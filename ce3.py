@@ -100,7 +100,7 @@ class Assistant:
                 # Attempt loading the tool module
                 try:
                     module = importlib.import_module(f'tools.{module_info.name}')
-                    self._extract_tools_from_module(module, tools)
+                    self._extract_tools_from_module(module, tools) # the output is something like this: tools = ({'name': 'tool_name', 'description': 'tool_description', 'input_schema': 'tool_input_schema'}, ...)
                 except ImportError as e:
                     # Handle missing dependencies
                     missing_module = self._parse_missing_dependency(str(e))
@@ -113,7 +113,7 @@ class Assistant:
                             # Retry loading the module after installation
                             try:
                                 module = importlib.import_module(f'tools.{module_info.name}')
-                                self._extract_tools_from_module(module, tools)
+                                self._extract_tools_from_module(module, tools) # the output is something like this: tools = ({'name': 'tool_name', 'description': 'tool_description', 'input_schema': 'tool_input_schema'}, ...)
                             except Exception as retry_err:
                                 self.console.print(f"[red]Failed to load tool after installation: {str(retry_err)}[/red]")
                         else:
