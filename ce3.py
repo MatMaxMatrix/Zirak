@@ -378,7 +378,14 @@ class Assistant:
                 tool_results = []
                 if getattr(response.choices[0].message, 'function_call', None) and isinstance(response.choices[0].message.function_call.name, str):
                     self.console.print(f"Here:{response.choices[0].message.function_call.name}")
-                    result = self._execute_tool(response.choices[0].message.function_call.name)
+
+                    self.console.print(duckduckgotool.name)
+
+                    for module_name in list(sys.modules.keys()):
+                        if module_name.startswith('tools.') and module_name != 'tools.base':
+                            self.console.print(f"Here:{module_name}")
+                    tool = response.choices[0].message.function_call.name
+                    result = self._execute_tool(tool)
                     
                     # Handle structured data (like image blocks) vs text
                     if isinstance(result, (list, dict)):
