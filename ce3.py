@@ -338,6 +338,7 @@ class Assistant:
         Handles both text-only and multimodal messages.
         """
         # for loop to iterate over tools used only for OpenAI API
+        self.console.print("START")
         functions = []
         for tool in self.tools:
             functions.append({
@@ -345,7 +346,6 @@ class Assistant:
                 "description": tool['description'],
                 "parameters": tool['input_schema']
             })
-
         try:
             response = self.client.chat.completions.create(
                 model=Config.MODEL,
@@ -369,8 +369,6 @@ class Assistant:
             if self.total_tokens_used >= Config.MAX_CONVERSATION_TOKENS:
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
-            self.console.print(f"Here:{response.choices[0].message.function_call.name}")
-            self.console.print(f"Here:{type(response.choices)}")
 
             if response.choices[0].finish_reason == "function_call":
                 self.console.print("\n[bold yellow]  Handling Tool Use...[/bold yellow]\n")
@@ -415,13 +413,13 @@ class Assistant:
                     # Append tool usage to conversation and continue
                     self.conversation_history.append({
                         "role": "assistant",
-                        "content": response.choices[0].message.content
+                        "content": f"Called function: {response.choices[0].message.function_call.name} with arguments: {response.choices[0].message.function_call.arguments}"
                     })
                     self.conversation_history.append({
                         "role": "user",
-                        "content": tool_results
+                        "content": f"{tool_results}"
                     })
-                    print("GGGGGGGGGGGGGGG")
+                    self.console.print(f"{self.conversation_history}")
                     return self._get_completion()  # Recursive call to continue the conversation
                     
                 else:
@@ -429,13 +427,12 @@ class Assistant:
                     return "Error: No tool content received"
             
             # Final assistant response
-            if (getattr(response, 'content', None) and 
-                isinstance(response.content, list) and 
-                response.content):
-                final_content = response.content[0].text
+            if (getattr(response.choices[0].message, 'content', None) and 
+                isinstance(response.choices[0].message.content, str)):
+                final_content = response.choices[0].message.content
                 self.conversation_history.append({
                     "role": "assistant",
-                    "content": response.content
+                    "content": response.choices[0].message.content
                 })
                 return final_content
             else:
