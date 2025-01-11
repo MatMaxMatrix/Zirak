@@ -19,6 +19,9 @@ from tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
 from prompts.system_prompts import SystemPrompts
+import openai
+from openai import OpenAI
+
 
 # Configure logging to only show ERROR level and above
 logging.basicConfig(
@@ -41,8 +44,8 @@ class Assistant:
             raise ValueError("No ANTHROPIC_API_KEY found in environment variables")
 
         # Initialize Anthropics client
-        self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-
+        #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
 
@@ -94,7 +97,7 @@ class Assistant:
 
         try:
             for module_info in pkgutil.iter_modules([str(tools_path)]):
-                if module_info.name == 'base':
+                if module_info.name == 'base' or module_info.name == 'filecreatortool':
                     continue
 
                 # Attempt loading the tool module
@@ -334,53 +337,63 @@ class Assistant:
         Get a completion from the Anthropic API.
         Handles both text-only and multimodal messages.
         """
+        # for loop to iterate over tools used only for OpenAI API
+        functions = []
+        for tool in self.tools:
+            functions.append({
+                "name": tool['name'],
+                "description": tool['description'],
+                "parameters": tool['input_schema']
+            })
+
         try:
-            response = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=Config.MODEL,
+                messages=self.conversation_history,
                 max_tokens=min(
                     Config.MAX_TOKENS,
                     Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used
                 ),
                 temperature=self.temperature,
-                tools=self.tools,
-                messages=self.conversation_history,
-                system=f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}"
+                functions=functions,  # For OpenAI function calls
+                function_call="auto",  # Change to "none" if no functions are being called
             )
 
+            self.console.print(f"\n[bold cyan]🤖 response:[/bold cyan]{response}")
             # Update token usage based on response usage
             if hasattr(response, 'usage') and response.usage:
-                message_tokens = response.usage.input_tokens + response.usage.output_tokens
+                message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
                 self.total_tokens_used += message_tokens
                 self._display_token_usage(response.usage)
 
             if self.total_tokens_used >= Config.MAX_CONVERSATION_TOKENS:
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
+            self.console.print(f"Here:{response.choices[0].message.function_call.name}")
+            self.console.print(f"Here:{type(response.choices[0].message.function_call.name)}")
 
-            if response.stop_reason == "tool_use":
+            if response.choices[0].finish_reason == "function_call":
                 self.console.print("\n[bold yellow]  Handling Tool Use...[/bold yellow]\n")
 
                 tool_results = []
-                if getattr(response, 'content', None) and isinstance(response.content, list):
-                    # Execute each tool in the response content
-                    for content_block in response.content:
-                        if content_block.type == "tool_use":
-                            result = self._execute_tool(content_block)
-                            
-                            # Handle structured data (like image blocks) vs text
-                            if isinstance(result, (list, dict)):
-                                tool_results.append({
-                                    "type": "tool_result",
-                                    "tool_use_id": content_block.id,
-                                    "content": result  # Keep structured data intact
-                                })
-                            else:
-                                # Convert text results to proper content blocks
-                                tool_results.append({
-                                    "type": "tool_result",
-                                    "tool_use_id": content_block.id,
-                                    "content": [{"type": "text", "text": str(result)}]
-                                })
+                if getattr(response.choices[0].message, 'function_call', None) and isinstance(response.choices[0].message.function_call.name, str):
+                    self.console.print(f"Here:{response.choices[0].message.function_call.name}")
+                    result = self._execute_tool(response.choices[0].message.function_call.name)
+                    
+                    # Handle structured data (like image blocks) vs text
+                    if isinstance(result, (list, dict)):
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": response.id,
+                            "content": result  # Keep structured data intact
+                        })
+                    else:
+                        # Convert text results to proper content blocks
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": response.id,
+                            "content": [{"type": "text", "text": str(result)}]
+                        })
 
                     # Append tool usage to conversation and continue
                     self.conversation_history.append({
@@ -479,7 +492,7 @@ def main():
     Provides a prompt for user input and handles 'quit' and 'reset' commands.
     """
     console = Console()
-    style = Style.from_dict({'prompt': 'orange'})
+    style = Style.from_dict({'prompt': 'purple'})
 
     try:
         assistant = Assistant()
