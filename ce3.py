@@ -377,23 +377,15 @@ class Assistant:
                 if getattr(response.choices[0].message, 'function_call', None) and isinstance(response.choices[0].message.function_call.name, str):
                     self.console.print(f"Here:{response.choices[0].message.function_call.name}")
 
-
-                    for module_name in list(sys.modules.keys()):
-                        if module_name.startswith('tools.') and module_name != 'tools.base':
-                            self.console.print(f"Here:{module_name}")
-
                     tool_name = response.choices[0].message.function_call.name
                     tool_input_str = response.choices[0].message.function_call.arguments
                     tool_input = json.loads(tool_input_str) 
-                    print("GGGGGg")
                     class ToolUseMock:
                         name = tool_name
                         input = tool_input
                     tool = ToolUseMock()
-                    print("RRRRRR")
                     result = self._execute_tool(tool)
-                    print("HHHHHH")
-                    print(type(result))
+                    self.console.print(f"Result:{result}")
 
                     # Handle structured data (like image blocks) vs text
                     if isinstance(result, (list, dict)):
@@ -419,7 +411,7 @@ class Assistant:
                         "role": "user",
                         "content": f"{tool_results}"
                     })
-                    self.console.print(f"{self.conversation_history}")
+                    self.console.print(self.conversation_history)
                     return self._get_completion()  # Recursive call to continue the conversation
                     
                 else:
