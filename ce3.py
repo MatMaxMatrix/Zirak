@@ -370,7 +370,7 @@ class Assistant:
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
             self.console.print(f"Here:{response.choices[0].message.function_call.name}")
-            self.console.print(f"Here:{type(response.choices[0].message.function_call.name)}")
+            self.console.print(f"Here:{type(response.choices)}")
 
             if response.choices[0].finish_reason == "function_call":
                 self.console.print("\n[bold yellow]  Handling Tool Use...[/bold yellow]\n")
@@ -379,14 +379,24 @@ class Assistant:
                 if getattr(response.choices[0].message, 'function_call', None) and isinstance(response.choices[0].message.function_call.name, str):
                     self.console.print(f"Here:{response.choices[0].message.function_call.name}")
 
-                    self.console.print(duckduckgotool.name)
 
                     for module_name in list(sys.modules.keys()):
                         if module_name.startswith('tools.') and module_name != 'tools.base':
                             self.console.print(f"Here:{module_name}")
-                    tool = response.choices[0].message.function_call.name
+
+                    tool_name = response.choices[0].message.function_call.name
+                    tool_input_str = response.choices[0].message.function_call.arguments
+                    tool_input = json.loads(tool_input_str) 
+                    print("GGGGGg")
+                    class ToolUseMock:
+                        name = tool_name
+                        input = tool_input
+                    tool = ToolUseMock()
+                    print("RRRRRR")
                     result = self._execute_tool(tool)
-                    
+                    print("HHHHHH")
+                    print(type(result))
+
                     # Handle structured data (like image blocks) vs text
                     if isinstance(result, (list, dict)):
                         tool_results.append({
@@ -405,18 +415,19 @@ class Assistant:
                     # Append tool usage to conversation and continue
                     self.conversation_history.append({
                         "role": "assistant",
-                        "content": response.content
+                        "content": response.choices[0].message.content
                     })
                     self.conversation_history.append({
                         "role": "user",
                         "content": tool_results
                     })
+                    print("GGGGGGGGGGGGGGG")
                     return self._get_completion()  # Recursive call to continue the conversation
-
+                    
                 else:
                     self.console.print("[red]No tool content received despite 'tool_use' stop reason.[/red]")
                     return "Error: No tool content received"
-
+            
             # Final assistant response
             if (getattr(response, 'content', None) and 
                 isinstance(response.content, list) and 
