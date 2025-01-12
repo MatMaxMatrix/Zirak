@@ -54,6 +54,10 @@ class Assistant:
         self.total_tokens_used = 0
 
         self.tools = self._load_tools()
+        self.conversation_history.append({
+                    "role": "system",
+                    "content": f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}"
+                })
 
     def _execute_uv_install(self, package_name: str) -> bool:
         """
@@ -346,6 +350,7 @@ class Assistant:
                 "description": tool['description'],
                 "parameters": tool['input_schema']
             })
+        self.console.print(self.conversation_history)
         try:
             response = self.client.chat.completions.create(
                 model=Config.MODEL,
