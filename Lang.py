@@ -1,72 +1,41 @@
-#%%
-from typing import Annotated
-from typing_extensions import TypedDict
-from langgraph.graph import StateGraph, START, END
+from typing import Annotated, Literal
 from dotenv import load_dotenv
-from rich.console import Console
-from prompt_toolkit.styles import Style
-from prompt_toolkit import prompt
-
-
-
 
 load_dotenv()
 
-from langgraph.graph.message import add_messages
 
 
-class State(TypedDict):
-    messages: Annotated[list, add_messages]
+Operator = Literal["+", "-", "*", "/"]
+
+def calculator(a: int, b: int, operator: Annotated[Operator, "Supported operators"]):
+    if operator == "+":
+        return a + b
+    elif operator == "-":
+        return a - b
+    elif operator == "*":
+        return a * b
+    elif operator == "/":
+        return a / b
+    else:
+        raise ValueError("Invalid operator")
+    
+import os
+from autogen import ConversableAgent
+
+assistant = ConversableAgent(
+    name="Assistant",
+    system_message="You are a helpful AI assistant. "
+    "You can help with simple calculations. "
+    "Return 'TERMINATE' when the task is done.",
+    llm_config={"config_list": [{"model": "gpt-4", "api_key": os.environ["OPENAI_API_KEY"]}]},
+)
 
 
-graph_builder = StateGraph(State)
+user_proxy = ConversableAgent(
+    name="User",
+    llm_config=False,
+    is_termination_msg=lambda msg: msg.get("content") is not None and "TERMINATE" in msg["content"],
+    human_input_mode="NEVER",
+)
 
-
-from langchain_openai import OpenAI
-llm = OpenAI(model_name = "gpt-3.5-turbo-instruct")
-
-def chatbot(state: State):
-    return {"messages": [llm.invoke(state["messages"])]}
-
-graph_builder.add_node("chatbot", chatbot)
-
-graph_builder.add_edge(START, "chatbot")
-graph_builder.add_edge("chatbot", END)
-
-graph = graph_builder.compile()
-
-from IPython.display import Image, display
-
-try:
-    display(Image(graph.get_graph().draw_mermaid_png()))
-except Exception:
-    pass
-
-# %%
-
-
-def stream_graph_updates(user_input: str):
-    for event in graph.stream({"messages": [("user", user_input)]}):
-        for value in event.values():
-            print("Assistant:", value["messages"][-1])
-
-
-while True:
-    try:
-        console = Console()
-        style = Style.from_dict({'prompt': 'purple'})
-
-        user_input = prompt("You: ", style=style).strip()
-
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
-
-        stream_graph_updates(user_input)
-    except:
-        # fallback if input() is not available
-        user_input = "What do you know about LangGraph?"
-        print("User: " + user_input)
-        stream_graph_updates(user_input)
-        break
-# %%
+assistant.register_for_llm(name="calculator", description="A simple calculator")(calculator)
