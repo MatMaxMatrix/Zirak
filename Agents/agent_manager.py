@@ -8,14 +8,10 @@ from typing import List, Dict, Any
 
 import autogen
 from .input_validation_agent import InputValidationAgent
-from .violation_extraction_agent import ViolationExtractionAgent
-from .validation_agent import ValidationAgent
-from .similarity_search_agent import SimilaritySearchAgent
-from .regulation_content_agent import RegulationContentAgent
-from .recommendation_agent import RecommendationAgent
-from .corrective_action_agent import CorrectiveActionAgent
-from .corrective_action_validation_agent import CorrectiveActionValidationAgent
-from .similar_case_agent import Similar_case_Recommendation
+from .LLM_Agent import LLM_Agent
+from .Query_Transformation import Query_Transformation
+from .Step_Generator import Step_Generator
+from .Evaluatoin_LLM import Evaluatoin_LLM
 from .Initiating_agent import InitiatingAgent
 import json
 
@@ -73,9 +69,11 @@ def state_transition(last_speaker, groupchat):
     elif last_speaker is LLM_agent:
         return Evaluation_agent
     elif last_speaker is Evaluation_agent and context.get("total_steps", 0) >= context.get("current_step", 1):
-        context["current_step"] += 1
-        context["stage_prompt"] = context.get("stage_prompt", "")[context["current_step"]]
-        return LLM_agent
+        if context.get("Evaluation_result") == "Yes":
+            context["current_step"] += 1
+            context["stage_prompt"] = context.get("stage_prompt", "")[context["current_step"]]
+            return LLM_agent
+        else:
     
 
 
