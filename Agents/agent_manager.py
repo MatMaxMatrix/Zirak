@@ -65,7 +65,12 @@ def state_transition(last_speaker, groupchat):
         return Step_agent
 
     elif last_speaker is Step_agent:
-        return LLM_agent
+        try:
+            context["steps"] = Step_agent.last_message()
+            return LLM_Agent
+        except (ValueError, KeyError, json.JSONDecodeError, TypeError) as e:
+            print(f"Error exception: {str(e)}")
+            return Query_Agent
     elif last_speaker is LLM_agent:
         return Evaluation_agent
     elif last_speaker is Evaluation_agent and context.get("total_steps", 0) >= context.get("current_step", 1):
@@ -75,13 +80,6 @@ def state_transition(last_speaker, groupchat):
             return LLM_agent
         else:
     
-
-
-
-
-
-
-
 
 
 group_chat = GroupChat(
