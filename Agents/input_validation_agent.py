@@ -1,7 +1,18 @@
 from autogen import ConversableAgent
+import autogen
 import os
 import json
 import logging
+
+llm_config = {
+    "timeout": 600,
+    "cache_seed": 45,  # change the seed for different trials
+    "config_list": autogen.config_list_from_json(
+        "OAI_CONFIG_LIST",
+        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+    ),
+    "temperature": 0,
+}
 
 
 class Similar_case_Recommendation(ConversableAgent):
@@ -20,8 +31,5 @@ class Similar_case_Recommendation(ConversableAgent):
                         - "Can you analyze this log file and create a visualization?" → {"type": "Technical"}
                         
                         Return ONLY the JSON object. No other text.""",
-            llm_config={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
-            },
+            llm_config=llm_config,
         )

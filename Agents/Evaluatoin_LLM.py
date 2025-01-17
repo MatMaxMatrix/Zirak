@@ -3,12 +3,50 @@ import os
 import json
 import logging
 
+import autogen
+
+
+llm_config = {
+    "timeout": 600,
+    "cache_seed": 45,  # change the seed for different trials
+    "config_list": autogen.config_list_from_json(
+        "OAI_CONFIG_LIST",
+        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+    ),
+    "temperature": 0,
+}
+
 
 class Similar_case_Recommendation(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Query_Transformation",
-            system_message="""
+            system_message=,
+            llm_config=llm_config,
+        )
+        self.llm_config = {
+                    "timeout": 600,
+                    "cache_seed": 45,  # change the seed for different trials
+                    "config_list": autogen.config_list_from_json(
+                        "OAI_CONFIG_LIST",
+                        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+                    ),
+                    "temperature": 0,
+                }
+
+        self.client = OpenAI(api_key=self.llm_config["config_list"][0].get("api_key"))
+        self.register_reply(
+            trigger=self._always_true_trigger,  # Add a specific trigger string
+            reply_func=self.handle_message,
+            position=0,
+        )
+
+    def _always_true_trigger(self, sender):
+        # This trigger function always returns True
+        return True
+
+    def handle_message(self, *args, **kwargs):
+        message = """
 You are an expert Technical Evaluation Agent responsible for assessing the quality and completeness of technical implementations. Your role is to evaluate the output of each implementation step against established criteria and provide clear pass/fail decisions with detailed feedback.
 
 When evaluating each implementation, consider these key aspects:
@@ -101,9 +139,14 @@ Example Output:
 }
 
 Return ONLY the JSON evaluation output. Do not include any additional explanation or commentary. Your feedback should be specific, actionable, and focused on technical implementation details.
-""",
-            llm_config={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
-            },
+"""
+
+        response = self.client.chat.completions.create(
+            model=self.llm_config["config_list"][0].get("model"),
+            messages=message,
+            temperature=0.3,
+            max_tokens=1000,
         )
+        #  logging.debug(f"{self.name}: Generated corrective action plan:\n{corrective_action_plan.strip()}")
+
+        self.context["Evaluation_result"] = response.choices[0].message.content.strip()

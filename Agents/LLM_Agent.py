@@ -23,6 +23,19 @@ from ..tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
 from prompts.system_prompts import SystemPrompts
+import autogen
+
+
+llm_config = {
+    "timeout": 600,
+    "cache_seed": 45,  # change the seed for different trials
+    "config_list": autogen.config_list_from_json(
+        "OAI_CONFIG_LIST",
+        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
+    ),
+    "temperature": 0,
+}
+
 
 
 class CorrectiveActionAgent(ConversableAgent):
@@ -52,10 +65,7 @@ class CorrectiveActionAgent(ConversableAgent):
             system_message="""
 You are a compliance assistant tasked with drafting a full corrective action plan to address all violated terms.
 """,
-            llm_config={
-                "model": os.getenv("OPENAI_MODEL_Corrective_Action_Model", "gpt-4o"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
-            },
+            llm_config=llm_config,
         )
         self.client = OpenAI(api_key=self.llm_config["api_key"])
 
