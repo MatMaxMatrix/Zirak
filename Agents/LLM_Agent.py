@@ -62,9 +62,7 @@ class CorrectiveActionAgent(ConversableAgent):
                 })
         super().__init__(
             name="LLM_Agent",
-            system_message="""
-You are a compliance assistant tasked with drafting a full corrective action plan to address all violated terms.
-""",
+            system_message="",
             llm_config=llm_config,
         )
         self.client = OpenAI(api_key=self.llm_config["api_key"])

@@ -21,7 +21,7 @@ class Similar_case_Recommendation(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Query_Transformation",
-            system_message=,
+            system_message="",
             llm_config=llm_config,
         )
         self.llm_config = {
