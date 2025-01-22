@@ -2,7 +2,7 @@
 
 import os
 from autogen import GroupChat
-
+from pydantic import BaseModel
 from prompts.system_prompts import SystemPrompts
 from typing import List, Dict, Any
 
@@ -12,28 +12,32 @@ from .LLM_Agent import LLM_Agent
 from .Query_Transformation import Query_Transformation
 from .Step_Generator import Step_Generator
 from .Evaluatoin_LLM import Evaluatoin_LLM
-from .Initiating_agent import InitiatingAgent
+from .Initiating_agent import EnhancedInitiatingAgent
+from .Critical_Analysis_Agent import CriticalAnalysisAgent
 import json
 
 
 import logging
 
-conversation_history: List[Dict[str, Any]] = []
-conversation_history.append({
-                    "role": "system",
-                    "content": f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}"
-                })
+class Conversation(BaseModel):
+    conversation_history: List[Dict[str, Any]] = []
+    conversation_history.append({
+                        "role": "system",
+                        "content": f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}"
+                    })
 
-initiating_agent = InitiatingAgent()
+initiating_agent = EnhancedInitiatingAgent()
 Regular_or_Tech = InputValidationAgent()
 LLM_agent = LLM_Agent()
 Query_Agent = Query_Transformation()
 Step_agent = Step_Generator()
 Evaluation_agent = Evaluatoin_LLM()
+CriticalAnalysisAgent = CriticalAnalysisAgent()
 
 
 agents = [
     initiating_agent,
+    CriticalAnalysisAgent,
     Regular_or_Tech,
     LLM_agent,
     Query_Agent,
@@ -49,7 +53,19 @@ def state_transition(last_speaker, groupchat):
     if len(messages) <= 1:
         return initiating_agent
     if last_speaker is initiating_agent:
-        return Regular_or_Tech
+        return CriticalAnalysisAgent
+    if last_speaker is CriticalAnalysisAgent:
+        try:
+            analysis = json.loads(CriticalAnalysisAgent.last_message())
+            if analysis.get("requires_clarification"):
+                context["clarifying_questions"] = analysis.get("clarifying_questions", [])
+                context["user_input_required"] = True
+                context["input_validation_result_feedback"] = "\n".join(analysis.get("clarifying_questions"))
+                return initiating_agent
+            else:
+                return Regular_or_Tech
+        except json.JSONDecodeError:
+            return Regular_or_Tech
     elif last_speaker is Regular_or_Tech:
         # Check if input validation passed
         response = Regular_or_Tech.handle_message()

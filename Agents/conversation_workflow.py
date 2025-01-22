@@ -22,7 +22,7 @@ async def conversation_workflow(group_chat):
     group_chat_manager.reset()
     User_input = group_chat.context.get("User_input")
     for agent in group_chat.agents:
-        if agent.name == "initiating_agent" or agent.name == "RegularLLM" or agent.name == "TechLLM":
+        if agent.name in ["initiating_agent", "CriticalAnalysisAgent", "RegularLLM", "TechLLM"]:
             agent.context = group_chat.context
 
     if not User_input:
