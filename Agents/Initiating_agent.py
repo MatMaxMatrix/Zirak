@@ -33,7 +33,18 @@ class EnhancedInitiatingAgent(UserProxyAgent):
             llm_config=llm_config,
             code_execution_config=False  # Disable code execution as it's not needed
         )
+        self.register_reply(
+            trigger=self._always_true_trigger,
+            reply_func=self.process_input,
+            position=0,
+        )
+
         self.conversation_context = {}
+    def _always_true_trigger(self, sender):
+        return True
+
+
+
 
     async def process_input(self, message, conversation):
         """Process input and gather clarifications if needed"""
@@ -80,8 +91,3 @@ class EnhancedInitiatingAgent(UserProxyAgent):
             except Exception as e:
                 logging.error(f"Error getting human input: {str(e)}")
                 print("An error occurred. Please try again.")
-
-    def initiate_chat(self, manager, message):
-        """Override initiate_chat to handle the enhanced functionality"""
-        processed_message = self.process_input(message, manager.groupchat)
-        return super().initiate_chat(manager, processed_message)
