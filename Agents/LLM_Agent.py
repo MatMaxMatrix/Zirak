@@ -19,35 +19,33 @@ import json
 import sys
 
 from config import Config
-from ..tools.base import BaseTool
+from Agents.tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
-from prompts.system_prompts import SystemPrompts
+from Agents.prompts.system_prompts import SystemPrompts
 import autogen
 
 
-llm_config = {
-    "timeout": 600,
-    "cache_seed": 45,  # change the seed for different trials
-    "config_list": autogen.config_list_from_json(
-        "OAI_CONFIG_LIST",
-        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
-    ),
-    "temperature": 0,
-}
 
 
-
-class CorrectiveActionAgent(ConversableAgent):
+class LLM_Agent(ConversableAgent):
     def __init__(self):
-
+        self.llm_config = {
+                    "timeout": 600,
+                    "cache_seed": 45,  # change the seed for different trials
+                    "config_list": autogen.config_list_from_json(
+                        "OAI_CONFIG_LIST",
+                        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+                    ),
+                    "temperature": 0,
+                }
 
         if not getattr(Config, 'ANTHROPIC_API_KEY', None):
             raise ValueError("No ANTHROPIC_API_KEY found in environment variables")
 
         # Initialize Anthropics client
         #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
+        self.client = OpenAI(api_key=self.llm_config["config_list"][0].get("api_key"))
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
 
@@ -63,10 +61,8 @@ class CorrectiveActionAgent(ConversableAgent):
         super().__init__(
             name="LLM_Agent",
             system_message="",
-            llm_config=llm_config,
+            llm_config=self.llm_config,
         )
-        self.client = OpenAI(api_key=self.llm_config["api_key"])
-
         self.register_reply(
             trigger=self._always_true_trigger,
             reply_func=self.main,
