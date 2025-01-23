@@ -2,28 +2,14 @@ from autogen import ConversableAgent
 import os
 import json
 import logging
+from openai import OpenAI
 
 import autogen
 
 
-llm_config = {
-    "timeout": 600,
-    "cache_seed": 45,  # change the seed for different trials
-    "config_list": autogen.config_list_from_json(
-        "OAI_CONFIG_LIST",
-        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
-    ),
-    "temperature": 0,
-}
-
-
-class Similar_case_Recommendation(ConversableAgent):
+class Evaluatoin_LLM(ConversableAgent):
     def __init__(self):
-        super().__init__(
-            name="Query_Transformation",
-            system_message="",
-            llm_config=llm_config,
-        )
+
         self.llm_config = {
                     "timeout": 600,
                     "cache_seed": 45,  # change the seed for different trials
@@ -33,6 +19,12 @@ class Similar_case_Recommendation(ConversableAgent):
                     ),
                     "temperature": 0,
                 }
+        
+        super().__init__(
+            name="Query_Transformation",
+            system_message="",
+            llm_config=self.llm_config,
+        )
 
         self.client = OpenAI(api_key=self.llm_config["config_list"][0].get("api_key"))
         self.register_reply(

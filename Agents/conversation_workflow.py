@@ -1,7 +1,7 @@
 from autogen import GroupChatManager
 import autogen
-from .agent_manager import initiating_agent
-
+from .Initiating_agent import EnhancedInitiatingAgent
+initiating_agent = EnhancedInitiatingAgent()
 manager_config = {
     "timeout": 600,
     "cache_seed": 44,  # change the seed for different trials
@@ -22,13 +22,13 @@ async def conversation_workflow(group_chat):
     group_chat_manager.reset()
     User_input = group_chat.context.get("User_input")
     for agent in group_chat.agents:
-        if agent.name in ["initiating_agent", "CriticalAnalysisAgent", "RegularLLM", "TechLLM"]:
+        if agent.name == "initiating_agent":
             agent.context = group_chat.context
 
     if not User_input:
         return {"error": "User_input is missing or empty"}
     initiating_message = f"User_input received:\n\n{User_input}"
-    initiating_agent.initiate_chat(group_chat_manager, message=initiating_message)
+    initiating_agent.a_initiate_chat(group_chat_manager, message=initiating_message)
 
     if group_chat.context.get("user_input_required"):
         return {
@@ -41,7 +41,7 @@ async def conversation_workflow(group_chat):
 
     # Extract results from agent context
     for agent in group_chat.agents:
-        if agent.name == "corrective_action_agent":
-            corrective_action_plan = agent.context.get("corrective_action_plan", "")
+        if agent.name == "LLM_agent":
+            LLM_agent = agent.context.get("LLM_agent", "")
 
-    return {True: corrective_action_plan}
+    return {True}

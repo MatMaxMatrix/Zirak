@@ -3,7 +3,7 @@ from autogen.agentchat.assistant_agent import ConversableAgent
 
 
 
-class Similar_case_Recommendation(ConversableAgent):
+class Step_Generator(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Step_Generator",

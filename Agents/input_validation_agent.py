@@ -15,7 +15,7 @@ llm_config = {
 }
 
 
-class Similar_case_Recommendation(ConversableAgent):
+class Validation_input(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Regular_or_Tech",
@@ -142,6 +142,6 @@ If you require more information from the user to make this determination, ask th
 ---
 
 **Return ONLY the JSON object. No other text.**
-"""
+""",
             llm_config=llm_config,
         )

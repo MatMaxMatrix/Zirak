@@ -16,7 +16,7 @@ llm_config = {
 }
 
 
-class Similar_case_Recommendation(ConversableAgent):
+class Query_Transformation(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Query_Transformation",

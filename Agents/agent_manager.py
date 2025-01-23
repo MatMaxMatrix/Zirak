@@ -3,11 +3,11 @@
 import os
 from autogen import GroupChat
 from pydantic import BaseModel
-from prompts.system_prompts import SystemPrompts
+from Agents.prompts.system_prompts import SystemPrompts
 from typing import List, Dict, Any
 
 import autogen
-from .input_validation_agent import InputValidationAgent
+from .input_validation_agent import Validation_input
 from .LLM_Agent import LLM_Agent
 from .Query_Transformation import Query_Transformation
 from .Step_Generator import Step_Generator
@@ -27,7 +27,7 @@ class Conversation(BaseModel):
                     })
 
 initiating_agent = EnhancedInitiatingAgent()
-Regular_or_Tech = InputValidationAgent()
+Regular_or_Tech = Validation_input()
 LLM_agent = LLM_Agent()
 Query_Agent = Query_Transformation()
 Step_agent = Step_Generator()
@@ -59,7 +59,6 @@ def state_transition(last_speaker, groupchat):
             analysis = json.loads(CriticalAnalysisAgent.last_message())
             if analysis.get("requires_clarification"):
                 context["clarifying_questions"] = analysis.get("clarifying_questions", [])
-                context["user_input_required"] = True
                 context["input_validation_result_feedback"] = "\n".join(analysis.get("clarifying_questions"))
                 return initiating_agent
             else:
@@ -94,9 +93,7 @@ def state_transition(last_speaker, groupchat):
             context["current_step"] += 1
             context["stage_prompt"] = context.get("stage_prompt", "")[context["current_step"]]
             return LLM_agent
-        else:
-    
-
+            
 
 group_chat = GroupChat(
     agents=agents,
