@@ -9,8 +9,8 @@ console = Console()
 
 async def main():
     # Manually provide the warning letter and template
-    User_Input = console.input("Enter the User's Input: ")
-    group_chat.context = {"User_input": User_Input}
+    #User_Input = console.input("Enter the User's Input: ")
+    group_chat.context = {"welcome_message": "Welcome to the Claude Engine!"}
 
     # Run the conversation workflow
     result = await conversation_workflow(group_chat)
