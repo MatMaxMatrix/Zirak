@@ -1,4 +1,4 @@
 [
     {"model": "gpt-4o", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "text"}},
-    {"model": "gpt-4o-json", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "json_object"}}
+    {"model": "gpt-4o", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "json_object"}}
 ]

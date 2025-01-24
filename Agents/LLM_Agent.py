@@ -35,17 +35,17 @@ class LLM_Agent(ConversableAgent):
                     "cache_seed": 45,  # change the seed for different trials
                     "config_list": autogen.config_list_from_json(
                         "OAI_CONFIG_LIST",
-                        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+                        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
                     ),
                     "temperature": 0,
                 }
-
+        api = self.llm_config["config_list"][0].get("api_key")
         if not getattr(Config, 'ANTHROPIC_API_KEY', None):
             raise ValueError("No ANTHROPIC_API_KEY found in environment variables")
 
         # Initialize Anthropics client
         #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=self.llm_config["config_list"][0].get("api_key"))
+        self.client = OpenAI(api_key=api)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
 

@@ -1,6 +1,13 @@
 from autogen import GroupChatManager
 import autogen
 from .Initiating_agent import EnhancedInitiatingAgent
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+
+
 initiating_agent = EnhancedInitiatingAgent()
 manager_config = {
     "timeout": 600,

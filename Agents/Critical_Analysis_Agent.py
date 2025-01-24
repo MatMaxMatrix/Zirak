@@ -1,19 +1,22 @@
 from autogen import ConversableAgent
 import autogen
 import json
+import os
 
-llm_config = {
-    "timeout": 600,
-    "cache_seed": 45,
-    "config_list": autogen.config_list_from_json(
-        "OAI_CONFIG_LIST",
-        filter_dict={"model": ["gpt-4o-json"]},
-    ),
-    "temperature": 0,
-}
+
 
 class CriticalAnalysisAgent(ConversableAgent):
+
     def __init__(self):
+        self.llm_config = {
+            "timeout": 600,
+            "cache_seed": 45,
+            "config_list": autogen.config_list_from_json(
+                "OAI_CONFIG_LIST",
+                filter_dict={"model": ["gpt-4o-json"]},
+            ),
+            "temperature": 0,
+        }
         super().__init__(
             name = "CriticalAnalysisAgent",
             system_message = """
@@ -138,5 +141,13 @@ Before generating the JSON, please analyze the query in <thinking> tags.
 Include your identification of the core requirements, implicit assumptions, and any modern context considerations.
 Then, provide your JSON output in <json> tags.
 """,
-            llm_config = llm_config,
+            
+
+
+            
+
+            llm_config ={
+                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            },
         )
