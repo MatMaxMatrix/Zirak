@@ -15,7 +15,7 @@ class Evaluatoin_LLM(ConversableAgent):
                     "cache_seed": 45,  # change the seed for different trials
                     "config_list": autogen.config_list_from_json(
                         "OAI_CONFIG_LIST",
-                        filter_dict={"model": ["gpt-4o-json"]},  # This Config is set to JSON mode
+                        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
                     ),
                     "temperature": 0,
                 }
@@ -25,8 +25,8 @@ class Evaluatoin_LLM(ConversableAgent):
             system_message="",
             llm_config=self.llm_config,
         )
-
-        self.client = OpenAI(api_key=self.llm_config["config_list"][0].get("api_key"))
+        api = self.llm_config["config_list"][0].get("api_key")
+        self.client = OpenAI(api_key=api)
         self.register_reply(
             trigger=self._always_true_trigger,  # Add a specific trigger string
             reply_func=self.handle_message,
