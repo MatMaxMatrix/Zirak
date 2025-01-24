@@ -35,7 +35,7 @@ class EnhancedInitiatingAgent(UserProxyAgent):
         )
         self.register_reply(
             trigger=self._always_true_trigger,
-            reply_func=self.process_input,
+            reply_func=self.handle_message,
             position=0,
         )
 
@@ -46,48 +46,47 @@ class EnhancedInitiatingAgent(UserProxyAgent):
 
 
 
-    async def process_input(self, message, conversation):
-        """Process input and gather clarifications if needed"""
-        if not message:
-            return {"error": "Empty input received"}
 
-        # Store initial query in context
-        self.conversation_context["initial_query"] = message
+    def handle_message(self, *args, **kwargs):
+        """Process input and gather clarifications if needed"""
+        print(f"Here is the context: {self.context}")
+        
+        if not self.context.get("User_input"):
+            # Return False to indicate the conversation should not proceed
+            return False, {"role": "assistant", "content": "User input is missing or empty."}
 
         # If clarification is needed (checked from conversation context)
-        if conversation.context.get("clarifying_questions"):
-            clarifying_questions = conversation.context["clarifying_questions"]
+        if self.context.get("requires_clarification", False):
+            clarifying_questions = self.context["clarifying_questions"]
             clarification_responses = {}
             
             for question in clarifying_questions:
                 # Get user input for each clarifying question
-                response = await self.get_human_input(question)
+                response = self.get_human_input(question)
                 clarification_responses[question] = response
 
-            # Store clarification responses in context
-            self.conversation_context["clarifications"] = clarification_responses
-            conversation.context["clarifications"] = clarification_responses
-            
-            # Clear the clarifying questions flag
-            conversation.context["clarifying_questions"] = None
-            conversation.context["user_input_required"] = False
-
+            self.context["clarifications"] = clarification_responses            
+            self.context["requires_clarification"] = None
             # Return enhanced query with clarifications
-            return {
-                "original_query": message,
+            reply_content = {
+                "original_query": self.context.get("User_input"),
                 "clarifications": clarification_responses
             }
+            return True, {"role": "assistant", "content": reply_content}
+        else:
+            response = self.get_human_input("Please provide a query.")
+            self.context["User_input"] = response
+            return True, {"role": "assistant", "content": response}
 
-        return {"query": message}
-
-    async def get_human_input(self, prompt):
+    def get_human_input(self, prompt):
         """Enhanced method to get human input with validation"""
         while True:
             try:
-                user_input = input(f"\n{prompt}\nYour response: ")
+                user_input = input(f"Ask Me: ")
                 if user_input.strip():  # Basic validation
                     return user_input
                 print("Please provide a non-empty response.")
             except Exception as e:
                 logging.error(f"Error getting human input: {str(e)}")
                 print("An error occurred. Please try again.")
+

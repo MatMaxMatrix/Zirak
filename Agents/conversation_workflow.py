@@ -20,15 +20,14 @@ async def conversation_workflow(group_chat):
         llm_config = manager_config,
         )
     group_chat_manager.reset()
-    User_input = group_chat.context.get("User_input")
+    Welcome_message = group_chat.context.get("welcome_message")
     for agent in group_chat.agents:
-        if agent.name == "initiating_agent":
-            agent.context = group_chat.context
+        agent.context = group_chat.context
 
-    if not User_input:
+    if not Welcome_message:
         return {"error": "User_input is missing or empty"}
-    initiating_message = f"User_input received:\n\n{User_input}"
-    initiating_agent.a_initiate_chat(group_chat_manager, message=initiating_message)
+    initiating_message = f"User_input received:\n\n{Welcome_message}"
+    initiating_agent.initiate_chat(group_chat_manager, message=Welcome_message)
 
     if group_chat.context.get("user_input_required"):
         return {
