@@ -62,11 +62,7 @@ def state_transition(last_speaker, groupchat):
         return CriticalAnalysisAgent
     if last_speaker is CriticalAnalysisAgent:
         try:
-            analysis = json.loads(CriticalAnalysisAgent.last_message())
-            if analysis.get("requires_clarification"):
-                context["clarifying_questions"] = analysis.get("clarifying_questions", [])
-                context["input_validation_result_feedback"] = "\n".join(analysis.get("clarifying_questions"))
-                context["requires_clarification"] = analysis.get("requires_clarification")
+            if context["requires_clarification"] == True:
                 return initiating_agent
             else:
                 return Regular_or_Tech
