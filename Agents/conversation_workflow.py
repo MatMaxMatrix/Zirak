@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 initiating_agent = EnhancedInitiatingAgent()
-manager_config = autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]
+manager_config = autogen.config_list_from_json("OAI_CONFIG_LIST",)[3]
 async def conversation_workflow(group_chat):
     group_chat_manager = GroupChatManager(
         groupchat = group_chat,
@@ -19,6 +19,6 @@ async def conversation_workflow(group_chat):
     for agent in group_chat.agents:
             agent.context = group_chat.context
     group_chat.context["requires_clarification"] = False
-    group_chat.context["clarifications"] = None
+    group_chat.context["clarifications"] = "Clarifications:"
     initiating_agent.initiate_chat(group_chat_manager, message=Welcome_message)
     return {True}
