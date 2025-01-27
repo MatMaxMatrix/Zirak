@@ -63,7 +63,7 @@ def state_transition(last_speaker, groupchat):
     if last_speaker is CriticalAnalysisAgent:
         try:
             print(context["requires_clarification"])
-            if context["requires_clarification"] == True:
+            if context["requires_clarification"] == True and len(context["clarifications"])<500:
                 return initiating_agent
             else:
                 return Regular_or_Tech
