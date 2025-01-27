@@ -50,7 +50,7 @@ def state_transition(last_speaker, groupchat):
     context = groupchat.context
     messages = groupchat.messages
     print(f"messages{messages}")
-    context["requires_clarification"] = False
+
     if len(messages) <= 1:
         print("%%%%%%%%%%%%%%%%%%")
         return initiating_agent
@@ -62,6 +62,7 @@ def state_transition(last_speaker, groupchat):
         return CriticalAnalysisAgent
     if last_speaker is CriticalAnalysisAgent:
         try:
+            print(context["requires_clarification"])
             if context["requires_clarification"] == True:
                 return initiating_agent
             else:

@@ -164,14 +164,15 @@ Include your identification of the core requirements, implicit assumptions, and 
 Then, provide your JSON output.
 
 Input query and information to analyze:
-[user_query]
+[Original query: "[user_query]"]
+[Clarifications]
 
 """,
-            message = self.context.get("User_input")
-            Critic_prompt = Critic_prompt_template[0].replace("[user_query]", message)
-
-
-
+            Input_user = self.context.get("User_input")
+            clarifications = self.context.get("clarifications")
+            Critic_prompt = Critic_prompt_template[0].replace("[user_query]", Input_user)
+            if clarifications is not None:
+                Critic_prompt = Critic_prompt_template[0].replace("[Clarifications]", clarifications)
             def extract_json_from_response(response_text: str) -> dict:
                 """
                 Extract JSON content from a response text that may contain markdown code blocks
@@ -230,9 +231,7 @@ Input query and information to analyze:
                     print(f"Error extracting JSON: {str(e)}")
                     return None
             while True:
-                print(autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'])
-                print(type(autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model']))
-                print(type(Critic_prompt))
+                print("WE GOT HERE")
                 response = self.client.chat.completions.create(
                     model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'],
                     messages=[{"role": "user", "content": Critic_prompt}],
@@ -242,7 +241,7 @@ Input query and information to analyze:
                 try:
                     json_content = extract_json_from_response(response)
                     if json_content:
-                        if json_content.get("identified_assumptions") or json_content.get("clarifying_questions") or json_content.get("requires_clarification"):
+                        if json_content.get("clarifying_questions"):
                             self.context["requires_clarification"] = True
                             self.context["clarifying_questions"] = json_content.get("clarifying_questions", [])
                             self.context["identified_assumptions"] = json_content.get("identified_assumptions", [])

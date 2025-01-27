@@ -18,5 +18,7 @@ async def conversation_workflow(group_chat):
     Welcome_message = group_chat.context.get("welcome_message")
     for agent in group_chat.agents:
             agent.context = group_chat.context
+    group_chat.context["requires_clarification"] = False
+    group_chat.context["clarifications"] = None
     initiating_agent.initiate_chat(group_chat_manager, message=Welcome_message)
     return {True}
