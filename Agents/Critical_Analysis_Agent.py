@@ -1,25 +1,32 @@
+#%%
 from autogen import ConversableAgent
 import autogen
+from openai import OpenAI
 import json
-import os
 
-
-
+#%%
 class CriticalAnalysisAgent(ConversableAgent):
-
     def __init__(self):
-        self.llm_config = {
-            "timeout": 600,
-            "cache_seed": 45,
-            "config_list": autogen.config_list_from_json(
-                "OAI_CONFIG_LIST",
-                filter_dict={"model": ["gpt-4o-json"]},
-            ),
-            "temperature": 0,
-        }
         super().__init__(
-            name = "CriticalAnalysisAgent",
-            system_message = """
+            name="CriticalAnalysisAgent",
+            system_message="",
+            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
+        )
+        api = autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['api_key']
+        self.client = OpenAI(api_key=api)
+        self.register_reply(
+            trigger=self._always_true_trigger,  # Add a specific trigger string
+            reply_func=self.handle_message,
+            position=0,
+        )
+
+    def _always_true_trigger(self, sender):
+        # This trigger function always returns True
+        return True
+    
+
+    def handle_message(self, *args, **kwargs):
+            Critic_prompt_template = """
 Analyze the User's query and generate a JSON summary of the identified assumptions and necessary clarifications:
 
 Instructions:
@@ -44,7 +51,7 @@ Generate a JSON object with the following structure:
 }
 </json>
 
-Examples:
+Examples-1:
 <examples>
 1. Query about starting a restaurant:
 <query>
@@ -61,7 +68,7 @@ Modern context considerations:
 - No mention of online presence or use of food delivery apps.
 </thinking>
 
-<json>
+OUTPUT:
 {
     "identified_assumptions": [
         "Focus on physical location only",
@@ -75,7 +82,9 @@ Modern context considerations:
     ],
     "requires_clarification": true
 }
-</json>
+
+
+Example-2:
 
 2. Query with sufficient detail:
 <query>
@@ -92,7 +101,7 @@ Modern context considerations:
 - Data security and privacy considerations.
 </thinking>
 
-<json>
+OUTPUT:
 {
     "identified_assumptions": [
         "Users require synchronization across multiple devices",
@@ -106,8 +115,8 @@ Modern context considerations:
     ],
     "requires_clarification": true
 }
-</json>
 
+Example-3:
 3. Query with all necessary information:
 <query>
 "I need a website designed for my bakery business that showcases our products, allows online ordering, and includes a blog for recipes."
@@ -123,7 +132,7 @@ Modern context considerations:
 - Integration with payment gateways.
 </thinking>
 
-<json>
+OUTPUT:
 {
     "identified_assumptions": [
         "Website will include an e-commerce platform for online ordering",
@@ -133,21 +142,113 @@ Modern context considerations:
     "clarifying_questions": [],
     "requires_clarification": false
 }
-</json>
+
+Examples-4:
+4. Query with simple input:
+<query>
+"Hi, how can you help me?"
+</query>
+
+OUTPUT:
+{
+    "identified_assumptions": [],
+    "clarifying_questions": ["Please provide more details about the assistance you need."],
+    "requires_clarification": true
+}
+
 </examples>
-</instructions>
+
 
 Before generating the JSON, please analyze the query in <thinking> tags.
 Include your identification of the core requirements, implicit assumptions, and any modern context considerations.
-Then, provide your JSON output in <json> tags.
+Then, provide your JSON output.
+
+Input query and information to analyze:
+[user_query]
+
 """,
-            
+            message = self.context.get("User_input")
+            Critic_prompt = Critic_prompt_template[0].replace("[user_query]", message)
 
 
-            
 
-            llm_config ={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
-            },
-        )
+            def extract_json_from_response(response_text: str) -> dict:
+                """
+                Extract JSON content from a response text that may contain markdown code blocks
+                and thinking tags.
+                
+                Args:
+                    response_text (str): The full response text containing JSON data
+                    
+                Returns:
+                    dict: Extracted JSON object or None if extraction fails
+                    
+                Example:
+                    text = '''<thinking>some analysis</thinking>
+                    OUTPUT:
+                    ```json
+                    {
+                        "key": "value"
+                    }
+                    ```
+                    '''
+                    result = extract_json_from_response(text)
+                """
+                try:
+                    # If we receive a ChatCompletion object, get the content
+                    if hasattr(response_text, 'choices'):
+                        response_text = response_text.choices[0].message.content
+
+                    # Find the position of 'OUTPUT:'
+                    output_pos = response_text.find('OUTPUT:')
+                    if output_pos == -1:
+                        return None
+                        
+                    # Get the text after 'OUTPUT:'
+                    json_text = response_text[output_pos + 7:].strip()
+                    
+                    # Remove markdown code blocks if present
+                    json_text = json_text.replace('```json', '').replace('```', '').strip()
+                    
+                    # Find the first '{' and last '}'
+                    start_pos = json_text.find('{')
+                    end_pos = json_text.rfind('}')
+                    
+                    if start_pos == -1 or end_pos == -1:
+                        return None
+                        
+                    # Extract the JSON string
+                    json_str = json_text[start_pos:end_pos + 1]
+                    
+                    # Parse the JSON string
+                    return json.loads(json_str)
+                    
+                except json.JSONDecodeError as e:
+                    print(f"JSON decode error: {str(e)}")
+                    return None
+                except Exception as e:
+                    print(f"Error extracting JSON: {str(e)}")
+                    return None
+            while True:
+                print(autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'])
+                print(type(autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model']))
+                print(type(Critic_prompt))
+                response = self.client.chat.completions.create(
+                    model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'],
+                    messages=[{"role": "user", "content": Critic_prompt}],
+                    temperature=0.3,
+                    max_tokens=1000,
+                )
+                try:
+                    json_content = extract_json_from_response(response)
+                    if json_content:
+                        if json_content.get("identified_assumptions") or json_content.get("clarifying_questions") or json_content.get("requires_clarification"):
+                            self.context["requires_clarification"] = True
+                            self.context["clarifying_questions"] = json_content.get("clarifying_questions", [])
+                            self.context["identified_assumptions"] = json_content.get("identified_assumptions", [])
+                        else:
+                            self.context["requires_clarification"] = False
+                        return  {"role": "assistant", "content": json_content}
+                except Exception as e:
+                    print(f"Error processing response: {str(e)}")
+                    continue
