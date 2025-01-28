@@ -26,10 +26,12 @@ class CriticalAnalysisAgent(ConversableAgent):
     
 
     def handle_message(self, *args, **kwargs):
-            Critic_prompt_template = [
+            Input_user = self.context.get("User_input")
+            clarifications = self.context.get("clarifications")
+            Critic_prompt = [
 {
     "role": "system",
-    "content": """Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
+    "content": f"""Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
 
 Instructions:
 1. Carefully parse the query for explicit/implicit requirements
@@ -38,11 +40,11 @@ Instructions:
 4. Maintain professional analytical tone throughout
 
 Output JSON structure:
-{
+{{
     "identified_assumptions": [str],
     "clarifying_questions": [str],
     "requires_clarification": bool
-}
+}}
 
 Process flow:
 <thinking>
@@ -59,20 +61,19 @@ Examples:
 3. Complete website spec → No questions needed
 
 Current Input:
-[QUERY]
+{Input_user}
 [user_query]
 [/QUERY]
 
 [CLARIFICATIONS]
-[Clarifications]
+{clarifications}
 [/CLARIFICATIONS]
 
 Generate analysis JSON after <thinking>."""
 }],
-            Input_user = self.context.get("User_input")
-            clarifications = self.context.get("clarifications")
-            Critic_prompt = Critic_prompt_template[0].replace("[user_query]", Input_user)
-            Critic_prompt = Critic_prompt_template[0].replace("[Clarifications]", clarifications)
+
+            #Critic_prompt = Critic_prompt_template[0].replace("[user_query]", Input_user)
+            #Critic_prompt = Critic_prompt_template[0].replace("[Clarifications]", clarifications)
             def extract_json_from_response(response_text: str) -> dict:
                 """
                 Extract JSON content from a response text that may contain markdown code blocks
@@ -133,11 +134,12 @@ Generate analysis JSON after <thinking>."""
             while True:
                 print("WE GOT HERE")
                 response = self.client.chat.completions.create(
-                    model="deepseek-chat",     #autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'],
+                    model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[3]['config_list'][0]['model'],
                     messages=[{"role": "user", "content": Critic_prompt}],
-                    temperature=0.3,
+                    temperature=0,
                     max_tokens=1000,
                 )
+                print(response.choices[0].message.content)
                 try:
                     json_content = extract_json_from_response(response)
                     if json_content:
