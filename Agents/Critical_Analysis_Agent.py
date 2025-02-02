@@ -3,7 +3,6 @@ from autogen import ConversableAgent
 import autogen
 from openai import OpenAI
 import json
-
 #%%
 class CriticalAnalysisAgent(ConversableAgent):
     def __init__(self):
@@ -28,10 +27,7 @@ class CriticalAnalysisAgent(ConversableAgent):
     def handle_message(self, *args, **kwargs):
             Input_user = self.context.get("User_input")
             clarifications = self.context.get("clarifications")
-            Critic_prompt = [
-{
-    "role": "system",
-    "content": f"""Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
+            Critic_prompt = f"""Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
 
 Instructions:
 1. Carefully parse the query for explicit/implicit requirements
@@ -69,15 +65,17 @@ Current Input:
 {clarifications}
 [/CLARIFICATIONS]
 
-Generate analysis JSON after <thinking>."""
-}],
+Generate analysis JSON after <thinking>.""",
+            
+
+
 
             #Critic_prompt = Critic_prompt_template[0].replace("[user_query]", Input_user)
             #Critic_prompt = Critic_prompt_template[0].replace("[Clarifications]", clarifications)
+
             def extract_json_from_response(response_text: str) -> dict:
                 """
-                Extract JSON content from a response text that may contain markdown code blocks
-                and thinking tags.
+                Extract JSON content from a response text that contains markdown code blocks.
                 
                 Args:
                     response_text (str): The full response text containing JSON data
@@ -86,14 +84,11 @@ Generate analysis JSON after <thinking>."""
                     dict: Extracted JSON object or None if extraction fails
                     
                 Example:
-                    text = '''<thinking>some analysis</thinking>
-                    OUTPUT:
-                    ```json
+                    text = '''```json
                     {
                         "key": "value"
                     }
-                    ```
-                    '''
+                    ```'''
                     result = extract_json_from_response(text)
                 """
                 try:
@@ -101,41 +96,49 @@ Generate analysis JSON after <thinking>."""
                     if hasattr(response_text, 'choices'):
                         response_text = response_text.choices[0].message.content
 
-                    # Find the position of 'OUTPUT:'
-                    output_pos = response_text.find('OUTPUT:')
-                    if output_pos == -1:
+                    # Find the start of a JSON code block
+                    start_marker = '```json'
+                    start_idx = response_text.find(start_marker)
+                    if start_idx == -1:
+                        # Check for a generic code block
+                        start_marker = '```'
+                        start_idx = response_text.find(start_marker)
+                        if start_idx == -1:
+                            return None
+                        else:
+                            start_idx += len(start_marker)
+                    else:
+                        start_idx += len(start_marker)
+
+                    # Find the end of the code block
+                    end_idx = response_text.find('```', start_idx)
+                    if end_idx == -1:
                         return None
-                        
-                    # Get the text after 'OUTPUT:'
-                    json_text = response_text[output_pos + 7:].strip()
-                    
-                    # Remove markdown code blocks if present
-                    json_text = json_text.replace('```json', '').replace('```', '').strip()
-                    
-                    # Find the first '{' and last '}'
+
+                    # Extract the content between the markers
+                    json_text = response_text[start_idx:end_idx].strip()
+
+                    # Find the first '{' and last '}' to handle possible leading/trailing text
                     start_pos = json_text.find('{')
                     end_pos = json_text.rfind('}')
-                    
                     if start_pos == -1 or end_pos == -1:
                         return None
-                        
-                    # Extract the JSON string
+
                     json_str = json_text[start_pos:end_pos + 1]
-                    
+
                     # Parse the JSON string
                     return json.loads(json_str)
-                    
-                except json.JSONDecodeError as e:
-                    print(f"JSON decode error: {str(e)}")
-                    return None
                 except Exception as e:
-                    print(f"Error extracting JSON: {str(e)}")
                     return None
+
+
+
+
             while True:
                 print("WE GOT HERE")
                 response = self.client.chat.completions.create(
                     model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[3]['config_list'][0]['model'],
-                    messages=[{"role": "user", "content": Critic_prompt}],
+                    messages=[{"role": "user", "content": str(Critic_prompt)}],
                     temperature=0,
                     max_tokens=1000,
                 )

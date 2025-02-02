@@ -7,7 +7,7 @@ from Agents.prompts.system_prompts import SystemPrompts
 from typing import List, Dict, Any
 
 import autogen
-from .input_validation_agent import Validation_input
+from .Regular_or_Tech import Regular_or_Tech
 from .LLM_Agent import LLM_Agent
 from .Query_Transformation import Query_Transformation
 from .Step_Generator import Step_Generator
@@ -27,7 +27,7 @@ class Conversation(BaseModel):
                     })
 
 initiating_agent = EnhancedInitiatingAgent()
-Regular_or_Tech = Validation_input()
+Regular_or_Tech = Regular_or_Tech()
 LLM_agent = LLM_Agent()
 Query_Agent = Query_Transformation()
 Step_agent = Step_Generator()
@@ -63,7 +63,7 @@ def state_transition(last_speaker, groupchat):
     if last_speaker is CriticalAnalysisAgent:
         try:
             print(context["requires_clarification"])
-            if context["requires_clarification"] == True and len(context["clarifications"])<500:
+            if context["requires_clarification"] == True and len(context["clarifications"])<200:
                 return initiating_agent
             else:
                 return Regular_or_Tech
@@ -71,7 +71,7 @@ def state_transition(last_speaker, groupchat):
             return Regular_or_Tech
     elif last_speaker is Regular_or_Tech:
         # Check if input validation passed
-        response = Regular_or_Tech.handle_message()
+        response = Regular_or_Tech.last_message()
         print(f"Regular_or_Tech : {response}")
         selector = context.get("Reular_or_Tech")
         if selector == "Regular":
