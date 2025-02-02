@@ -1,16 +1,21 @@
+#%%
 from autogen import ConversableAgent
 import autogen
 import os
 import json
 import logging
 
+#print(autogen.config_list_from_json("../OAI_CONFIG_LIST",)[3]['config_list'][0]['model'])
+
+#%%
 
 
-class Validation_input(ConversableAgent):
+class Regular_or_Tech(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Regular_or_Tech",
-            system_message="""
+            system_message="Reply in JSON",
+            description="""
 You are an assistant that determines whether a user's query requires **multi-step technical processing**, **simple processing**, or can be answered directly. Analyze the query and respond as follows:
 
 1. **Return `{"type": "Technical"}`** for complex tasks requiring multi-step execution (e.g., creating websites/applications/games, solving advanced problems).
@@ -39,6 +44,14 @@ You are an assistant that determines whether a user's query requires **multi-ste
 - Return **ONLY** a JSON object (`{"type": "Technical"}` or `{"type": "Simple"}`) or a text response ending with `TERMINATE`.  
 - Never combine JSON with text.  
 - Do not include markdown formatting.  
+
 """,
-            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[3],
+            llm_config={
+                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            },
         )
+
+
+
+
