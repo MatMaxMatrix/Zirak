@@ -3,21 +3,23 @@ from autogen import ConversableAgent
 import autogen
 from openai import OpenAI
 import json
+from rich.console import Console
 #%%
 class CriticalAnalysisAgent(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="CriticalAnalysisAgent",
             system_message="",
-            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[3],
+            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
         )
-        api = autogen.config_list_from_json("OAI_CONFIG_LIST",)[3]['config_list'][0]['api_key']
-        self.client = OpenAI(api_key=api, base_url="https://api.deepseek.com")
+        api = autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['api_key']
+        self.client = OpenAI(api_key=api )  #, base_url="https://api.deepseek.com")
         self.register_reply(
             trigger=self._always_true_trigger,  # Add a specific trigger string
             reply_func=self.handle_message,
             position=0,
         )
+        self.console = Console()
 
     def _always_true_trigger(self, sender):
         # This trigger function always returns True
@@ -27,6 +29,8 @@ class CriticalAnalysisAgent(ConversableAgent):
     def handle_message(self, *args, **kwargs):
             Input_user = self.context.get("User_input")
             clarifications = self.context.get("clarifications")
+            self.console.print(f"[red]{clarifications}.[/red]")
+            
             Critic_prompt = f"""Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
 
 Instructions:
@@ -137,12 +141,13 @@ Generate analysis JSON after <thinking>.""",
             while True:
                 print("WE GOT HERE")
                 response = self.client.chat.completions.create(
-                    model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[3]['config_list'][0]['model'],
+                    model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'],
                     messages=[{"role": "user", "content": str(Critic_prompt)}],
                     temperature=0,
                     max_tokens=1000,
                 )
                 print(response.choices[0].message.content)
+                self.console.print(f"[purple]{response}.[/purple]")
                 try:
                     json_content = extract_json_from_response(response)
                     if json_content:

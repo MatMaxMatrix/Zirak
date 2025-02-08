@@ -15,6 +15,9 @@ from .Evaluatoin_LLM import Evaluatoin_LLM
 from .Initiating_agent import EnhancedInitiatingAgent
 from .Critical_Analysis_Agent import CriticalAnalysisAgent
 import json
+from rich.console import Console
+
+console = Console()
 
 
 import logging
@@ -71,14 +74,29 @@ def state_transition(last_speaker, groupchat):
             return Regular_or_Tech
     elif last_speaker is Regular_or_Tech:
         # Check if input validation passed
-        response = Regular_or_Tech.last_message()
-        print(f"Regular_or_Tech : {response}")
-        selector = context.get("Reular_or_Tech")
-        if selector == "Regular":
-            # Proceed to violation_extraction_agent
+        response = Regular_or_Tech.last_message().strip()
+        type_value = None
+
+        try:
+            response = json.loads(response)
+            type_value = response.get("type")
+        except json.JSONDecodeError:
+            if response.endswith("TERMINATE"):
+                console.print(f"Assistant's response: {response}.")
+                console.print("Conversation has ended by TERMINATE.")
+                return None  # Or any other action to end the conversation
+            else:
+                console.print("[red]NOT A JSON RESPONSE[/red]")
+                return Regular_or_Tech
+            # Decide which agent to proceed with based on the type_value
+        if type_value == "Technical":
+            # Proceed to Query_Agent for complex technical processing
+            return Query_Agent
+        elif type_value == "Simple":
+            # Proceed to LLM_agent for simple processing
             return LLM_agent
         else:
-            return Query_Agent
+            return Regular_or_Tech
 
     elif last_speaker is Query_Agent:
         return Step_agent
