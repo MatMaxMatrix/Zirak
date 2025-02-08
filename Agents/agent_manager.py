@@ -74,20 +74,17 @@ def state_transition(last_speaker, groupchat):
             return Regular_or_Tech
     elif last_speaker is Regular_or_Tech:
         # Check if input validation passed
-        response = Regular_or_Tech.last_message().strip()
+        console.print(f"Assistant's response: {Regular_or_Tech.last_message()}.")
+        console.print(f"Assistant's response: {type(Regular_or_Tech.last_message().get('content'))}.")
+        response = Regular_or_Tech.last_message().get("content")
         type_value = None
 
         try:
             response = json.loads(response)
             type_value = response.get("type")
         except json.JSONDecodeError:
-            if response.endswith("TERMINATE"):
-                console.print(f"Assistant's response: {response}.")
-                console.print("Conversation has ended by TERMINATE.")
-                return None  # Or any other action to end the conversation
-            else:
-                console.print("[red]NOT A JSON RESPONSE[/red]")
-                return Regular_or_Tech
+            console.print("[red]NOT A JSON RESPONSE[/red]")
+            return Regular_or_Tech
             # Decide which agent to proceed with based on the type_value
         if type_value == "Technical":
             # Proceed to Query_Agent for complex technical processing
@@ -99,9 +96,11 @@ def state_transition(last_speaker, groupchat):
             return Regular_or_Tech
 
     elif last_speaker is Query_Agent:
+        console.print(f"Query_Agent's response: {Query_Agent.last_message()}.")
         return Step_agent
 
     elif last_speaker is Step_agent:
+        console.print(f"Step_agent's response: {Step_agent.last_message()}.")
         try:
             context["steps"] = Step_agent.last_message()
             return LLM_Agent

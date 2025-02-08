@@ -5,17 +5,6 @@ import logging
 import autogen
 
 
-llm_config = {
-    "timeout": 600,
-    "cache_seed": 45,  # change the seed for different trials
-    "config_list": autogen.config_list_from_json(
-        "OAI_CONFIG_LIST",
-        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
-    ),
-    "temperature": 0,
-}
-
-
 class Query_Transformation(ConversableAgent):
     def __init__(self):
         super().__init__(
@@ -46,5 +35,9 @@ Input: "Build a todo app"
 Output: Create a todo list application with CRUD operations persistent storage user task categorization due dates priority levels task completion tracking responsive design and offline functionality
 
 Remember: Return ONLY the transformed query as a single line of text. Do not include any labels, explanations, formatting, or additional commentary.""",
-            llm_config=llm_config,
+            
+            llm_config={
+                "model": os.getenv("OPENAI_MODEL", "gpt-4"),
+                "api_key": os.getenv("OPENAI_API_KEY"),
+            },
         )
