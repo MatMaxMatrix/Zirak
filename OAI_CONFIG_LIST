@@ -2,5 +2,7 @@
     {"model": "gpt-4o", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "text"}},
     {"model": "gpt-4o", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "json_object"}},
     {"timeout": 600, "cache_seed": 44, "config_list": [{"model": "gpt-4o", "api_key": "sk-UGJLGt_BWa8cnX9Sc939Hk1wrOWcAKIkd4btcsz4f9T3BlbkFJyp_j_SRb7irjOiIOPwPy1xUPhfo9aRLio3ljAeczsA", "response_format": {"type": "json_object"}}], "temperature": 0},
-    {"timeout": 600, "cache_seed": 44, "config_list": [{"model": "deepseek-chat", "api_key": "sk-0f864567b11944aea82d442aa5594a20", "response_format": {"type": "json_object"}}], "temperature": 0}
+    {"timeout": 600, "cache_seed": 44, "config_list": [{"model": "deepseek-chat", "api_key": "sk-0f864567b11944aea82d442aa5594a20", "response_format": {"type": "json_object"}}], "temperature": 0},
+    {"timeout": 600, "cache_seed": 44, "config_list": [{"model": "deepseek-reasoner", "api_key": "sk-0f864567b11944aea82d442aa5594a20", "response_format": {"type": "json_object"}}], "temperature": 0}
+
 ]
