@@ -103,7 +103,7 @@ def state_transition(last_speaker, groupchat):
         console.print(f"Step_agent's response: {Step_agent.last_message()}.")
         try:
             context["steps"] = Step_agent.last_message()
-            return LLM_Agent
+            return LLM_agent
         except (ValueError, KeyError, json.JSONDecodeError, TypeError) as e:
             print(f"Error exception: {str(e)}")
             return Query_Agent
