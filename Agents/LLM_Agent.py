@@ -48,6 +48,7 @@ class LLM_Agent(ConversableAgent):
         self.client = OpenAI(api_key=api)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
+        self.console.print(f"[red]LLM_Agent start from here.[/red]")
 
         self.thinking_enabled = getattr(Config, 'ENABLE_THINKING', False)
         self.temperature = getattr(Config, 'DEFAULT_TEMPERATURE', 0.7)
@@ -511,7 +512,7 @@ Available tools:
         self.display_available_tools()
 
 
-    def main(self):
+    def main(self, *args, **kwargs):
         """
         Entry point for the assistant CLI loop.
         Provides a prompt for user input and handles 'quit' and 'reset' commands.
@@ -530,6 +531,7 @@ Available tools:
     """
         console.print(Markdown(welcome_text))
         self.display_available_tools()
+        self.console.print(f"[red]LLM_Agent start from here.[/red]")
 
         while True:
             try:
