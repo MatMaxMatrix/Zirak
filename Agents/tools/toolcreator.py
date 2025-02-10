@@ -1,4 +1,4 @@
-from tools.base import BaseTool
+from Agents.tools.base import BaseTool
 from rich.console import Console
 from rich.panel import Panel
 from pathlib import Path

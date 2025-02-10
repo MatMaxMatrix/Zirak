@@ -1,5 +1,5 @@
 # File: /Framework/agents/corrective_action_agent.py
-
+#%%
 from autogen import ConversableAgent
 import os
 import logging
@@ -17,8 +17,8 @@ import pkgutil
 import os
 import json
 import sys
-
-from config import Config
+from pathlib import Path
+from .config import Config
 from Agents.tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
@@ -26,7 +26,7 @@ from Agents.prompts.system_prompts import SystemPrompts
 import autogen
 
 
-
+#%%
 
 class LLM_Agent(ConversableAgent):
     def __init__(self):
@@ -101,12 +101,18 @@ class LLM_Agent(ConversableAgent):
         Returns:
             A list of tools (dicts) containing their 'name', 'description', and 'input_schema'.
         """
+        self.console.print("\n[bold cyan]Loading tools...[/bold cyan]")
         tools = []
         tools_path = getattr(Config, 'TOOLS_DIR', None)
-
+        self.console.print(f"tools_path:{tools_path}")
         if tools_path is None:
             self.console.print("[red]TOOLS_DIR not set in Config[/red]")
             return tools
+        
+        parent_dir = str(Path(tools_path).parent) 
+        if parent_dir not in sys.path:
+            self.console.print(f"[cyan]parent_dir Added to the system path[/cyan]")
+            sys.path.insert(0, parent_dir)
 
         # Clear cached tool modules for fresh import
         for module_name in list(sys.modules.keys()):
@@ -115,14 +121,15 @@ class LLM_Agent(ConversableAgent):
 
         try:
             for module_info in pkgutil.iter_modules([str(tools_path)]):
-                if module_info.name == 'base' or module_info.name == 'filecreatortool':
+                if module_info.name == 'base':
                     continue
-
+                
                 # Attempt loading the tool module
                 try:
                     module = importlib.import_module(f'tools.{module_info.name}')
                     self._extract_tools_from_module(module, tools) # the output is something like this: tools = ({'name': 'tool_name', 'description': 'tool_description', 'input_schema': 'tool_input_schema'}, ...)
                 except ImportError as e:
+                    self.console.print(f"\n[yellow]Error e: {str(e)}[/yellow]")
                     # Handle missing dependencies
                     missing_module = self._parse_missing_dependency(str(e))
                     self.console.print(f"\n[yellow]Missing dependency:[/yellow] {missing_module} for tool {module_info.name}")
@@ -199,7 +206,7 @@ class LLM_Agent(ConversableAgent):
 
     def display_available_tools(self):
         """
-        Print a list of currently loaded tools.
+        Print a list of currently loaded tools. 
         """
         self.console.print("\n[bold cyan]Available tools:[/bold cyan]")
         tool_names = [tool['name'] for tool in self.tools]

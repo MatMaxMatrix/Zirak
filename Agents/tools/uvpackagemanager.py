@@ -2,7 +2,7 @@ import logging
 import subprocess
 from typing import List, Optional
 
-from tools.base import BaseTool
+from Agents.tools.base import BaseTool
 
 
 class UVPackageManager(BaseTool):
