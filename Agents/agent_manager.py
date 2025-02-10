@@ -52,16 +52,9 @@ agents = [
 def state_transition(last_speaker, groupchat):
     context = groupchat.context
     messages = groupchat.messages
-    print(f"messages{messages}")
-
     if len(messages) <= 1:
-        print("%%%%%%%%%%%%%%%%%%")
         return initiating_agent
     if last_speaker is initiating_agent:
-        print("%%%333333%%%%%%%%%%%")
-        print(f"Last_message{initiating_agent.last_message()}")
-        print(f"messages{messages}")
-        print(f"context{context}")
         return CriticalAnalysisAgent
     if last_speaker is CriticalAnalysisAgent:
         try:

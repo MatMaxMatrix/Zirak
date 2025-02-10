@@ -2,6 +2,11 @@ from autogen import ConversableAgent, UserProxyAgent
 import autogen
 import json
 import logging
+from prompt_toolkit import prompt
+from prompt_toolkit.styles import Style
+from rich.console import Console
+
+
 
 
 class EnhancedInitiatingAgent(ConversableAgent):
@@ -17,22 +22,19 @@ class EnhancedInitiatingAgent(ConversableAgent):
             reply_func=self.handle_message,
             position=0,
         )
-
+        self.console = Console()
         self.conversation_context = {}
     def _always_true_trigger(self, sender):
         return True
 
     def handle_message(self, *args, **kwargs):
         """Process input and gather clarifications if needed"""
-        print(f"Here is the context: {self.context}")
         
         # If clarification is needed (checked from conversation context)
         if self.context.get("requires_clarification", False):
-            print("WE ARE HERE")
             clarifying_questions = self.context["clarifying_questions"]
             clarification_responses = {}
-            print(type(clarifying_questions))
-            
+
             for question in clarifying_questions:
                 # Get user input for each clarifying question
                 response = self.get_human_input(question)
@@ -47,13 +49,11 @@ class EnhancedInitiatingAgent(ConversableAgent):
             if self.context["clarifications"]:
                 clarification_values = self.context["clarifications"]
                 clarification_values += " | " + new_values
-                print(f"Here is the length of the clarifications: {len(clarification_values)}")
                 self.context["clarifications"] = clarification_values
             else:
                 self.context["clarifications"] = new_values
                 
             self.context["requires_clarification"] = False
-            print(f"Here is the clarifications: {self.context['clarifications']}")
             # Return enhanced query with clarifications
             return True, {"role": "user", "content": new_values}
         else:
@@ -61,15 +61,17 @@ class EnhancedInitiatingAgent(ConversableAgent):
             self.context["User_input"] = response
             return True, {"role": "user", "content": response}
 
-    def get_human_input(self, Question: str = None):
+    def get_human_input(self, Question: str = ""):
         """Enhanced method to get human input with validation"""
-        while True:
-            try:
-                user_input = input(f"Question, {Question}: ")
-                if user_input.strip():  # Basic validation
-                    return user_input
-                print("Please provide a non-empty response.")
-            except Exception as e:
-                logging.error(f"Error getting human input: {str(e)}")
-                print("An error occurred. Please try again.")
+        style = Style.from_dict({'prompt': 'purple'})
+
+        try:
+            prompt_text = f"You, {Question}: " if Question else "You: "
+            user_input = self.console.input(f"[yellow]{prompt_text}[/yellow]").strip()
+            if user_input.strip():  # Basic validation
+                return user_input
+            print("Please provide a non-empty response.")
+        except Exception as e:
+            logging.error(f"Error getting human input: {str(e)}")
+            print("An error occurred. Please try again.")
 
