@@ -30,22 +30,12 @@ import autogen
 
 class LLM_Agent(ConversableAgent):
     def __init__(self):
-        self.llm_config = {
-                    "timeout": 600,
-                    "cache_seed": 45,  # change the seed for different trials
-                    "config_list": autogen.config_list_from_json(
-                        "OAI_CONFIG_LIST",
-                        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
-                    ),
-                    "temperature": 0,
-                }
-        api = self.llm_config["config_list"][0].get("api_key")
         if not getattr(Config, 'ANTHROPIC_API_KEY', None):
             raise ValueError("No ANTHROPIC_API_KEY found in environment variables")
 
         # Initialize Anthropics client
         #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=api)
+        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
         self.console.print(f"[red]LLM_Agent start from here.[/red]")
@@ -62,7 +52,7 @@ class LLM_Agent(ConversableAgent):
         super().__init__(
             name="LLM_Agent",
             system_message="",
-            llm_config=self.llm_config,
+            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
         )
         self.register_reply(
             trigger=self._always_true_trigger,
@@ -357,38 +347,43 @@ class LLM_Agent(ConversableAgent):
 
         self.console.print("---")
 
+
     def _get_completion(self):
         """
         Get a completion from the Anthropic API.
         Handles both text-only and multimodal messages.
         """
-        # for loop to iterate over tools used only for OpenAI API
-        self.console.print("START")
-        functions = []
-        for tool in self.tools:
-            functions.append({
-                "name": tool['name'],
-                "description": tool['description'],
-                "parameters": tool['input_schema']
-            })
-        self.console.print(self.conversation_history)
         try:
+            # Update your tools list to ensure each tool has a "type" property.
+            updated_tools = []
+            for tool in self.tools:
+                if "type" not in tool:
+                    tool["type"] = "tool"  # Ensure the required type is provided
+                updated_tools.append(tool)
+
+            # Prepend the system prompt to the conversation history.
+            messages = [
+                *self.conversation_history,
+            ]
+            self.console.print(f"\n[bold cyan]{messages}[/bold cyan]")
+            self.console.print("\n[bold cyan]Cold HERE[/bold cyan]")
+            self.console.print(f"\n[bold cyan]{Config.MODEL}[/bold cyan][bold yellow]{messages}[/bold yellow][bold magenta]{self.temperature}[/bold magenta][bold green]{updated_tools}[/bold green]")
+
             response = self.client.chat.completions.create(
                 model=Config.MODEL,
-                messages=self.conversation_history,
+                messages=messages,
                 max_tokens=min(
                     Config.MAX_TOKENS,
                     Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used
                 ),
                 temperature=self.temperature,
-                functions=functions,  # For OpenAI function calls
-                function_call="auto",  # Change to "none" if no functions are being called
+                functions=updated_tools,  # Updated parameter name and list with required keys
             )
 
-            self.console.print(f"\n[bold cyan]🤖 response:[/bold cyan]{response}")
+            self.console.print("\n[bold cyan]HOT HERE[/bold cyan]")
             # Update token usage based on response usage
             if hasattr(response, 'usage') and response.usage:
-                message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
+                message_tokens = response.usage.prompt_tokens + response.usage.prompt_tokens
                 self.total_tokens_used += message_tokens
                 self._display_token_usage(response.usage)
 
@@ -396,70 +391,63 @@ class LLM_Agent(ConversableAgent):
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
 
-            if response.choices[0].finish_reason == "function_call":
+            if response.choices[0].finish_reason == "tool_use":
                 self.console.print("\n[bold yellow]  Handling Tool Use...[/bold yellow]\n")
 
                 tool_results = []
-                if getattr(response.choices[0].message, 'function_call', None) and isinstance(response.choices[0].message.function_call.name, str):
-                    self.console.print(f"Here:{response.choices[0].message.function_call.name}")
-
-                    tool_name = response.choices[0].message.function_call.name
-                    tool_input_str = response.choices[0].message.function_call.arguments
-                    tool_input = json.loads(tool_input_str) 
-                    class ToolUseMock:
-                        name = tool_name
-                        input = tool_input
-                    tool = ToolUseMock()
-                    result = self._execute_tool(tool)
-                    self.console.print(f"Result:{result}")
-
-                    # Handle structured data (like image blocks) vs text
-                    if isinstance(result, (list, dict)):
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": response.id,
-                            "content": result  # Keep structured data intact
-                        })
-                    else:
-                        # Convert text results to proper content blocks
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": response.id,
-                            "content": [{"type": "text", "text": str(result)}]
-                        })
+                if getattr(response, 'content', None) and isinstance(response.content, list):
+                    # Execute each tool in the response content
+                    for content_block in response.content:
+                        if content_block.type == "tool_use":
+                            result = self._execute_tool(content_block)
+                            
+                            # Handle structured data (like image blocks) vs text
+                            if isinstance(result, (list, dict)):
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": content_block.id,
+                                    "content": result  # Keep structured data intact
+                                })
+                            else:
+                                # Convert text results to proper content blocks
+                                tool_results.append({
+                                    "type": "tool_result",
+                                    "tool_use_id": content_block.id,
+                                    "content": [{"type": "text", "text": str(result)}]
+                                })
 
                     # Append tool usage to conversation and continue
                     self.conversation_history.append({
                         "role": "assistant",
-                        "content": f"Called function: {response.choices[0].message.function_call.name} with arguments: {response.choices[0].message.function_call.arguments}"
+                        "content": response.content
                     })
                     self.conversation_history.append({
                         "role": "user",
-                        "content": f"{tool_results}"
+                        "content": tool_results
                     })
-                    self.console.print(self.conversation_history)
                     return self._get_completion()  # Recursive call to continue the conversation
-                    
+
                 else:
                     self.console.print("[red]No tool content received despite 'tool_use' stop reason.[/red]")
                     return "Error: No tool content received"
-            
+
             # Final assistant response
-            if (getattr(response.choices[0].message, 'content', None) and 
-                isinstance(response.choices[0].message.content, str)):
+            if response.choices and len(response.choices) > 0:
                 final_content = response.choices[0].message.content
-                self.conversation_history.append({
-                    "role": "assistant",
-                    "content": response.choices[0].message.content
-                })
-                return final_content
-            else:
+                if final_content:
+                    self.conversation_history.append({
+                        "role": "assistant",
+                        "content": final_content
+                    })  
+                    return final_content
                 self.console.print("[red]No content in final response.[/red]")
                 return "No response content available."
 
         except Exception as e:
             logging.error(f"Error in _get_completion: {str(e)}")
             return f"Error: {str(e)}"
+        
+
 
     def chat(self, user_input):
         """
@@ -542,7 +530,7 @@ Available tools:
 
         while True:
             try:
-                user_input = prompt("You: ", style=style).strip()
+                user_input = input("You: ").strip()
 
                 if user_input.lower() == 'quit':
                     console.print("\n[bold blue]👋 Goodbye![/bold blue]")
