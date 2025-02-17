@@ -43,6 +43,7 @@ class LLM_Agent(ConversableAgent):
         self.thinking_enabled = getattr(Config, 'ENABLE_THINKING', False)
         self.temperature = getattr(Config, 'DEFAULT_TEMPERATURE', 0.7)
         self.total_tokens_used = 0
+        self.current_step_index = 0 
 
         self.tools = self._load_tools()
         self.conversation_history.append({
@@ -111,7 +112,8 @@ class LLM_Agent(ConversableAgent):
 
         try:
             for module_info in pkgutil.iter_modules([str(tools_path)]):
-                if module_info.name == 'base':
+                if module_info.name == 'base' or module_info.name == 'filecreatortool':
+                    self.console.print(f"[red]skipping base and filecreatortool tool[/red]")    
                     continue
                 
                 # Attempt loading the tool module
@@ -353,6 +355,9 @@ class LLM_Agent(ConversableAgent):
         Get a completion from the Anthropic API.
         Handles both text-only and multimodal messages.
         """
+        from openai import OpenAI
+        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
+        #self.console.print(f"[red]context {self.context['steps']}[/red]")
         try:
             # Update your tools list to ensure each tool has a "type" property.
             updated_tools = []
@@ -365,22 +370,19 @@ class LLM_Agent(ConversableAgent):
             messages = [
                 *self.conversation_history,
             ]
-            self.console.print(f"\n[bold cyan]{messages}[/bold cyan]")
-            self.console.print("\n[bold cyan]Cold HERE[/bold cyan]")
-            self.console.print(f"\n[bold cyan]{Config.MODEL}[/bold cyan][bold yellow]{messages}[/bold yellow][bold magenta]{self.temperature}[/bold magenta][bold green]{updated_tools}[/bold green]")
+            #self.console.print(f"\n[bold cyan]{messages}[/bold cyan]")
+            #self.console.print("\n[bold cyan]Cold HERE[/bold cyan]")
+            #self.console.print(f"\n[bold cyan]{Config.MODEL}[/bold cyan][bold yellow]{messages}[/bold yellow][bold magenta]{self.temperature}[/bold magenta][bold green]{updated_tools}[/bold green]")
 
             response = self.client.chat.completions.create(
                 model=Config.MODEL,
                 messages=messages,
-                max_tokens=min(
-                    Config.MAX_TOKENS,
-                    Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used
-                ),
+                max_tokens=min(Config.MAX_TOKENS,Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
                 temperature=self.temperature,
                 functions=updated_tools,  # Updated parameter name and list with required keys
             )
 
-            self.console.print("\n[bold cyan]HOT HERE[/bold cyan]")
+            #self.console.print("\n[bold cyan]HOT HERE[/bold cyan]")
             # Update token usage based on response usage
             if hasattr(response, 'usage') and response.usage:
                 message_tokens = response.usage.prompt_tokens + response.usage.prompt_tokens
@@ -526,11 +528,25 @@ Available tools:
     """
         console.print(Markdown(welcome_text))
         self.display_available_tools()
-        self.console.print(f"[red]LLM_Agent start from here.[/red]")
-
         while True:
             try:
-                user_input = input("You: ").strip()
+                # Check for context steps and process them first
+                if hasattr(self, 'context') and 'steps' in self.context:
+                    # Convert steps dictionary to ordered list
+                    step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
+                    self.console.print(f"[yellow]step_keys: {step_keys}[/yellow]")
+                    if self.current_step_index < len(step_keys):
+                        current_step_key = step_keys[self.current_step_index]
+                        self.console.print(f"[red]current_step_key context: {self.context['steps'][current_step_key]}[/red]")
+                        user_input = self.context['steps'][current_step_key]
+                        self.current_step_index += 1
+                    else:
+                        # Clear context after processing all steps
+                        del self.context['steps']
+                        self.current_step_index = 0
+                        user_input = prompt("You: ", style=style).strip()
+                else:
+                    user_input = prompt("You: ", style=style).strip()
 
                 if user_input.lower() == 'quit':
                     console.print("\n[bold blue]👋 Goodbye![/bold blue]")
