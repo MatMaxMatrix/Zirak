@@ -41,11 +41,11 @@ CriticalAnalysisAgent = CriticalAnalysisAgent()
 agents = [
     initiating_agent,
     CriticalAnalysisAgent,
-    Regular_or_Tech,
+    # Regular_or_Tech,
     LLM_agent,
     Query_Agent,
     Step_agent,
-    Evaluation_agent,
+    # Evaluation_agent,
 ]
 
 
@@ -62,31 +62,31 @@ def state_transition(last_speaker, groupchat):
             if context["requires_clarification"] == True and len(context["clarifications"])<200:
                 return initiating_agent
             else:
-                return Regular_or_Tech
+                return Query_Agent
         except json.JSONDecodeError:
-            return Regular_or_Tech
-    elif last_speaker is Regular_or_Tech:
-        # Check if input validation passed
-        console.print(f"Assistant's response: {Regular_or_Tech.last_message()}.")
-        console.print(f"Assistant's response: {type(Regular_or_Tech.last_message().get('content'))}.")
-        response = Regular_or_Tech.last_message().get("content")
-        type_value = None
-
-        try:
-            response = json.loads(response)
-            type_value = response.get("type")
-        except json.JSONDecodeError:
-            console.print("[red]NOT A JSON RESPONSE[/red]")
-            return Regular_or_Tech
-            # Decide which agent to proceed with based on the type_value
-        if type_value == "Technical":
-            # Proceed to Query_Agent for complex technical processing
             return Query_Agent
-        elif type_value == "Simple":
-            # Proceed to LLM_agent for simple processing
-            return LLM_agent
-        else:
-            return Regular_or_Tech
+    # elif last_speaker is Regular_or_Tech:
+    #     # Check if input validation passed
+    #     console.print(f"Assistant's response: {Regular_or_Tech.last_message()}.")
+    #     console.print(f"Assistant's response: {type(Regular_or_Tech.last_message().get('content'))}.")
+    #     response = Regular_or_Tech.last_message().get("content")
+    #     type_value = None
+
+    #     try:
+    #         response = json.loads(response)
+    #         type_value = response.get("type")
+    #     except json.JSONDecodeError:
+    #         console.print("[red]NOT A JSON RESPONSE[/red]")
+    #         return Regular_or_Tech
+    #         # Decide which agent to proceed with based on the type_value
+    #     if type_value == "Technical":
+    #         # Proceed to Query_Agent for complex technical processing
+    #         return Query_Agent
+    #     elif type_value == "Simple":
+    #         # Proceed to LLM_agent for simple processing
+    #         return LLM_agent
+    #     else:
+    #         return Regular_or_Tech
 
     elif last_speaker is Query_Agent:
         console.print(f"Query_Agent's response: {Query_Agent.last_message()}.")
@@ -100,14 +100,19 @@ def state_transition(last_speaker, groupchat):
         except (ValueError, KeyError, json.JSONDecodeError, TypeError) as e:
             print(f"Error exception: {str(e)}")
             return Step_agent
+    
     elif last_speaker is LLM_agent:
-        return Evaluation_agent
-    elif last_speaker is Evaluation_agent and context.get("total_steps", 0) >= context.get("current_step", 1):
-        if context.get("Evaluation_result") == "Yes":
-            context["current_step"] += 1
-            context["stage_prompt"] = context.get("stage_prompt", "")[context["current_step"]]
-            return LLM_agent
-            
+        # Check if there are more steps to process
+        if hasattr(LLM_agent, 'current_step_index') and 'steps' in context:
+            step_keys = sorted([k for k in context['steps'].keys() if k.startswith('step')])
+            if LLM_agent.current_step_index < len(step_keys):
+                # There are more steps to process, continue with LLM_agent
+                return LLM_agent
+        # All steps completed or no steps to process
+        return initiating_agent
+    
+    # Default case - return to initiating agent
+    return initiating_agent
 
 group_chat = GroupChat(
     agents=agents,
