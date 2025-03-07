@@ -123,7 +123,22 @@ class FileCreatorTool(BaseTool):
                 encoding = file_spec.get('encoding', 'utf-8')
 
                 # Create parent directories
-                path.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if not path.parent.exists():
+                        results.append({
+                            'path': str(path),
+                            'success': False,
+                            'error': f"Failed to create parent directory: {path.parent}"
+                        })
+                        continue
+                except Exception as e:
+                    results.append({
+                        'path': str(path),
+                        'success': False,
+                        'error': f"Error creating parent directory: {str(e)}"
+                    })
+                    continue
 
                 # Handle content
                 if isinstance(content, dict):
@@ -140,11 +155,19 @@ class FileCreatorTool(BaseTool):
                     with open(path, mode, encoding=encoding, newline='') as f:
                         f.write(content)
 
-                results.append({
-                    'path': str(path),
-                    'success': True,
-                    'size': path.stat().st_size
-                })
+                # Verify file was created
+                if path.exists() and path.is_file():
+                    results.append({
+                        'path': str(path),
+                        'success': True,
+                        'size': path.stat().st_size
+                    })
+                else:
+                    results.append({
+                        'path': str(path),
+                        'success': False,
+                        'error': "File creation command completed but file does not exist"
+                    })
 
             except Exception as e:
                 results.append({

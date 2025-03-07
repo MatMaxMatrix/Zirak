@@ -19,10 +19,10 @@ import json
 import sys
 from pathlib import Path
 from .config import Config
-from Agents.tools.base import BaseTool
+from .tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
-from Agents.prompts.system_prompts import SystemPrompts
+from .prompts.system_prompts import SystemPrompts
 import autogen
 
 
@@ -45,11 +45,20 @@ class LLM_Agent(ConversableAgent):
         self.total_tokens_used = 0
         self.current_step_index = 0 
 
-        self.tools = self._load_tools()
+        # Initialize the tool manager
+        self.tool_manager = ToolManager(console=self.console)
+        
+        # Generate dynamic tool information for the system prompt
+        tool_info = self.tool_manager.generate_tool_info()
+        
+        # Add system message with dynamic tool information
+        system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}"
         self.conversation_history.append({
-                    "role": "system",
-                    "content": f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}"
-                })
+            "role": "system",
+            "content": system_prompt
+        })
+        
+        # Call super().__init__ after setting up our attributes
         super().__init__(
             name="LLM_Agent",
             system_message="",
@@ -69,145 +78,214 @@ class LLM_Agent(ConversableAgent):
         Execute the uvpackagemanager tool directly to install the missing package.
         Returns True if installation seems successful (no errors in output), otherwise False.
         """
-        class ToolUseMock:
-            name = "uvpackagemanager"
-            input = {
-                "command": "install",
-                "packages": [package_name]
-            }
+        # Use the tool manager's method
+        return self.tool_manager._execute_uv_install(package_name)
 
-        result = self._execute_tool(ToolUseMock())
-        if "Error" not in result and "failed" not in result.lower():
-            self.console.print("[green]The package was installed successfully.[/green]")
-            return True
-        else:
-            self.console.print(f"[red]Failed to install {package_name}. Output:[/red] {result}")
-            return False
-
-    def _load_tools(self) -> List[Dict[str, Any]]:
+    @property
+    def tools(self):
         """
-        Dynamically load all tool classes from the tools directory.
-        If a dependency is missing, prompt the user to install it via uvpackagemanager.
-        
-        Returns:
-            A list of tools (dicts) containing their 'name', 'description', and 'input_schema'.
+        Get the list of available tools.
         """
-        self.console.print("\n[bold cyan]Loading tools...[/bold cyan]")
-        tools = []
-        tools_path = getattr(Config, 'TOOLS_DIR', None)
-        self.console.print(f"tools_path:{tools_path}")
-        if tools_path is None:
-            self.console.print("[red]TOOLS_DIR not set in Config[/red]")
-            return tools
-        
-        parent_dir = str(Path(tools_path).parent) 
-        if parent_dir not in sys.path:
-            self.console.print(f"[cyan]parent_dir Added to the system path[/cyan]")
-            sys.path.insert(0, parent_dir)
-
-        # Clear cached tool modules for fresh import
-        for module_name in list(sys.modules.keys()):
-            if module_name.startswith('tools.') and module_name != 'tools.base':
-                del sys.modules[module_name]
-
-        try:
-            for module_info in pkgutil.iter_modules([str(tools_path)]):
-                if module_info.name == 'base' or module_info.name == 'filecreatortool':
-                    self.console.print(f"[red]skipping base and filecreatortool tool[/red]")    
-                    continue
-                
-                # Attempt loading the tool module
-                try:
-                    module = importlib.import_module(f'tools.{module_info.name}')
-                    self._extract_tools_from_module(module, tools) # the output is something like this: tools = ({'name': 'tool_name', 'description': 'tool_description', 'input_schema': 'tool_input_schema'}, ...)
-                except ImportError as e:
-                    self.console.print(f"\n[yellow]Error e: {str(e)}[/yellow]")
-                    # Handle missing dependencies
-                    missing_module = self._parse_missing_dependency(str(e))
-                    self.console.print(f"\n[yellow]Missing dependency:[/yellow] {missing_module} for tool {module_info.name}")
-                    user_response = input(f"Would you like to install {missing_module}? (y/n): ").lower()
-
-                    if user_response == 'y':
-                        success = self._execute_uv_install(missing_module)
-                        if success:
-                            # Retry loading the module after installation
-                            try:
-                                module = importlib.import_module(f'tools.{module_info.name}')
-                                self._extract_tools_from_module(module, tools) # the output is something like this: tools = ({'name': 'tool_name', 'description': 'tool_description', 'input_schema': 'tool_input_schema'}, ...)
-                            except Exception as retry_err:
-                                self.console.print(f"[red]Failed to load tool after installation: {str(retry_err)}[/red]")
-                        else:
-                            self.console.print(f"[red]Installation of {missing_module} failed. Skipping this tool.[/red]")
-                    else:
-                        self.console.print(f"[yellow]Skipping tool {module_info.name} due to missing dependency[/yellow]")
-                except Exception as mod_err:
-                    self.console.print(f"[red]Error loading module {module_info.name}:[/red] {str(mod_err)}")
-        except Exception as overall_err:
-            self.console.print(f"[red]Error in tool loading process:[/red] {str(overall_err)}")
-
-        return tools
-
-    def _parse_missing_dependency(self, error_str: str) -> str:
-        """
-        Parse the missing dependency name from an ImportError string.
-        """
-        if "No module named" in error_str:
-            parts = error_str.split("No module named")
-            missing_module = parts[-1].strip(" '\"")
-        else:
-            missing_module = error_str
-        return missing_module
-
-    def _extract_tools_from_module(self, module, tools: List[Dict[str, Any]]) -> None:
-        """
-        Given a tool module, find and instantiate all tool classes (subclasses of BaseTool).
-        Append them to the 'tools' list.
-        """
-        for name, obj in inspect.getmembers(module):
-            if (inspect.isclass(obj) and issubclass(obj, BaseTool) and obj != BaseTool):
-                try:
-                    tool_instance = obj()
-                    tools.append({
-                        "name": tool_instance.name,
-                        "description": tool_instance.description,
-                        "input_schema": tool_instance.input_schema
-                    })
-                    self.console.print(f"[green]Loaded tool:[/green] {tool_instance.name}")
-                except Exception as tool_init_err:
-                    self.console.print(f"[red]Error initializing tool {name}:[/red] {str(tool_init_err)}")
+        return self.tool_manager.get_tools()
 
     def refresh_tools(self):
         """
-        Refresh the list of tools and show newly discovered tools.
+        Refresh the list of available tools by reloading them from the tools directory.
+        This is useful when new tools are added or existing tools are modified.
         """
-        current_tool_names = {tool['name'] for tool in self.tools}
-        self.tools = self._load_tools()
-        new_tool_names = {tool['name'] for tool in self.tools}
-        new_tools = new_tool_names - current_tool_names
-
-        if new_tools:
-            self.console.print("\n")
-            for tool_name in new_tools:
-                tool_info = next((t for t in self.tools if t['name'] == tool_name), None)
-                if tool_info:
-                    description_lines = tool_info['description'].strip().split('\n')
-                    formatted_description = '\n    '.join(line.strip() for line in description_lines)
-                    self.console.print(f"[bold green]NEW[/bold green] 🔧 [cyan]{tool_name}[/cyan]:\n    {formatted_description}")
-        else:
-            self.console.print("\n[yellow]No new tools found[/yellow]")
+        self.tool_manager.refresh_tools()
+        self.display_available_tools()
 
     def display_available_tools(self):
         """
-        Print a list of currently loaded tools. 
+        Display all available tools with their descriptions.
         """
-        self.console.print("\n[bold cyan]Available tools:[/bold cyan]")
-        tool_names = [tool['name'] for tool in self.tools]
-        if tool_names:
-            formatted_tools = ", ".join([f"🔧 [cyan]{name}[/cyan]" for name in tool_names])
-        else:
-            formatted_tools = "No tools available."
-        self.console.print(formatted_tools)
-        self.console.print("\n---")
+        self.tool_manager.display_available_tools()
+
+    def _execute_tool(self, tool_use):
+        """
+        Execute a tool with the given parameters.
+        
+        Args:
+            tool_use: An object with 'name' and 'input' attributes
+        
+        Returns:
+            str: The result of the tool execution
+        """
+        tool_name = tool_use.name
+        tool_input = tool_use.input
+        
+        self.console.print(f"\n[bold cyan]Executing tool:[/bold cyan] {tool_name}")
+        self.console.print(f"[cyan]Input:[/cyan] {json.dumps(self._clean_data_for_display(tool_input), indent=2)}")
+        
+        # Special handling for common tools
+        if tool_name.lower() == "createfolderstool":
+            self.console.print(f"[cyan]Special handling for createfolderstool[/cyan]")
+            # Ensure the tool_input has the correct parameter name
+            if "paths" in tool_input and "folder_paths" not in tool_input:
+                tool_input["folder_paths"] = tool_input["paths"]
+                self.console.print(f"[cyan]Converted 'paths' parameter to 'folder_paths' for compatibility[/cyan]")
+        elif tool_name.lower() == "filecreatortool":
+            self.console.print(f"[cyan]Special handling for filecreatortool[/cyan]")
+            # Ensure parent directories exist
+            if isinstance(tool_input.get('files'), dict):
+                path = Path(tool_input['files']['path'])
+                try:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    self.console.print(f"[green]Created parent directory: {path.parent}[/green]")
+                except Exception as e:
+                    self.console.print(f"[red]Error creating parent directory: {str(e)}[/red]")
+            elif isinstance(tool_input.get('files'), list):
+                for file_spec in tool_input['files']:
+                    path = Path(file_spec['path'])
+                    try:
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        self.console.print(f"[green]Created parent directory: {path.parent}[/green]")
+                    except Exception as e:
+                        self.console.print(f"[red]Error creating parent directory: {str(e)}[/red]")
+        
+        # Try both import paths for each module
+        import_paths = [
+            lambda name: f"Agents.tools.{name}",
+            lambda name: f"tools.{name}"
+        ]
+        
+        # Get tools directory path
+        tools_path = getattr(Config, 'TOOLS_DIR', None)
+        if tools_path is None:
+            tools_path = Path(__file__).parent / "tools"
+        
+        # Ensure tools_path is a Path object
+        if not isinstance(tools_path, Path):
+            tools_path = Path(tools_path)
+        
+        result = None
+        
+        # Search for the tool in all modules in the tools directory
+        for module_info in pkgutil.iter_modules([str(tools_path)]):
+            module_name = module_info.name
+            if module_name == 'base':
+                continue
+                
+            module = None
+            for import_path_func in import_paths:
+                try:
+                    full_module_name = import_path_func(module_name)
+                    self.console.print(f"[cyan]Trying to import module: {full_module_name}[/cyan]")
+                    module = importlib.import_module(full_module_name)
+                    self.console.print(f"[green]Successfully imported module: {full_module_name}[/green]")
+                    break
+                except ImportError as e:
+                    self.console.print(f"[yellow]Failed to import {import_path_func(module_name)}: {str(e)}[/yellow]")
+            
+            if not module:
+                self.console.print(f"[red]Could not import module {module_name} using any import path[/red]")
+                continue
+                
+            try:
+                # Try to find a tool instance with the matching name
+                tool_instance = self._find_tool_instance_in_module(module, tool_name)
+                if tool_instance:
+                    self.console.print(f"[green]Found tool '{tool_name}' in module '{module_name}'[/green]")
+                    
+                    # Execute the tool
+                    try:
+                        self.console.print(f"[cyan]Executing tool with parameters: {json.dumps(tool_input, indent=2)}[/cyan]")
+                        result = tool_instance.execute(**tool_input)
+                        self.console.print(f"[green]Tool execution successful[/green]")
+                        break
+                    except Exception as exec_err:
+                        self.console.print(f"[red]Error executing tool: {str(exec_err)}[/red]")
+                        import traceback
+                        self.console.print(f"[red]{traceback.format_exc()}[/red]")
+                        result = f"Error executing tool '{tool_name}': {str(exec_err)}"
+                        break
+            except Exception as e:
+                self.console.print(f"[red]Error processing module {module_name}: {str(e)}[/red]")
+                import traceback
+                self.console.print(f"[red]{traceback.format_exc()}[/red]")
+        
+        if result is None:
+            result = f"Error: Tool '{tool_name}' not found or failed to execute"
+        
+        self.console.print(f"[cyan]Result:[/cyan] {self._clean_parsed_data(result)}")
+        
+        # Display tool usage in a formatted way
+        if getattr(Config, 'SHOW_TOOL_USAGE', True):
+            self._display_tool_usage(tool_name, tool_input, result)
+        
+        return result
+
+    def _find_tool_instance_in_module(self, module, tool_name: str):
+        """
+        Search a given module for a tool class matching tool_name and return an instance of it.
+        
+        Args:
+            module: The module to search in
+            tool_name: The name of the tool to find
+            
+        Returns:
+            An instance of the tool class if found, None otherwise
+        """
+        try:
+            self.console.print(f"[cyan]Searching for tool '{tool_name}' in module '{module.__name__}'[/cyan]")
+            
+            # Normalize the tool name for case-insensitive comparison
+            normalized_tool_name = tool_name.lower()
+            
+            # First, try to find a class with a matching name attribute
+            tool_candidates = []
+            
+            for name, obj in inspect.getmembers(module):
+                if (inspect.isclass(obj) and hasattr(obj, '__mro__')):
+                    # Check if BaseTool is in the class's MRO (Method Resolution Order)
+                    is_tool_class = False
+                    for base in obj.__mro__:
+                        if base.__name__ == 'BaseTool':
+                            is_tool_class = True
+                            break
+                    
+                    if is_tool_class and obj.__name__ != 'BaseTool':
+                        try:
+                            candidate_tool = obj()
+                            if hasattr(candidate_tool, 'name'):
+                                tool_name_value = candidate_tool.name.lower()
+                                self.console.print(f"[cyan]Found tool class '{name}' with name '{candidate_tool.name}'[/cyan]")
+                                
+                                # Exact match
+                                if tool_name_value == normalized_tool_name:
+                                    self.console.print(f"[green]Found exact match: tool class '{name}' with name '{candidate_tool.name}'[/green]")
+                                    return candidate_tool
+                                
+                                # Add to candidates for fuzzy matching later
+                                similarity_score = 0
+                                # Exact substring match
+                                if normalized_tool_name in tool_name_value or tool_name_value in normalized_tool_name:
+                                    similarity_score += 2
+                                # Class name contains tool name
+                                if normalized_tool_name in name.lower():
+                                    similarity_score += 1
+                                
+                                if similarity_score > 0:
+                                    tool_candidates.append((candidate_tool, similarity_score))
+                        except Exception as e:
+                            self.console.print(f"[yellow]Error instantiating tool class '{name}': {str(e)}[/yellow]")
+            
+            # If no exact match found, return the best candidate based on similarity score
+            if tool_candidates:
+                # Sort by similarity score (highest first)
+                tool_candidates.sort(key=lambda x: x[1], reverse=True)
+                best_candidate, score = tool_candidates[0]
+                self.console.print(f"[green]Found best matching tool: '{best_candidate.name}' with similarity score {score}[/green]")
+                return best_candidate
+            
+            self.console.print(f"[yellow]No tool with name '{tool_name}' found in module '{module.__name__}'[/yellow]")
+            return None
+        except Exception as e:
+            self.console.print(f"[red]Error searching for tool in module '{module.__name__}': {str(e)}[/red]")
+            import traceback
+            self.console.print(f"[red]{traceback.format_exc()}[/red]")
+            return None
 
     def _display_tool_usage(self, tool_name: str, input_data: Dict, result: str):
         """
@@ -278,50 +356,6 @@ class LLM_Agent(ConversableAgent):
             return "[base64 data omitted]"
         return data
 
-    def _execute_tool(self, tool_use):
-        """
-        Given a tool usage request (with tool name and inputs),
-        dynamically load and execute the corresponding tool.
-        """
-        tool_name = tool_use.name
-        tool_input = tool_use.input or {}
-        tool_result = None
-
-        try:
-            module = importlib.import_module(f'tools.{tool_name}')
-            tool_instance = self._find_tool_instance_in_module(module, tool_name)
-
-            if not tool_instance:
-                tool_result = f"Tool not found: {tool_name}"
-            else:
-                # Execute the tool with the provided input
-                try:
-                    result = tool_instance.execute(**tool_input)
-                    # Keep structured data intact
-                    tool_result = result
-                except Exception as exec_err:
-                    tool_result = f"Error executing tool '{tool_name}': {str(exec_err)}"
-        except ImportError:
-            tool_result = f"Failed to import tool: {tool_name}"
-        except Exception as e:
-            tool_result = f"Error executing tool: {str(e)}"
-
-        # Display tool usage with proper handling of structured data
-        self._display_tool_usage(tool_name, tool_input, 
-            json.dumps(tool_result) if not isinstance(tool_result, str) else tool_result)
-        return tool_result
-
-    def _find_tool_instance_in_module(self, module, tool_name: str):
-        """
-        Search a given module for a tool class matching tool_name and return an instance of it.
-        """
-        for name, obj in inspect.getmembers(module):
-            if (inspect.isclass(obj) and issubclass(obj, BaseTool) and obj != BaseTool):
-                candidate_tool = obj()
-                if candidate_tool.name == tool_name:
-                    return candidate_tool
-        return None
-
     def _display_token_usage(self, usage):
         """
         Display a visual representation of token usage and remaining tokens.
@@ -357,35 +391,63 @@ class LLM_Agent(ConversableAgent):
         """
         from openai import OpenAI
         self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
-        #self.console.print(f"[red]context {self.context['steps']}[/red]")
+        
         try:
-            # Update your tools list to ensure each tool has a "type" property.
+            # Update your tools list to ensure each tool has a "type" property
+            # and that descriptions are not too long
             updated_tools = []
             for tool in self.tools:
-                if "type" not in tool:
-                    tool["type"] = "tool"  # Ensure the required type is provided
-                updated_tools.append(tool)
+                # Create a copy of the tool to avoid modifying the original
+                updated_tool = tool.copy()
+                
+                # Ensure the required type is provided
+                if "type" not in updated_tool:
+                    updated_tool["type"] = "function"
+                
+                # Format the tool properly for OpenAI API
+                if "function" not in updated_tool:
+                    updated_tool["function"] = {
+                        "name": updated_tool.get("name", ""),
+                        "description": updated_tool.get("description", ""),
+                        "parameters": updated_tool.get("input_schema", {})
+                    }
+                
+                # Truncate description if it's too long (max 1000 chars to be safe)
+                if "description" in updated_tool["function"] and len(updated_tool["function"]["description"]) > 1000:
+                    updated_tool["function"]["description"] = updated_tool["function"]["description"][:997] + "..."
+                
+                # Also check for nested descriptions in parameters
+                if "parameters" in updated_tool["function"] and "description" in updated_tool["function"]["parameters"]:
+                    if len(updated_tool["function"]["parameters"]["description"]) > 1000:
+                        updated_tool["function"]["parameters"]["description"] = updated_tool["function"]["parameters"]["description"][:997] + "..."
+                
+                # Check for properties descriptions
+                if ("parameters" in updated_tool["function"] and "properties" in updated_tool["function"]["parameters"]):
+                    for prop_name, prop in updated_tool["function"]["parameters"]["properties"].items():
+                        if "description" in prop and len(prop["description"]) > 1000:
+                            prop["description"] = prop["description"][:997] + "..."
+                
+                updated_tools.append(updated_tool)
 
-            # Prepend the system prompt to the conversation history.
+            # Prepend the system prompt to the conversation history
             messages = [
                 *self.conversation_history,
             ]
-            #self.console.print(f"\n[bold cyan]{messages}[/bold cyan]")
-            #self.console.print("\n[bold cyan]Cold HERE[/bold cyan]")
-            #self.console.print(f"\n[bold cyan]{Config.MODEL}[/bold cyan][bold yellow]{messages}[/bold yellow][bold magenta]{self.temperature}[/bold magenta][bold green]{updated_tools}[/bold green]")
-
+            
+            self.console.print(f"\n[yellow]message to the LLM: {messages}[/yellow]")
+            
+            # Create the completion
             response = self.client.chat.completions.create(
                 model=Config.MODEL,
                 messages=messages,
-                max_tokens=min(Config.MAX_TOKENS,Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
+                max_tokens=min(Config.MAX_TOKENS, Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
                 temperature=self.temperature,
-                functions=updated_tools,  # Updated parameter name and list with required keys
+                tools=updated_tools,  # Use the updated tools with truncated descriptions
             )
 
-            #self.console.print("\n[bold cyan]HOT HERE[/bold cyan]")
             # Update token usage based on response usage
             if hasattr(response, 'usage') and response.usage:
-                message_tokens = response.usage.prompt_tokens + response.usage.prompt_tokens
+                message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
                 self.total_tokens_used += message_tokens
                 self._display_token_usage(response.usage)
 
@@ -393,60 +455,66 @@ class LLM_Agent(ConversableAgent):
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
 
-            if response.choices[0].finish_reason == "tool_use":
-                self.console.print("\n[bold yellow]  Handling Tool Use...[/bold yellow]\n")
-
-                tool_results = []
-                if getattr(response, 'content', None) and isinstance(response.content, list):
-                    # Execute each tool in the response content
-                    for content_block in response.content:
-                        if content_block.type == "tool_use":
-                            result = self._execute_tool(content_block)
-                            
-                            # Handle structured data (like image blocks) vs text
-                            if isinstance(result, (list, dict)):
-                                tool_results.append({
-                                    "type": "tool_result",
-                                    "tool_use_id": content_block.id,
-                                    "content": result  # Keep structured data intact
-                                })
-                            else:
-                                # Convert text results to proper content blocks
-                                tool_results.append({
-                                    "type": "tool_result",
-                                    "tool_use_id": content_block.id,
-                                    "content": [{"type": "text", "text": str(result)}]
-                                })
-
-                    # Append tool usage to conversation and continue
+            # Handle tool use
+            if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+                self.console.print("\n[bold yellow]Handling Function Call...[/bold yellow]\n")
+                
+                tool_calls = response.choices[0].message.tool_calls
+                for tool_call in tool_calls:
+                    tool_name = tool_call.function.name
+                    tool_input = json.loads(tool_call.function.arguments)
+                    
+                    # Create a mock tool use object
+                    class ToolUseMock:
+                        def __init__(self, name, input_data):
+                            self.name = name
+                            self.input = input_data
+                    
+                    tool_use = ToolUseMock(tool_name, tool_input)
+                    result = self._execute_tool(tool_use)
+                    
+                    # Add the assistant's message and the tool result to the conversation
                     self.conversation_history.append({
                         "role": "assistant",
-                        "content": response.content
+                        "content": None,
+                        "tool_calls": [{
+                            "id": tool_call.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(tool_input)
+                            }
+                        }]
                     })
+                    
                     self.conversation_history.append({
-                        "role": "user",
-                        "content": tool_results
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_name,
+                        "content": str(result)
                     })
-                    return self._get_completion()  # Recursive call to continue the conversation
-
-                else:
-                    self.console.print("[red]No tool content received despite 'tool_use' stop reason.[/red]")
-                    return "Error: No tool content received"
+                
+                # Continue the conversation
+                return self._get_completion()
 
             # Final assistant response
             if response.choices and len(response.choices) > 0:
                 final_content = response.choices[0].message.content
-                if final_content:
-                    self.conversation_history.append({
-                        "role": "assistant",
-                        "content": final_content
-                    })  
-                    return final_content
-                self.console.print("[red]No content in final response.[/red]")
-                return "No response content available."
-
+                
+                # Add the assistant's response to the conversation history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": final_content
+                })
+                
+                return final_content
+            else:
+                return "No response generated."
+                
         except Exception as e:
             logging.error(f"Error in _get_completion: {str(e)}")
+            import traceback
+            logging.error(traceback.format_exc())
             return f"Error: {str(e)}"
         
 
@@ -513,6 +581,9 @@ Available tools:
         """
         Entry point for the assistant CLI loop.
         Provides a prompt for user input and handles 'quit' and 'reset' commands.
+        
+        Returns:
+            A string response to be sent back to the user
         """
         console = Console()
         style = Style.from_dict({'prompt': 'purple'})
@@ -528,42 +599,520 @@ Available tools:
     """
         console.print(Markdown(welcome_text))
         self.display_available_tools()
-        while True:
-            try:
-                # Check for context steps and process them first
-                if hasattr(self, 'context') and 'steps' in self.context:
-                    # Convert steps dictionary to ordered list
-                    step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
-                    self.console.print(f"[yellow]step_keys: {step_keys}[/yellow]")
-                    if self.current_step_index < len(step_keys):
-                        current_step_key = step_keys[self.current_step_index]
-                        self.console.print(f"[red]current_step_key context: {self.context['steps'][current_step_key]}[/red]")
-                        user_input = self.context['steps'][current_step_key]
-                        self.current_step_index += 1
+        
+        try:
+            # Check for context steps and process them
+            if hasattr(self, 'context') and 'steps' in self.context:
+                # Convert steps dictionary to ordered list
+                step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
+                self.console.print(f"[yellow]Processing steps: {len(step_keys)} steps found[/yellow]")
+                
+                if self.current_step_index < len(step_keys):
+                    current_step_key = step_keys[self.current_step_index]
+                    user_input = self.context['steps'][current_step_key]
+                    self.console.print(f"[cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}: {current_step_key}[/cyan]")
+                    self.current_step_index += 1
+                    
+                    if user_input.lower() == 'quit':
+                        console.print("\n[bold blue]👋 Goodbye![/bold blue]")
+                        return "Execution completed successfully"
+                    elif user_input.lower() == 'reset':
+                        self.reset()
+                        return self.main(*args, **kwargs)
+                    
+                    response = self.chat(user_input)
+                    console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+                    
+                    if isinstance(response, str):
+                        safe_response = response.replace('[', '\\[').replace(']', '\\]')
+                        console.print(f"\n[bold green]Step {self.current_step_index}/{len(step_keys)}:[/bold green] {safe_response}")
                     else:
-                        # Clear context after processing all steps
-                        del self.context['steps']
-                        self.current_step_index = 0
-                        user_input = prompt("You: ", style=style).strip()
+                        console.print(f"\n[bold green]Step {self.current_step_index}/{len(step_keys)}:[/bold green] {str(response)}")
+                    
+                    # If there are more steps, process them recursively
+                    if self.current_step_index < len(step_keys):
+                        return self.main(*args, **kwargs)
+                    else:
+                        console.print("\n[bold green]All steps completed successfully![/bold green]")
+                        return "All steps completed successfully"
                 else:
-                    user_input = prompt("You: ", style=style).strip()
-
+                    console.print("\n[bold green]All steps already completed![/bold green]")
+                    return "All steps already completed"
+            else:
+                # If we're being called from the AutoGen framework, just return a message
+                if args or kwargs:
+                    messages = kwargs.get('messages', [])
+                    if messages:
+                        last_message = messages[-1]['content']
+                        self.console.print(f"[cyan]Processing message: {last_message}[/cyan]")
+                        response = self.chat(last_message)
+                        return response
+                
+                # Otherwise, prompt for user input
+                console.print("\n[bold yellow]No steps found in context. Waiting for user input.[/bold yellow]")
+                user_input = prompt("\n[purple]You:[/purple] ", style=style)
+                
                 if user_input.lower() == 'quit':
                     console.print("\n[bold blue]👋 Goodbye![/bold blue]")
-                    break
+                    return "Execution completed successfully"
                 elif user_input.lower() == 'reset':
                     self.reset()
-                    continue
-
+                    return self.main(*args, **kwargs)
+                
                 response = self.chat(user_input)
                 console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+                
                 if isinstance(response, str):
                     safe_response = response.replace('[', '\\[').replace(']', '\\]')
-                    console.print(safe_response)
+                    console.print(f"\n{safe_response}")
                 else:
-                    console.print(str(response))
+                    console.print(f"\n{str(response)}")
+                
+                return response
+                
+        except KeyboardInterrupt:
+            console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
+            return "Operation interrupted by user"
+        except Exception as e:
+            console.print(f"[bold red]Error: {str(e)}[/bold red]")
+            import traceback
+            console.print(f"[red]{traceback.format_exc()}[/red]")
+            return f"Error: {str(e)}"
 
-            except KeyboardInterrupt:
-                continue
-            except EOFError:
+    def _generate_tool_info(self) -> str:
+        """
+        Generate a formatted string with information about all available tools.
+        This is used to enhance the system prompt with dynamic tool information.
+        """
+        if not self.tools:
+            return "No tools are currently available."
+            
+        tool_info = "# Available Tools\n\n"
+        
+        # Sort tools by name for consistent display
+        sorted_tools = sorted(self.tools, key=lambda x: x['name'])
+        
+        for tool_info_dict in sorted_tools:
+            name = tool_info_dict['name']
+            description = tool_info_dict['description'].strip()
+            
+            # Add tool name and description
+            tool_info += f"## {name}\n{description}\n\n"
+            
+            # Add input schema if available
+            if 'input_schema' in tool_info_dict and tool_info_dict['input_schema']:
+                try:
+                    # Extract required parameters
+                    required_params = tool_info_dict['input_schema'].get('required', [])
+                    properties = tool_info_dict['input_schema'].get('properties', {})
+                    
+                    if properties:
+                        tool_info += "### Parameters:\n"
+                        for param_name, param_info in properties.items():
+                            param_type = param_info.get('type', 'any')
+                            param_desc = param_info.get('description', '')
+                            required_mark = "*" if param_name in required_params else ""
+                            tool_info += f"- {param_name}{required_mark} ({param_type}): {param_desc}\n"
+                except Exception:
+                    pass
+            
+            tool_info += "\n"
+            
+        return tool_info
+
+class ToolManager:
+    """
+    A class to manage tools for the LLM_Agent.
+    This class is responsible for loading, storing, and providing access to tools.
+    """
+    
+    def __init__(self, console=None):
+        """
+        Initialize the ToolManager.
+        
+        Args:
+            console: A rich.console.Console instance for output
+        """
+        self.console = console or Console()
+        self._tools = []
+        self._load_tools()
+    
+    def _load_tools(self) -> List[Dict[str, Any]]:
+        """
+        Dynamically load all tool classes from the tools directory.
+        If a dependency is missing, prompt the user to install it via uvpackagemanager.
+        
+        Returns:
+            A list of tools (dicts) containing their 'name', 'description', and 'input_schema'.
+        """
+        self.console.print("\n[bold cyan]Loading tools...[/bold cyan]")
+        tools_list = []
+        
+        # Ensure TOOLS_DIR is set and exists
+        tools_path = getattr(Config, 'TOOLS_DIR', None)
+        if tools_path is None:
+            self.console.print("[red]TOOLS_DIR not set in Config[/red]")
+            # Set a default path if not configured
+            tools_path = Path(__file__).parent / "tools"
+            self.console.print(f"[yellow]Using default tools path: {tools_path}[/yellow]")
+        
+        # Ensure tools_path is a Path object
+        if not isinstance(tools_path, Path):
+            tools_path = Path(tools_path)
+        
+        self.console.print(f"[cyan]Tools path: {tools_path}[/cyan]")
+        
+        # Ensure the tools directory exists
+        if not tools_path.exists():
+            self.console.print(f"[red]Tools directory does not exist: {tools_path}[/red]")
+            try:
+                tools_path.mkdir(parents=True, exist_ok=True)
+                self.console.print(f"[green]Created tools directory: {tools_path}[/green]")
+            except Exception as e:
+                self.console.print(f"[red]Error creating tools directory: {str(e)}[/red]")
+                return tools_list
+        
+        # Add the parent directory to sys.path to ensure imports work correctly
+        parent_dir = str(tools_path.parent)
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+            self.console.print(f"[cyan]Added {parent_dir} to sys.path[/cyan]")
+        
+        # Add the tools directory itself to sys.path
+        if str(tools_path) not in sys.path:
+            sys.path.insert(0, str(tools_path))
+            self.console.print(f"[cyan]Added {tools_path} to sys.path[/cyan]")
+
+        # Clear cached tool modules for fresh import
+        for module_name in list(sys.modules.keys()):
+            if module_name.startswith('tools.') or module_name.startswith('Agents.tools.'):
+                if module_name != 'tools.base' and module_name != 'Agents.tools.base':
+                    del sys.modules[module_name]
+                    self.console.print(f"[cyan]Cleared cached module: {module_name}[/cyan]")
+
+        try:
+            for module_info in pkgutil.iter_modules([str(tools_path)]):
+                if module_info.name == 'base':
+                    self.console.print(f"[yellow]Skipping base module as it's not a tool[/yellow]")    
+                    continue
+                
+                # Attempt loading the tool module
+                try:
+                    # Try both import paths
+                    module = None
+                    import_errors = []
+                    
+                    try:
+                        module_name = f'Agents.tools.{module_info.name}'
+                        module = importlib.import_module(module_name)
+                        self.console.print(f"[green]Loaded module using path: {module_name}[/green]")
+                    except ImportError as e1:
+                        import_errors.append(f"Error with 'Agents.tools.{module_info.name}': {str(e1)}")
+                        try:
+                            module_name = f'tools.{module_info.name}'
+                            module = importlib.import_module(module_name)
+                            self.console.print(f"[green]Loaded module using path: {module_name}[/green]")
+                        except ImportError as e2:
+                            import_errors.append(f"Error with 'tools.{module_info.name}': {str(e2)}")
+                    
+                    if module:
+                        # Extract tools from the module and add them to the tools list
+                        module_tools = []
+                        self._extract_tools_from_module(module, module_tools)
+                        
+                        if module_tools:
+                            tools_list.extend(module_tools)
+                            self.console.print(f"[green]Loaded tool: {module_info.name}[/green]")
+                        else:
+                            self.console.print(f"[yellow]No tools found in module: {module_info.name}[/yellow]")
+                    else:
+                        self.console.print(f"[red]Failed to import module {module_info.name}:[/red]")
+                        for err in import_errors:
+                            self.console.print(f"[red]{err}[/red]")
+                        
+                        # Handle missing dependencies
+                        missing_module = self._parse_missing_dependency(import_errors[-1])
+                        self.console.print(f"\n[yellow]Missing dependency:[/yellow] {missing_module} for tool {module_info.name}")
+                        user_response = input(f"Would you like to install {missing_module}? (y/n): ").lower()
+
+                        if user_response == 'y':
+                            success = self._execute_uv_install(missing_module)
+                            if success:
+                                # Retry loading the module after installation
+                                try:
+                                    # Try both import paths again
+                                    try:
+                                        module = importlib.import_module(f'Agents.tools.{module_info.name}')
+                                    except ImportError:
+                                        module = importlib.import_module(f'tools.{module_info.name}')
+                                    
+                                    module_tools = []
+                                    self._extract_tools_from_module(module, module_tools)
+                                    
+                                    if module_tools:
+                                        tools_list.extend(module_tools)
+                                        self.console.print(f"[green]Loaded tool after installing dependency: {module_info.name}[/green]")
+                                    else:
+                                        self.console.print(f"[yellow]No tools found in module after installing dependency: {module_info.name}[/yellow]")
+                                except Exception as retry_err:
+                                    self.console.print(f"[red]Failed to load tool after installation: {str(retry_err)}[/red]")
+                            else:
+                                self.console.print(f"[red]Installation of {missing_module} failed. Skipping this tool.[/red]")
+                        else:
+                            self.console.print(f"[yellow]Skipping tool {module_info.name} due to missing dependency[/yellow]")
+                except Exception as mod_err:
+                    self.console.print(f"[red]Error loading module {module_info.name}:[/red] {str(mod_err)}")
+                    import traceback
+                    self.console.print(f"[red]{traceback.format_exc()}[/red]")
+        except Exception as overall_err:
+            self.console.print(f"[red]Error in tool loading process:[/red] {str(overall_err)}")
+            import traceback
+            self.console.print(f"[red]{traceback.format_exc()}[/red]")
+
+        self.console.print(f"[green]Successfully loaded {len(tools_list)} tools[/green]")
+        self._tools = tools_list
+        return tools_list
+    
+    def _parse_missing_dependency(self, error_str: str) -> str:
+        """
+        Parse the missing dependency name from an ImportError string.
+        """
+        if "No module named" in error_str:
+            parts = error_str.split("No module named")
+            missing_module = parts[-1].strip(" '\"")
+        else:
+            missing_module = error_str
+        return missing_module
+    
+    def _extract_tools_from_module(self, module, tools: List[Dict[str, Any]]) -> None:
+        """
+        Given a tool module, find and instantiate all tool classes (subclasses of BaseTool).
+        Append them to the 'tools' list.
+        """
+        found_tools = False
+        for name, obj in inspect.getmembers(module):
+            if (inspect.isclass(obj) and hasattr(obj, '__mro__')):
+                # Check if BaseTool is in the class's MRO (Method Resolution Order)
+                is_tool_class = False
+                for base in obj.__mro__:
+                    if base.__name__ == 'BaseTool':
+                        is_tool_class = True
+                        break
+                
+                if is_tool_class and obj.__name__ != 'BaseTool':
+                    try:
+                        tool_instance = obj()
+                        
+                        # Verify the tool has all required attributes
+                        if not hasattr(tool_instance, 'name') or not tool_instance.name:
+                            self.console.print(f"[yellow]Warning: Tool {name} has no name attribute, skipping[/yellow]")
+                            continue
+                        
+                        if not hasattr(tool_instance, 'description') or not tool_instance.description:
+                            self.console.print(f"[yellow]Warning: Tool {tool_instance.name} has no description, skipping[/yellow]")
+                            continue
+                        
+                        if not hasattr(tool_instance, 'input_schema') or not tool_instance.input_schema:
+                            self.console.print(f"[yellow]Warning: Tool {tool_instance.name} has no input_schema, skipping[/yellow]")
+                            continue
+                        
+                        # Check if tool with same name already exists
+                        if any(t['name'] == tool_instance.name for t in tools):
+                            self.console.print(f"[yellow]Tool with name {tool_instance.name} already exists, skipping duplicate[/yellow]")
+                            continue
+                        
+                        # Add the tool to the list
+                        tools.append({
+                            "name": tool_instance.name,
+                            "description": tool_instance.description,
+                            "input_schema": tool_instance.input_schema
+                        })
+                        
+                        self.console.print(f"[green]Added tool: {tool_instance.name}[/green]")
+                        found_tools = True
+                    except Exception as tool_init_err:
+                        self.console.print(f"[yellow]Error instantiating tool class {name}: {str(tool_init_err)}[/yellow]")
+        
+        if not found_tools:
+            self.console.print(f"[yellow]No tools found in module {module.__name__}[/yellow]")
+    
+    def _execute_uv_install(self, package_name: str) -> bool:
+        """
+        Execute the uvpackagemanager tool directly to install the missing package.
+        Returns True if installation seems successful (no errors in output), otherwise False.
+        """
+        # Find the uvpackagemanager tool
+        uvpackagemanager_tool = None
+        for tool in self._tools:
+            if tool['name'].lower() == 'uvpackagemanager':
+                uvpackagemanager_tool = tool
                 break
+        
+        if not uvpackagemanager_tool:
+            self.console.print("[yellow]UVPackageManager tool not found, cannot install dependencies[/yellow]")
+            return False
+        
+        # Try to find the tool module
+        try:
+            module = importlib.import_module('Agents.tools.uvpackagemanager')
+        except ImportError:
+            try:
+                module = importlib.import_module('tools.uvpackagemanager')
+            except ImportError:
+                self.console.print("[red]Failed to import UVPackageManager module[/red]")
+                return False
+        
+        # Find the tool class
+        tool_class = None
+        for name, obj in inspect.getmembers(module):
+            if (inspect.isclass(obj) and hasattr(obj, '__mro__')):
+                is_tool_class = False
+                for base in obj.__mro__:
+                    if base.__name__ == 'BaseTool':
+                        is_tool_class = True
+                        break
+        
+        if not tool_class:
+            self.console.print("[red]UVPackageManager tool class not found[/red]")
+            return False
+        
+        # Create an instance and execute it
+        try:
+            tool_instance = tool_class()
+            result = tool_instance.execute(command="install", packages=[package_name])
+            
+            if "Error" not in result and "failed" not in result.lower():
+                self.console.print("[green]The package was installed successfully.[/green]")
+                return True
+            else:
+                self.console.print(f"[red]Failed to install {package_name}. Output:[/red] {result}")
+                return False
+        except Exception as e:
+            self.console.print(f"[red]Error executing UVPackageManager: {str(e)}[/red]")
+            return False
+    
+    def refresh_tools(self):
+        """
+        Refresh the list of available tools by reloading them from the tools directory.
+        This is useful when new tools are added or existing tools are modified.
+        """
+        self.console.print("\n[bold cyan]Refreshing tools...[/bold cyan]")
+        self._load_tools()
+        self.console.print(f"[green]Successfully refreshed {len(self._tools)} tools[/green]")
+    
+    def display_available_tools(self):
+        """
+        Display all available tools with their descriptions.
+        """
+        if not self._tools:
+            self.console.print("\n[yellow]No tools available[/yellow]")
+            return
+            
+        self.console.print("\n[bold cyan]Available Tools:[/bold cyan]")
+        
+        # Sort tools by name for consistent display
+        sorted_tools = sorted(self._tools, key=lambda x: x['name'])
+        
+        if not sorted_tools:
+            self.console.print("[yellow]No tools available after sorting[/yellow]")
+            return
+            
+        self.console.print(f"[green]Found {len(sorted_tools)} tools[/green]")
+        
+        for tool_info in sorted_tools:
+            name = tool_info['name']
+            description = tool_info.get('description', '').strip()
+            
+            # Display tool name and description
+            self.console.print(f"🔧 [cyan]{name}[/cyan]:")
+            
+            if description:
+                description_lines = description.split('\n')
+                formatted_description = '\n    '.join(line.strip() for line in description_lines)
+                self.console.print(f"    {formatted_description}")
+            else:
+                self.console.print("    [yellow]No description available[/yellow]")
+            
+            # Display input schema if available
+            if 'input_schema' in tool_info and tool_info['input_schema']:
+                try:
+                    # Extract required parameters
+                    required_params = tool_info['input_schema'].get('required', [])
+                    properties = tool_info['input_schema'].get('properties', {})
+                    
+                    if properties:
+                        self.console.print("    [bold]Parameters:[/bold]")
+                        for param_name, param_info in properties.items():
+                            param_type = param_info.get('type', 'any')
+                            param_desc = param_info.get('description', '')
+                            required_mark = "[red]*[/red]" if param_name in required_params else ""
+                            self.console.print(f"      - {param_name}{required_mark} ({param_type}): {param_desc}")
+                except Exception as e:
+                    self.console.print(f"    [yellow]Error displaying schema: {str(e)}[/yellow]")
+            
+            self.console.print("")  # Add a blank line between tools
+    
+    def get_tools(self):
+        """
+        Get the list of available tools.
+        
+        Returns:
+            A list of tools (dicts) containing their 'name', 'description', and 'input_schema'.
+        """
+        return self._tools
+    
+    def find_tool(self, tool_name: str):
+        """
+        Find a tool by name.
+        
+        Args:
+            tool_name: The name of the tool to find
+            
+        Returns:
+            The tool dict if found, None otherwise
+        """
+        for tool in self._tools:
+            if tool['name'].lower() == tool_name.lower():
+                return tool
+        return None
+    
+    def generate_tool_info(self) -> str:
+        """
+        Generate a formatted string with information about all available tools.
+        This is used to enhance the system prompt with dynamic tool information.
+        """
+        if not self._tools:
+            return "No tools are currently available."
+            
+        tool_info = "# Available Tools\n\n"
+        
+        # Sort tools by name for consistent display
+        sorted_tools = sorted(self._tools, key=lambda x: x['name'])
+        
+        for tool_info_dict in sorted_tools:
+            name = tool_info_dict['name']
+            description = tool_info_dict['description'].strip()
+            
+            # Add tool name and description
+            tool_info += f"## {name}\n{description}\n\n"
+            
+            # Add input schema if available
+            if 'input_schema' in tool_info_dict and tool_info_dict['input_schema']:
+                try:
+                    # Extract required parameters
+                    required_params = tool_info_dict['input_schema'].get('required', [])
+                    properties = tool_info_dict['input_schema'].get('properties', {})
+                    
+                    if properties:
+                        tool_info += "### Parameters:\n"
+                        for param_name, param_info in properties.items():
+                            param_type = param_info.get('type', 'any')
+                            param_desc = param_info.get('description', '')
+                            required_mark = "*" if param_name in required_params else ""
+                            tool_info += f"- {param_name}{required_mark} ({param_type}): {param_desc}\n"
+                except Exception:
+                    pass
+            
+            tool_info += "\n"
+            
+        return tool_info

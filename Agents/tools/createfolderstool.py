@@ -2,6 +2,7 @@ from Agents.tools.base import BaseTool
 import os
 import pathlib
 from typing import List
+from pathlib import Path
 
 class CreateFoldersTool(BaseTool):
     name = "createfolderstool"
@@ -27,6 +28,11 @@ class CreateFoldersTool(BaseTool):
 
     def execute(self, **kwargs) -> str:
         folder_paths: List[str] = kwargs.get("folder_paths", [])
+        
+        # Also accept 'paths' parameter for backward compatibility
+        if not folder_paths and "paths" in kwargs:
+            folder_paths = kwargs.get("paths", [])
+            
         if not folder_paths:
             return "No folder paths provided"
 
@@ -43,8 +49,14 @@ class CreateFoldersTool(BaseTool):
                     continue
 
                 # Create directory
-                os.makedirs(absolute_path, exist_ok=True)
+                Path(absolute_path).mkdir(parents=True, exist_ok=True)
                 results.append(f"Successfully created folder: {path}")
+                
+                # Verify the directory was created
+                if os.path.exists(absolute_path) and os.path.isdir(absolute_path):
+                    results.append(f"Verified folder exists: {path}")
+                else:
+                    results.append(f"Warning: Folder creation command completed but folder may not exist: {path}")
 
             except PermissionError:
                 results.append(f"Permission denied: Unable to create folder {path}")

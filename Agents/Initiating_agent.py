@@ -30,8 +30,14 @@ class EnhancedInitiatingAgent(ConversableAgent):
     def handle_message(self, *args, **kwargs):
         """Process input and gather clarifications if needed"""
         
+        # Check if there's a user input in the context
+        if "user_input" in self.context:
+            user_input = self.context.get("user_input")
+            self.console.print(f"[bold cyan]Processing user request: [/bold cyan]{user_input}")
+            return True, {"role": "user", "content": f"I'll help you with: {user_input}\n\nLet me analyze your request and break it down into steps."}
+        
         # If clarification is needed (checked from conversation context)
-        if self.context.get("requires_clarification", False):
+        elif self.context.get("requires_clarification", False):
             clarifying_questions = self.context["clarifying_questions"]
             clarification_responses = {}
 
@@ -48,18 +54,19 @@ class EnhancedInitiatingAgent(ConversableAgent):
             # Append new values to existing ones, with a separator if needed
             if self.context["clarifications"]:
                 clarification_values = self.context["clarifications"]
-                clarification_values += " | " + new_values
-                self.context["clarifications"] = clarification_values
+                self.context["clarifications"] = f"{clarification_values}\n{new_values}"
             else:
                 self.context["clarifications"] = new_values
                 
+            # Reset the flag
             self.context["requires_clarification"] = False
-            # Return enhanced query with clarifications
-            return True, {"role": "user", "content": new_values}
+            
+            return True, {"role": "user", "content": f"Thank you for the clarifications. Here's what I understand:\n{new_values}\n\nI'll proceed with your request now."}
+        
+        # Default welcome message
         else:
-            response = self.get_human_input()
-            self.context["User_input"] = response
-            return True, {"role": "user", "content": response}
+            welcome_message = self.context.get("welcome_message", "Welcome! How can I help you today?")
+            return True, {"role": "user", "content": welcome_message}
 
     def get_human_input(self, Question: str = ""):
         """Enhanced method to get human input with validation"""

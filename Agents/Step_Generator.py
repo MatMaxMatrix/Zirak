@@ -1,21 +1,20 @@
 import os
 from autogen.agentchat.assistant_agent import ConversableAgent
 
-
-
 class Step_Generator(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Step_Generator",
             system_message="""
 
-            You are an expert system architect who breaks down complex technical tasks into a series of clear, detailed steps. Each step should be formulated as a complete prompt that can be given to an LLM for implementation.
+You are an expert system architect who breaks down complex technical tasks into a series of clear, detailed steps. Each step should be formulated as a complete prompt that can be given to an LLM for implementation. The first step must always contain the overall workflow and core implementation of the query, while subsequent steps should focus on additional details, features, or validations.
 
 Your task is to analyze the given query and generate a JSON response where:
 - Each step is a complete, self-contained prompt
 - Technical requirements and context are embedded within each step
 - Dependencies and considerations are included in the prompt text
 - The information is detailed enough for implementation
+- Include explicit instructions for file and folder creation when needed
 
 Return a JSON object with this structure:
 {
@@ -35,11 +34,11 @@ Input: "Create a secure user authentication system with password hashing email v
 {
     "goal": "Create a secure user authentication system",
     "steps": {
-        "step1": "Design and implement a secure password management system that includes: 1) Password hashing using industry-standard algorithms (bcrypt or Argon2), 2) Salt generation and storage, 3) Password validation rules including minimum length, complexity requirements, and common password checking, 4) Secure password reset flow. Consider security best practices, performance implications, and storage requirements. The implementation should prevent common vulnerabilities like rainbow table attacks and timing attacks.",
+        "step1": "Design and implement a secure user authentication system with the overall workflow including user registration, login, and basic security features. First, create the following folder structure: 1) 'auth_system' as the main folder, 2) 'auth_system/models' for data models, 3) 'auth_system/routes' for API endpoints, 4) 'auth_system/utils' for helper functions. Then implement core functionality with: 1) User registration with secure password hashing (e.g., bcrypt or Argon2) and storage, 2) Login endpoint to authenticate users by verifying hashed passwords, 3) Basic error handling for invalid credentials. Include a high-level description of how password hashing, email verification, and session management will integrate into the system. Follow security best practices to prevent vulnerabilities like SQL injection and ensure scalability.",
         
-        "step2": "Create a robust email verification system that implements: 1) Secure verification token generation, 2) Token storage and expiration handling, 3) Email sending service integration, 4) Verification endpoint implementation, 5) User state management during verification. Consider email delivery reliability, token security, rate limiting, and user experience during the verification flow. Include handling for edge cases like expired tokens and multiple verification attempts.",
+        "step2": "Extend the authentication system from step1 to include a robust email verification process. Create a new file 'auth_system/utils/email_verification.py' for the email verification functionality. Implement: 1) Secure verification token generation, 2) Token storage with expiration (e.g., 24 hours), 3) Integration with an email sending service, 4) A verification endpoint to validate tokens, 5) User account activation upon successful verification. Consider reliability of email delivery, token security, rate limiting, and edge cases like expired or reused tokens.",
         
-        "step3": "Develop a secure session management system incorporating: 1) Session token generation and storage, 2) Session expiration and renewal logic, 3) Secure cookie handling, 4) Session invalidation on security events, 5) Concurrent session handling. Consider security implications of session length, token storage, cross-site scripting prevention, and session fixation attacks. Implementation should follow OWASP security guidelines for session management."
+        "step3": "Enhance the authentication system from step1 with secure session management. Create a new file 'auth_system/utils/session_management.py' for the session management functionality. Implement: 1) Session token generation upon successful login, 2) Secure storage of session tokens (e.g., in a database or cache) with expiration handling, 3) Secure cookie management (HTTP-only, Secure flags), 4) Session invalidation on logout or security events, 5) Support for session renewal. Address security concerns like session fixation and cross-site scripting, adhering to OWASP session management guidelines."
     }
 }
 
@@ -50,6 +49,8 @@ Each step's prompt should:
 - Include relevant security or performance requirements
 - Reference any dependencies on previous steps
 - Request specific implementation details
+- Include explicit instructions for file and folder creation when needed
+- For step1, provide the overall workflow and core implementation; for subsequent steps, focus on additional features or validations
 
 Return ONLY the JSON output with no additional explanation or formatting.
 """,
@@ -57,32 +58,4 @@ Return ONLY the JSON output with no additional explanation or formatting.
                 "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
                 "api_key": os.getenv("OPENAI_API_KEY"),
             },
-        )
-
-
-"""
-
-from pydantic import BaseModel
-from openai import OpenAI
-
-client = OpenAI()
-
-class Step(BaseModel):
-    explanation: str
-    output: str
-
-class MathReasoning(BaseModel):
-    steps: list[Step]
-    final_answer: str
-
-completion = client.beta.chat.completions.parse(
-    model="gpt-4o-2024-08-06",
-    messages=[
-        {"role": "system", "content": "You are a helpful math tutor. Guide the user through the solution step by step."},
-        {"role": "user", "content": "how can I solve 8x + 7 = -23"}
-    ],
-    response_format=MathReasoning,
-)
-
-math_reasoning = completion.choices[0].message.parsed
-"""
+        ) 
