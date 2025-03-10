@@ -42,6 +42,12 @@ class LLM_Agent(ConversableAgent):
         self.temperature = getattr(Config, 'DEFAULT_TEMPERATURE', 0.7)
         self.total_tokens_used = 0
         self.current_step_index = 0 
+        
+        # Context tracking for agentic behavior
+        self.context_manager = ContextManager()
+        self.auto_tool_selection = getattr(Config, 'AUTO_TOOL_SELECTION', True)
+        self.max_auto_tool_calls = getattr(Config, 'MAX_AUTO_TOOL_CALLS', 5)
+        self.current_auto_tool_calls = 0
 
         # Initialize the tool manager
         self.tool_manager = ToolManager(console=self.console)
@@ -49,8 +55,8 @@ class LLM_Agent(ConversableAgent):
         # Generate dynamic tool information for the system prompt
         tool_info = self.tool_manager.generate_tool_info()
         
-        # Add system message with dynamic tool information
-        system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}"
+        # Enhanced system prompt with agentic capabilities
+        system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
         self.conversation_history.append({
             "role": "system",
             "content": system_prompt
@@ -427,6 +433,29 @@ class LLM_Agent(ConversableAgent):
                 
                 updated_tools.append(updated_tool)
 
+            # Get relevant context from the context manager
+            context_info = self.context_manager.get_relevant_context()
+            
+            # Add context information as a system message if there's relevant context
+            if (context_info["current_files"] or context_info["current_directories"]) and getattr(Config, 'AUTO_CONTEXT_GATHERING', True):
+                context_message = "Current context:\n"
+                
+                if context_info["current_files"]:
+                    context_message += "Files in current context:\n"
+                    for file in context_info["current_files"]:
+                        context_message += f"- {file}\n"
+                
+                if context_info["current_directories"]:
+                    context_message += "Directories in current context:\n"
+                    for directory in context_info["current_directories"]:
+                        context_message += f"- {directory}\n"
+                
+                # Add context message to conversation history
+                self.conversation_history.append({
+                    "role": "system",
+                    "content": context_message
+                })
+
             # Prepend the system prompt to the conversation history
             messages = [
                 *self.conversation_history,
@@ -461,6 +490,14 @@ class LLM_Agent(ConversableAgent):
                 for tool_call in tool_calls:
                     tool_name = tool_call.function.name
                     tool_input = json.loads(tool_call.function.arguments)
+                    
+                    # Update context manager with file and directory information from tool calls
+                    if tool_name == "filecontentreadertool" and "file_paths" in tool_input:
+                        for file_path in tool_input["file_paths"]:
+                            if os.path.isfile(file_path):
+                                self.context_manager.current_files.add(file_path)
+                            elif os.path.isdir(file_path):
+                                self.context_manager.current_directories.add(file_path)
                     
                     # Create a mock tool use object
                     class ToolUseMock:
@@ -539,6 +576,22 @@ class LLM_Agent(ConversableAgent):
                 "role": "user",
                 "content": user_input  # This can be either string or list
             })
+            
+            # Reset auto tool call counter for new user input
+            self.current_auto_tool_calls = 0
+            
+            # Analyze user input for context and potential tool needs
+            if self.auto_tool_selection and isinstance(user_input, str):
+                self.context_manager.analyze_user_input(user_input)
+                auto_tools = self._determine_auto_tools(user_input)
+                
+                # Execute auto tools if needed
+                if auto_tools:
+                    self.console.print("[cyan]Automatically gathering context...[/cyan]")
+                    for tool_name, tool_params in auto_tools:
+                        if self.current_auto_tool_calls < self.max_auto_tool_calls:
+                            self._auto_execute_tool(tool_name, tool_params)
+                            self.current_auto_tool_calls += 1
 
             # Show thinking indicator if enabled
             if self.thinking_enabled:
@@ -556,12 +609,45 @@ class LLM_Agent(ConversableAgent):
 
     def reset(self):
         """
-        Reset the assistant's memory and token usage.
+        Reset the conversation history and token count.
         """
+        self.console.print("\n[bold yellow]Resetting conversation...[/bold yellow]")
+        
+        # Save the system prompt
+        system_prompt = None
+        for message in self.conversation_history:
+            if message["role"] == "system" and len(self.conversation_history) > 0:
+                system_prompt = message["content"]
+                break
+        
+        # Clear conversation history
         self.conversation_history = []
+        
+        # Reset token count
         self.total_tokens_used = 0
-        self.console.print("\n[bold green]🔄 Assistant memory has been reset![/bold green]")
-
+        
+        # Reset context manager
+        self.context_manager = ContextManager()
+        self.current_auto_tool_calls = 0
+        
+        # Re-add the system prompt
+        if system_prompt:
+            self.conversation_history.append({
+                "role": "system",
+                "content": system_prompt
+            })
+        else:
+            # Generate a new system prompt if the original one wasn't found
+            tool_info = self.tool_manager.generate_tool_info()
+            system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
+            self.conversation_history.append({
+                "role": "system",
+                "content": system_prompt
+            })
+        
+        self.console.print("[bold green]Conversation reset successfully![/bold green]")
+        
+        # Display welcome message and available tools
         welcome_text = """
 # Claude Engineer v3. A self-improving assistant framework with tool creation
 
@@ -717,6 +803,98 @@ Available tools:
             tool_info += "\n"
             
         return tool_info
+
+    def _determine_auto_tools(self, user_input: str) -> List[tuple]:
+        """
+        Analyze user input to determine which tools should be automatically executed
+        to gather context before generating a response.
+        
+        Returns:
+            List of tuples (tool_name, tool_params) to execute
+        """
+        auto_tools = []
+        
+        # Check if input mentions files or directories
+        file_patterns = [
+            r'file[s]?\s+(?:named|called)?\s+["\']?([^"\']+)["\']?',
+            r'(?:read|open|check|view|show)\s+(?:the\s+)?(?:file|directory|folder|content[s]?)\s+(?:of\s+)?["\']?([^"\']+)["\']?',
+            r'(?:what\'s|what\s+is|show)\s+(?:in|inside)\s+["\']?([^"\']+)["\']?',
+            r'(?:content[s]?\s+of)\s+["\']?([^"\']+)["\']?',
+            r'(?:look\s+at)\s+["\']?([^"\']+)["\']?'
+        ]
+        
+        # Check if input mentions code or project structure
+        structure_patterns = [
+            r'(?:project|code|directory|folder)\s+structure',
+            r'(?:list|show|display)\s+(?:all|the)?\s+(?:files|directories|folders)',
+            r'(?:what|which)\s+(?:files|directories|folders)\s+(?:do\s+we|are|exist)'
+        ]
+        
+        # Check if input mentions changes or diffs
+        diff_patterns = [
+            r'(?:what|which)\s+(?:changes|modifications|edits)',
+            r'(?:show|display|list)\s+(?:the\s+)?(?:changes|modifications|edits|diff)',
+            r'(?:what|which)\s+(?:has|have)\s+(?:changed|been\s+modified|been\s+edited)'
+        ]
+        
+        # Check for file patterns
+        for pattern in file_patterns:
+            import re
+            matches = re.findall(pattern, user_input, re.IGNORECASE)
+            for match in matches:
+                if match and len(match) > 2:  # Avoid very short matches
+                    # Check if it's likely a file or directory
+                    if os.path.exists(match):
+                        if os.path.isdir(match):
+                            auto_tools.append(("filecontentreadertool", {"file_paths": [match]}))
+                        else:
+                            auto_tools.append(("filecontentreadertool", {"file_paths": [match]}))
+        
+        # Check for structure patterns
+        for pattern in structure_patterns:
+            if re.search(pattern, user_input, re.IGNORECASE):
+                # Get current directory or project root
+                current_dir = os.getcwd()
+                auto_tools.append(("filecontentreadertool", {"file_paths": [current_dir]}))
+                break
+        
+        # Check for diff patterns
+        for pattern in diff_patterns:
+            if re.search(pattern, user_input, re.IGNORECASE):
+                # Use a diff tool if available
+                diff_tool = self.tool_manager.find_tool("diffeditortool")
+                if diff_tool:
+                    auto_tools.append(("diffeditortool", {}))
+                break
+        
+        return auto_tools
+
+    def _auto_execute_tool(self, tool_name: str, tool_params: Dict[str, Any]) -> None:
+        """
+        Automatically execute a tool and add the result to conversation history
+        as system context rather than as a tool call.
+        """
+        try:
+            # Create a mock tool use object
+            class ToolUseMock:
+                def __init__(self, name, input_data):
+                    self.name = name
+                    self.input = input_data
+            
+            tool_use = ToolUseMock(tool_name, tool_params)
+            result = self._execute_tool(tool_use)
+            
+            # Add the result as system context
+            self.conversation_history.append({
+                "role": "system",
+                "content": f"Auto-gathered context from {tool_name}:\n{result}"
+            })
+            
+            self.console.print(f"[green]Auto-executed {tool_name} to gather context[/green]")
+            
+        except Exception as e:
+            self.console.print(f"[yellow]Error auto-executing tool {tool_name}: {str(e)}[/yellow]")
+            # Don't add errors to conversation history
 
 class ToolManager:
     """
@@ -1114,3 +1292,63 @@ class ToolManager:
             tool_info += "\n"
             
         return tool_info
+
+class ContextManager:
+    """
+    Manages context for the LLM_Agent, tracking information about the current
+    conversation, files being discussed, and other relevant context.
+    """
+    
+    def __init__(self):
+        self.current_files = set()
+        self.current_directories = set()
+        self.recent_topics = []
+        self.workspace_root = os.getcwd()
+    
+    def analyze_user_input(self, user_input: str) -> None:
+        """
+        Analyze user input to extract context like file paths, directories, etc.
+        """
+        import re
+        
+        # Extract potential file paths
+        file_patterns = [
+            r'["\']?([\/\w\.-]+\.\w+)["\']?',  # Matches file paths with extensions
+            r'["\']?([\w\.-]+\.\w+)["\']?'     # Matches filenames with extensions
+        ]
+        
+        # Extract potential directory paths
+        dir_patterns = [
+            r'["\']?([\/\w\.-]+\/)["\']?',     # Matches directory paths ending with /
+            r'directory\s+["\']?([\w\.-\/]+)["\']?',  # Matches "directory X"
+            r'folder\s+["\']?([\w\.-\/]+)["\']?'      # Matches "folder X"
+        ]
+        
+        # Extract file paths
+        for pattern in file_patterns:
+            matches = re.findall(pattern, user_input)
+            for match in matches:
+                if os.path.isfile(match):
+                    self.current_files.add(match)
+                elif os.path.isfile(os.path.join(self.workspace_root, match)):
+                    self.current_files.add(os.path.join(self.workspace_root, match))
+        
+        # Extract directory paths
+        for pattern in dir_patterns:
+            matches = re.findall(pattern, user_input)
+            for match in matches:
+                if os.path.isdir(match):
+                    self.current_directories.add(match)
+                elif os.path.isdir(os.path.join(self.workspace_root, match)):
+                    self.current_directories.add(os.path.join(self.workspace_root, match))
+    
+    def get_relevant_context(self) -> Dict[str, Any]:
+        """
+        Get relevant context information for the current conversation.
+        """
+        return {
+            "current_files": list(self.current_files),
+            "current_directories": list(self.current_directories),
+            "workspace_root": self.workspace_root,
+            "recent_topics": self.recent_topics
+        }
