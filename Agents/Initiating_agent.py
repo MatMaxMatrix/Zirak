@@ -31,13 +31,13 @@ class EnhancedInitiatingAgent(ConversableAgent):
         """Process input and gather clarifications if needed"""
         
         # Check if there's a user input in the context
-        if "user_input" in self.context:
+        if "user_input" in self.context and self.context.get("requires_clarification", False) == False:
             user_input = self.context.get("user_input")
             self.console.print(f"[bold cyan]Processing user request: [/bold cyan]{user_input}")
             return True, {"role": "user", "content": f"I'll help you with: {user_input}\n\nLet me analyze your request and break it down into steps."}
         
         # If clarification is needed (checked from conversation context)
-        elif self.context.get("requires_clarification", False):
+        elif self.context.get("requires_clarification", False) == True:
             clarifying_questions = self.context["clarifying_questions"]
             clarification_responses = {}
 

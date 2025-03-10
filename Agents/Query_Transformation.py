@@ -1,8 +1,6 @@
 from autogen import ConversableAgent
 import os
-import json
-import logging
-import autogen
+from .config import Config
 
 
 class Query_Transformation(ConversableAgent):
@@ -37,7 +35,8 @@ Output: Create a todo list application with CRUD operations persistent storage u
 Remember: Return ONLY the transformed query as a single line of text. Do not include any labels, explanations, formatting, or additional commentary.""",
             
             llm_config={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
+                "model": Config.DeepSeek_Model,
+                "api_key": Config.deepseek_api_key,
+                "base_url": "https://api.deepseek.com",
             },
         )

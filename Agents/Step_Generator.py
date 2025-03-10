@@ -1,5 +1,6 @@
 import os
 from autogen.agentchat.assistant_agent import ConversableAgent
+from .config import Config
 
 class Step_Generator(ConversableAgent):
     def __init__(self):
@@ -55,7 +56,8 @@ Each step's prompt should:
 Return ONLY the JSON output with no additional explanation or formatting.
 """,
             llm_config={
-                "model": os.getenv("OPENAI_MODEL", "gpt-4o"),
-                "api_key": os.getenv("OPENAI_API_KEY"),
+                "model": Config.DeepSeek_Model,
+                "api_key": Config.deepseek_api_key,
+                "base_url": "https://api.deepseek.com",
             },
         ) 
