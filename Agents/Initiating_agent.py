@@ -58,8 +58,6 @@ class EnhancedInitiatingAgent(ConversableAgent):
             else:
                 self.context["clarifications"] = new_values
                 
-            # Reset the flag
-            self.context["requires_clarification"] = False
             
             return True, {"role": "user", "content": f"Thank you for the clarifications. Here's what I understand:\n{new_values}\n\nI'll proceed with your request now."}
         
