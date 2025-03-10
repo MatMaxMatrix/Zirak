@@ -7,7 +7,7 @@ from Agents.prompts.system_prompts import SystemPrompts
 from typing import List, Dict, Any
 
 import autogen
-from .Regular_or_Tech import Regular_or_Tech
+
 from .LLM_Agent import LLM_Agent
 from .Query_Transformation import Query_Transformation
 from .Step_Generator import Step_Generator
@@ -30,7 +30,7 @@ class Conversation(BaseModel):
                     })
 
 initiating_agent = EnhancedInitiatingAgent()
-Regular_or_Tech = Regular_or_Tech()
+
 LLM_agent = LLM_Agent()
 Query_Agent = Query_Transformation()
 Step_agent = Step_Generator()
@@ -54,8 +54,10 @@ def state_transition(last_speaker, groupchat):
     messages = groupchat.messages
     if len(messages) <= 1:
         return initiating_agent
-    if last_speaker is initiating_agent:
+    if last_speaker is initiating_agent and context["requires_clarification"] == False:
         return CriticalAnalysisAgent
+    elif last_speaker is initiating_agent and context["requires_clarification"] == True:
+        return Query_Agent
     if last_speaker is CriticalAnalysisAgent:
         try:
             print(context["requires_clarification"])

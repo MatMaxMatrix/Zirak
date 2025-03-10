@@ -30,12 +30,10 @@ import autogen
 
 class LLM_Agent(ConversableAgent):
     def __init__(self):
-        if not getattr(Config, 'ANTHROPIC_API_KEY', None):
-            raise ValueError("No ANTHROPIC_API_KEY found in environment variables")
 
         # Initialize Anthropics client
         #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
+        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url="https://api.deepseek.com")
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
         self.console.print(f"[red]LLM_Agent start from here.[/red]")
@@ -390,7 +388,7 @@ class LLM_Agent(ConversableAgent):
         Handles both text-only and multimodal messages.
         """
         from openai import OpenAI
-        self.client = OpenAI(api_key=Config.ANTHROPIC_API_KEY)
+        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url = "https://api.deepseek.com")
         
         try:
             # Update your tools list to ensure each tool has a "type" property

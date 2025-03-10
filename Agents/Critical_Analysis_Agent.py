@@ -4,6 +4,7 @@ import autogen
 from openai import OpenAI
 import json
 from rich.console import Console
+from .config import Config
 #%%
 class CriticalAnalysisAgent(ConversableAgent):
     def __init__(self):
@@ -13,7 +14,7 @@ class CriticalAnalysisAgent(ConversableAgent):
             llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
         )
         api = autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['api_key']
-        self.client = OpenAI(api_key=api )  #, base_url="https://api.deepseek.com")
+        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url = "https://api.deepseek.com" )  #, base_url="https://api.deepseek.com")
         self.register_reply(
             trigger=self._always_true_trigger,  # Add a specific trigger string
             reply_func=self.handle_message,
@@ -141,7 +142,7 @@ Generate analysis JSON after <thinking>.""",
             while True:
                 print("WE GOT HERE")
                 response = self.client.chat.completions.create(
-                    model=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['model'],
+                    model= Config.DeepSeek_Model,
                     messages=[{"role": "user", "content": str(Critic_prompt)}],
                     temperature=0,
                     max_tokens=1000,
