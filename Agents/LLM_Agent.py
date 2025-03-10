@@ -432,11 +432,11 @@ class LLM_Agent(ConversableAgent):
                 *self.conversation_history,
             ]
             
-            self.console.print(f"\n[yellow]message to the LLM: {messages}[/yellow]")
+            #self.console.print(f"\n[yellow]message to the LLM: {messages}[/yellow]")
             
             # Create the completion
             response = self.client.chat.completions.create(
-                model=Config.MODEL,
+                model=Config.DeepSeek_Model,
                 messages=messages,
                 max_tokens=min(Config.MAX_TOKENS, Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
                 temperature=self.temperature,
