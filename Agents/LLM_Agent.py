@@ -32,9 +32,8 @@ import re
 class LLM_Agent(ConversableAgent):
     def __init__(self):
 
-        # Initialize Anthropics client
-        #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=Config.api_key, base_url= Config.base_url)
+        # Initialize OpenAI client
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
         self.console.print(f"[red]LLM_Agent start from here.[/red]")
@@ -68,9 +67,8 @@ class LLM_Agent(ConversableAgent):
             name="LLM_Agent",
             system_message="",
             llm_config={
-                "model": Config.Model,
-                "api_key": Config.api_key,
-                "base_url": Config.base_url ,
+                "config_list": [{"model": Config.Model, "api_key": Config.api_key, "base_url": Config.base_url}],
+                "timeout": 120,
             },
         )
         self.register_reply(
@@ -563,7 +561,23 @@ class LLM_Agent(ConversableAgent):
             logging.error(f"Error in _get_completion: {str(e)}")
             import traceback
             logging.error(traceback.format_exc())
-            return f"Error: {str(e)}"
+            # Check if this is a tag mismatch error
+            if "closing tag" in str(e) and "doesn't match any open tag" in str(e):
+                # Log more detailed information for debugging
+                logging.error("XML tag mismatch detected. This might be due to malformed tags in templates or responses.")
+                # Try to extract the problematic tag from the error message
+                import re
+                tag_match = re.search(r"closing tag '([^']+)'", str(e))
+                if tag_match:
+                    problematic_tag = tag_match.group(1)
+                    logging.error(f"Problematic tag: {problematic_tag}")
+                # Return a more user-friendly error message
+                return f"Error: There's an issue with the formatting of the response. Please check the template tags in your agent definitions."
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            return error_msg
         
 
 
@@ -624,7 +638,25 @@ class LLM_Agent(ConversableAgent):
 
         except Exception as e:
             logging.error(f"Error in chat: {str(e)}")
-            return f"Error: {str(e)}"
+            import traceback
+            logging.error(traceback.format_exc())
+            # Check if this is a tag mismatch error
+            if "closing tag" in str(e) and "doesn't match any open tag" in str(e):
+                # Log more detailed information for debugging
+                logging.error("XML tag mismatch detected. This might be due to malformed tags in templates or responses.")
+                # Try to extract the problematic tag from the error message
+                import re
+                tag_match = re.search(r"closing tag '([^']+)'", str(e))
+                if tag_match:
+                    problematic_tag = tag_match.group(1)
+                    logging.error(f"Problematic tag: {problematic_tag}")
+                # Return a more user-friendly error message
+                return f"Error: There's an issue with the formatting of the response. Please check the template tags in your agent definitions."
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            return error_msg
             
     def _check_mentioned_files(self):
         """
@@ -743,112 +775,100 @@ Available tools:
 
     def main(self, *args, **kwargs):
         """
-        Main entry point for the LLM_Agent.
+        Main entry point for the agent. This method is called by the AutoGen framework.
+        
+        Args:
+            *args: Variable length argument list
+            **kwargs: Arbitrary keyword arguments
+            
+        Returns:
+            A tuple (final, reply) where final is a boolean indicating if the conversation should end,
+            and reply is the response message.
         """
-        console = self.console
-        
-        # Display welcome message
-        welcome_text = f"""
-    # Claude Engineer v3. A self-improving assistant framework with tool creation
-
-    Type 'refresh' to reload available tools
-    Type 'reset' to clear conversation history
-    Type 'quit' to exit
-
-    Available tools:
-    """
-        console.print(Markdown(welcome_text))
-        self.display_available_tools()
-        
         try:
-            # Check for context steps and process them
-            if hasattr(self, 'context') and 'steps' in self.context:
-                # Convert steps dictionary to ordered list
-                step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
-                self.console.print(f"[yellow]Processing steps: {len(step_keys)} steps found. Here are the steps:{step_keys}[/yellow]")
-                
-                if self.current_step_index < len(step_keys):
-                    current_step_key = step_keys[self.current_step_index]
-                    user_input = self.context['steps'][current_step_key]
-                    self.console.print(f"[cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}: {current_step_key}[/cyan]")
-                    self.current_step_index += 1
+            # Check if we're being called from the AutoGen framework
+            if args or kwargs:
+                messages = kwargs.get('messages', [])
+                if messages:
+                    last_message = messages[-1]
+                    sender_name = last_message.get('name', '')
+                    content = last_message.get('content', '')
                     
-                    if user_input.lower() == 'quit':
-                        console.print("\n[bold blue]👋 Goodbye![/bold blue]")
-                        return "Execution completed successfully"
-                    elif user_input.lower() == 'reset':
-                        self.reset()
-                        return self.main(*args, **kwargs)
+                    # Check if the message is from the UserProxyAgent
+                    if sender_name == "UserProxyAgent":
+                        self.console.print(f"[cyan]Received request from UserProxyAgent: {content}[/cyan]")
+                        
+                        # Process the user query directly
+                        response = self.chat(content)
+                        return False, {"role": "assistant", "content": response}
                     
-                    # Process the current step, which may involve multiple tool calls
-                    response = self.chat(user_input)
-                    console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+                    # Handle normal message processing
+                    self.console.print(f"[cyan]Processing message from {sender_name}: {content}[/cyan]")
                     
-                    # Check if any directories in context are empty and need exploration
-                    self._ensure_directories_explored()
+                    # Check if we have steps to process
+                    if hasattr(self, 'context') and 'steps' in self.context:
+                        step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
+                        
+                        if self.current_step_index < len(step_keys):
+                            current_step_key = step_keys[self.current_step_index]
+                            current_step = self.context['steps'][current_step_key]
+                            
+                            # Check if current_step is a string or a dictionary
+                            if isinstance(current_step, dict) and 'description' in current_step:
+                                step_description = current_step['description']
+                                step_details = current_step.get('details', '')
+                                self.console.print(f"[bold cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}: {step_description}[/bold cyan]")
+                                
+                                # Increment the step index for the next call
+                                self.current_step_index += 1
+                                
+                                # Process the step
+                                response = self.chat(f"Execute step: {step_description}\n\nDetails: {step_details}")
+                            else:
+                                # If current_step is a string, use it directly
+                                self.console.print(f"[bold cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}[/bold cyan]")
+                                
+                                # Increment the step index for the next call
+                                self.current_step_index += 1
+                                
+                                # Process the step
+                                response = self.chat(f"Execute step: {current_step}")
+                            
+                            return False, {"role": "assistant", "content": response}
+                        else:
+                            self.console.print("[bold yellow]All steps completed.[/bold yellow]")
+                            return False, {"role": "assistant", "content": "All steps have been completed. Is there anything else you'd like me to help with?"}
                     
-                    # Check if the step has been fully processed
-                    if not self._is_step_fully_processed():
-                        self.console.print("[yellow]Step not fully processed. Continuing processing...[/yellow]")
-                        # Continue processing the current step by calling chat with a follow-up prompt
-                        follow_up_response = self.chat("Continue processing the current step. Make sure to explore all relevant files and directories.")
-                        response += "\n\n" + follow_up_response
-                    
-                    if isinstance(response, str):
-                        safe_response = response.replace('[', '\\[').replace(']', '\\]')
-                        console.print(f"\n[bold green]Step {self.current_step_index}/{len(step_keys)}:[/bold green] {safe_response}")
-                    else:
-                        console.print(f"\n[bold green]Step {self.current_step_index}/{len(step_keys)}:[/bold green] {str(response)}")
-                    
-                    # If there are more steps, process them recursively
-                    if self.current_step_index < len(step_keys):
-                        return self.main(*args, **kwargs)
-                    else:
-                        console.print("\n[bold green]All steps completed successfully![/bold green]")
-                        return "All steps completed successfully"
-                else:
-                    console.print("\n[bold green]All steps already completed![/bold green]")
-                    return "All steps already completed"
+                    # If no steps are defined, just process the message
+                    response = self.chat(content)
+                    return False, {"role": "assistant", "content": response}
+            
+            # If we're not being called from the AutoGen framework, prompt for user input
+            console = self.console
+            console.print("\n[bold yellow]No steps found in context. Waiting for user input.[/bold yellow]")
+            user_input = prompt("\n[purple]You:[/purple] ", style=Style.from_dict({'prompt': 'purple'}))
+            
+            if user_input.lower() == 'quit':
+                console.print("\n[bold blue]👋 Goodbye![/bold blue]")
+                return True, {"role": "assistant", "content": "Execution completed successfully"}
+            elif user_input.lower() == 'reset':
+                self.reset()
+                return self.main(*args, **kwargs)
+            
+            response = self.chat(user_input)
+            console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+            
+            if isinstance(response, str):
+                safe_response = response.replace('[', '\\[').replace(']', '\\]')
+                console.print(f"\n{safe_response}")
             else:
-                # If we're being called from the AutoGen framework, just return a message
-                if args or kwargs:
-                    messages = kwargs.get('messages', [])
-                    if messages:
-                        last_message = messages[-1]['content']
-                        self.console.print(f"[cyan]Processing message: {last_message}[/cyan]")
-                        response = self.chat(last_message)
-                        return response
-                
-                # Otherwise, prompt for user input
-                console.print("\n[bold yellow]No steps found in context. Waiting for user input.[/bold yellow]")
-                user_input = prompt("\n[purple]You:[/purple] ", style=Style.from_dict({'prompt': 'purple'}))
-                
-                if user_input.lower() == 'quit':
-                    console.print("\n[bold blue]👋 Goodbye![/bold blue]")
-                    return "Execution completed successfully"
-                elif user_input.lower() == 'reset':
-                    self.reset()
-                    return self.main(*args, **kwargs)
-                
-                response = self.chat(user_input)
-                console.print("\n[bold purple]Claude Engineer:[/bold purple]")
-                
-                if isinstance(response, str):
-                    safe_response = response.replace('[', '\\[').replace(']', '\\]')
-                    console.print(f"\n{safe_response}")
-                else:
-                    console.print(f"\n{str(response)}")
-                
-                return response
+                console.print(f"\n{str(response)}")
+            
+            return False, {"role": "assistant", "content": response}
                 
         except KeyboardInterrupt:
             console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
-            return "Operation interrupted by user"
-        except Exception as e:
-            console.print(f"[bold red]Error: {str(e)}[/bold red]")
-            import traceback
-            console.print(f"[red]{traceback.format_exc()}[/red]")
-            return f"Error: {str(e)}"
+            return True, {"role": "assistant", "content": "Operation interrupted by user"}
 
     def _is_step_fully_processed(self):
         """
@@ -1006,31 +1026,34 @@ Available tools:
         return auto_tools
 
     def _auto_execute_tool(self, tool_name: str, tool_params: Dict[str, Any]) -> None:
-        """
-        Automatically execute a tool and add the result to conversation history
-        as system context rather than as a tool call.
-        """
+        """Automatically execute a tool with the given parameters."""
         try:
             # Create a mock tool use object
             class ToolUseMock:
                 def __init__(self, name, input_data):
                     self.name = name
-                    self.input = input_data
+                    self.input_data = input_data
+
+            mock_tool_use = ToolUseMock(tool_name, tool_params)
             
-            tool_use = ToolUseMock(tool_name, tool_params)
-            result = self._execute_tool(tool_use)
+            # Execute the tool
+            result = self._execute_tool(mock_tool_use)
             
-            # Add the result as system context
+            # Display the result
+            self.console.print("[cyan]Tool execution successful[/cyan]")
+            self.console.print(f"[cyan]Result: [/cyan]\n{result}")
+            
+            # Add the result to the conversation history
             self.conversation_history.append({
-                "role": "system",
-                "content": f"Auto-gathered context from {tool_name}:\n{result}"
+                "role": "assistant",
+                "content": f"I executed the {tool_name} tool with the following parameters: {json.dumps(tool_params, indent=2)}\n\nResult: {result}"
             })
-            
-            self.console.print(f"[green]Auto-executed {tool_name} to gather context[/green]")
-            
         except Exception as e:
-            self.console.print(f"[yellow]Error auto-executing tool {tool_name}: {str(e)}[/yellow]")
-            # Don't add errors to conversation history
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error auto-executing tool {tool_name}: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            self.console.print(f"[yellow]{error_msg}[/yellow]")
 
     def _ensure_directories_explored(self):
         """

@@ -93,7 +93,11 @@ class FileContentReaderTool(BaseTool):
         except UnicodeDecodeError:
             return "Error: Unable to decode file (likely binary)"
         except Exception as e:
-            return f"Error: {str(e)}"
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            return error_msg
 
     def _read_directory(self, dir_path: str) -> dict:
         """Recursively read all files in a directory."""
@@ -112,7 +116,11 @@ class FileContentReaderTool(BaseTool):
                         results[file_path] = content
 
         except Exception as e:
-            results[dir_path] = f"Error reading directory: {str(e)}"
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error reading directory: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            results[dir_path] = error_msg
 
         return results
 
@@ -134,4 +142,8 @@ class FileContentReaderTool(BaseTool):
             return json.dumps(results, indent=2)
 
         except Exception as e:
-            return json.dumps({"error": str(e)}, indent=2)
+            # Fix: Create the error message first, then escape brackets
+            error_msg = f"Error: {str(e)}"
+            # Replace brackets outside of the f-string
+            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
+            return json.dumps({"error": error_msg}, indent=2)

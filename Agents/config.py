@@ -26,8 +26,13 @@ class Config:
 
     openai_api_key = os.getenv('openai_api_key')
     # Update to a valid OpenAI model name
-    OpenAI_Model = "gpt-3.5-turbo"  # Changed from gpt-4o-mini to a more widely available model
+    OpenAI_Model = "gpt-4o-mini"  # Changed from gpt-4o-mini to a more widely available model
     OpenAI_base_url = "https://api.openai.com/v1"  # Added /v1 to the base URL
+    
+    # Use the latest OpenAI client configuration
+    api_key =  openai_api_key
+    base_url = OpenAI_base_url 
+    Model = OpenAI_Model
     
     # Agentic Behavior Configuration
     AUTO_TOOL_SELECTION = True  # Enable automatic tool selection and execution
@@ -54,9 +59,3 @@ class Config:
     # Testing Configuration
     TEST_MODE = False  # Enable test mode
     TEST_TIMEOUT = 1800 # Timeout for tests in seconds (increased from 600 to 1800)
-
-
-
-    Model = OpenAI_Model
-    api_key = openai_api_key
-    base_url = OpenAI_base_url
