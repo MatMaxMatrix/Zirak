@@ -56,8 +56,13 @@ Each step's prompt should:
 Return ONLY the JSON output with no additional explanation or formatting.
 """,
             llm_config={
-                "model": Config.DeepSeek_Model,
-                "api_key": Config.deepseek_api_key,
-                "base_url": "https://api.deepseek.com",
+                "model": Config.Model,
+                "api_key": Config.api_key,
+                "base_url": Config.base_url,
             },
-        ) 
+        )
+        
+    # Override the _default_reply method to ensure it returns a tuple (final, reply)
+    def _default_reply(self, messages=None, sender=None, config=None):
+        """Default reply when no other reply is generated."""
+        return True, {"content": "I'll break down the task into clear, detailed steps."} 
