@@ -24,6 +24,7 @@ from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
 from .prompts.system_prompts import SystemPrompts
 import autogen
+import re
 
 
 #%%
@@ -33,7 +34,7 @@ class LLM_Agent(ConversableAgent):
 
         # Initialize Anthropics client
         #self.client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url="https://api.deepseek.com")
+        self.client = OpenAI(api_key=Config.api_key, base_url= Config.base_url)
         self.conversation_history: List[Dict[str, Any]] = []
         self.console = Console()
         self.console.print(f"[red]LLM_Agent start from here.[/red]")
@@ -66,7 +67,11 @@ class LLM_Agent(ConversableAgent):
         super().__init__(
             name="LLM_Agent",
             system_message="",
-            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
+            llm_config={
+                "model": Config.Model,
+                "api_key": Config.api_key,
+                "base_url": Config.base_url ,
+            },
         )
         self.register_reply(
             trigger=self._always_true_trigger,
@@ -394,7 +399,7 @@ class LLM_Agent(ConversableAgent):
         Handles both text-only and multimodal messages.
         """
         from openai import OpenAI
-        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url = "https://api.deepseek.com")
+        self.client = OpenAI(api_key=Config.api_key, base_url = Config.base_url)
         
         try:
             # Update your tools list to ensure each tool has a "type" property
@@ -465,7 +470,7 @@ class LLM_Agent(ConversableAgent):
             
             # Create the completion
             response = self.client.chat.completions.create(
-                model=Config.DeepSeek_Model,
+                model=Config.Model,
                 messages=messages,
                 max_tokens=min(Config.MAX_TOKENS, Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
                 temperature=self.temperature,
@@ -498,6 +503,10 @@ class LLM_Agent(ConversableAgent):
                                 self.context_manager.current_files.add(file_path)
                             elif os.path.isdir(file_path):
                                 self.context_manager.current_directories.add(file_path)
+                    elif tool_name == "list_directory" and "directory_path" in tool_input:
+                        directory_path = tool_input["directory_path"]
+                        if os.path.isdir(directory_path):
+                            self.context_manager.current_directories.add(directory_path)
                     
                     # Create a mock tool use object
                     class ToolUseMock:
@@ -507,6 +516,10 @@ class LLM_Agent(ConversableAgent):
                     
                     tool_use = ToolUseMock(tool_name, tool_input)
                     result = self._execute_tool(tool_use)
+                    
+                    # Check if the result indicates an empty directory
+                    if tool_name == "list_directory" and "No files found" in str(result):
+                        self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
                     
                     # Add the assistant's message and the tool result to the conversation
                     self.conversation_history.append({
@@ -529,7 +542,7 @@ class LLM_Agent(ConversableAgent):
                         "content": str(result)
                     })
                 
-                # Continue the conversation
+                # Continue the conversation to process any additional tool calls
                 return self._get_completion()
 
             # Final assistant response
@@ -600,12 +613,79 @@ class LLM_Agent(ConversableAgent):
                     response = self._get_completion()
             else:
                 response = self._get_completion()
+                
+            # After getting a response, ensure all directories in context are properly explored
+            self._ensure_directories_explored()
+            
+            # Check if any files were mentioned but not read
+            self._check_mentioned_files()
 
             return response
 
         except Exception as e:
             logging.error(f"Error in chat: {str(e)}")
             return f"Error: {str(e)}"
+            
+    def _check_mentioned_files(self):
+        """
+        Check if any files were mentioned in the conversation but not read.
+        This helps ensure that all relevant files are explored within a step.
+        """
+        # Extract file paths mentioned in the conversation
+        mentioned_files = set()
+        for message in self.conversation_history:
+            if message.get("role") == "assistant" and message.get("content"):
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    # Simple regex to find potential file paths
+                    file_matches = re.findall(r'`[^`]*`|\b[\w\-\.\/]+\.(py|js|ts|jsx|tsx|html|css|json|md|txt)\b', content)
+                    for match in file_matches:
+                        # Clean up the match
+                        file_path = match.strip('`')
+                        if os.path.exists(file_path) and os.path.isfile(file_path):
+                            mentioned_files.add(file_path)
+        
+        # Check which mentioned files haven't been read
+        unread_files = mentioned_files - self.context_manager.current_files
+        
+        # Read unread files that were mentioned
+        for file_path in unread_files:
+            self.console.print(f"[yellow]File {file_path} was mentioned but not read. Reading...[/yellow]")
+            
+            # Create a mock tool use object for reading the file
+            class ToolUseMock:
+                def __init__(self, name, input_data):
+                    self.name = name
+                    self.input = input_data
+            
+            tool_use = ToolUseMock("filecontentreadertool", {"file_paths": [file_path]})
+            result = self._execute_tool(tool_use)
+            
+            # Add the tool call and result to conversation history
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [{
+                    "id": f"auto_read_{file_path}",
+                    "type": "function",
+                    "function": {
+                        "name": "filecontentreadertool",
+                        "arguments": json.dumps({"file_paths": [file_path]})
+                    }
+                }]
+            })
+            
+            self.conversation_history.append({
+                "role": "tool",
+                "tool_call_id": f"auto_read_{file_path}",
+                "name": "filecontentreadertool",
+                "content": str(result)
+            })
+            
+            self.console.print(f"[green]File {file_path} read.[/green]")
+            
+            # Add the file to current_files
+            self.context_manager.current_files.add(file_path)
 
     def reset(self):
         """
@@ -663,16 +743,12 @@ Available tools:
 
     def main(self, *args, **kwargs):
         """
-        Entry point for the assistant CLI loop.
-        Provides a prompt for user input and handles 'quit' and 'reset' commands.
-        
-        Returns:
-            A string response to be sent back to the user
+        Main entry point for the LLM_Agent.
         """
-        console = Console()
-        style = Style.from_dict({'prompt': 'purple'})
-
-        welcome_text = """
+        console = self.console
+        
+        # Display welcome message
+        welcome_text = f"""
     # Claude Engineer v3. A self-improving assistant framework with tool creation
 
     Type 'refresh' to reload available tools
@@ -689,7 +765,7 @@ Available tools:
             if hasattr(self, 'context') and 'steps' in self.context:
                 # Convert steps dictionary to ordered list
                 step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
-                self.console.print(f"[yellow]Processing steps: {len(step_keys)} steps found[/yellow]")
+                self.console.print(f"[yellow]Processing steps: {len(step_keys)} steps found. Here are the steps:{step_keys}[/yellow]")
                 
                 if self.current_step_index < len(step_keys):
                     current_step_key = step_keys[self.current_step_index]
@@ -704,8 +780,19 @@ Available tools:
                         self.reset()
                         return self.main(*args, **kwargs)
                     
+                    # Process the current step, which may involve multiple tool calls
                     response = self.chat(user_input)
                     console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+                    
+                    # Check if any directories in context are empty and need exploration
+                    self._ensure_directories_explored()
+                    
+                    # Check if the step has been fully processed
+                    if not self._is_step_fully_processed():
+                        self.console.print("[yellow]Step not fully processed. Continuing processing...[/yellow]")
+                        # Continue processing the current step by calling chat with a follow-up prompt
+                        follow_up_response = self.chat("Continue processing the current step. Make sure to explore all relevant files and directories.")
+                        response += "\n\n" + follow_up_response
                     
                     if isinstance(response, str):
                         safe_response = response.replace('[', '\\[').replace(']', '\\]')
@@ -734,7 +821,7 @@ Available tools:
                 
                 # Otherwise, prompt for user input
                 console.print("\n[bold yellow]No steps found in context. Waiting for user input.[/bold yellow]")
-                user_input = prompt("\n[purple]You:[/purple] ", style=style)
+                user_input = prompt("\n[purple]You:[/purple] ", style=Style.from_dict({'prompt': 'purple'}))
                 
                 if user_input.lower() == 'quit':
                     console.print("\n[bold blue]👋 Goodbye![/bold blue]")
@@ -762,6 +849,55 @@ Available tools:
             import traceback
             console.print(f"[red]{traceback.format_exc()}[/red]")
             return f"Error: {str(e)}"
+
+    def _is_step_fully_processed(self):
+        """
+        Check if the current step has been fully processed by examining the conversation history.
+        A step is considered fully processed if:
+        1. The last message is from the assistant (not a tool call)
+        2. There are no unexplored directories in the context
+        3. There are no unread files mentioned in the conversation
+        
+        Returns:
+            bool: True if the step is fully processed, False otherwise
+        """
+        # Check if the last message is from the assistant
+        if not self.conversation_history:
+            return False
+            
+        last_message = self.conversation_history[-1]
+        if last_message.get("role") != "assistant" or not last_message.get("content"):
+            return False
+            
+        # Check if there are unexplored directories
+        for directory in self.context_manager.current_directories:
+            directory_explored = False
+            for file in self.context_manager.current_files:
+                if file.startswith(directory):
+                    directory_explored = True
+                    break
+            if not directory_explored:
+                return False
+                
+        # Check if there are unread files mentioned in the conversation
+        mentioned_files = set()
+        for message in self.conversation_history:
+            if message.get("role") == "assistant" and message.get("content"):
+                content = message.get("content", "")
+                if isinstance(content, str):
+                    # Simple regex to find potential file paths
+                    file_matches = re.findall(r'`[^`]*`|\b[\w\-\.\/]+\.(py|js|ts|jsx|tsx|html|css|json|md|txt)\b', content)
+                    for match in file_matches:
+                        # Clean up the match
+                        file_path = match.strip('`')
+                        if os.path.exists(file_path) and os.path.isfile(file_path):
+                            mentioned_files.add(file_path)
+        
+        unread_files = mentioned_files - self.context_manager.current_files
+        if unread_files:
+            return False
+            
+        return True
 
     def _generate_tool_info(self) -> str:
         """
@@ -896,6 +1032,140 @@ Available tools:
             self.console.print(f"[yellow]Error auto-executing tool {tool_name}: {str(e)}[/yellow]")
             # Don't add errors to conversation history
 
+    def _ensure_directories_explored(self):
+        """
+        Ensure that all directories in the current context are explored for file content.
+        This method checks if directories have been properly explored and contain files.
+        If a directory appears to be empty or unexplored, it will trigger a list_directory
+        tool call to explore it.
+        """
+        if not hasattr(self, 'context_manager') or not hasattr(self.context_manager, 'current_directories'):
+            return
+            
+        for directory in list(self.context_manager.current_directories):
+            if not os.path.exists(directory):
+                self.console.print(f"[yellow]Directory {directory} does not exist. Removing from context.[/yellow]")
+                self.context_manager.current_directories.remove(directory)
+                continue
+                
+            try:
+                # Check if directory is empty
+                contents = os.listdir(directory)
+                if not contents:
+                    self.console.print(f"[yellow]Directory {directory} is empty.[/yellow]")
+                    continue
+                    
+                # Check if we have explored this directory (if any files from this directory are in current_files)
+                directory_explored = False
+                for file in self.context_manager.current_files:
+                    if file.startswith(directory):
+                        directory_explored = True
+                        break
+                        
+                if not directory_explored:
+                    self.console.print(f"[yellow]Directory {directory} has not been explored. Exploring...[/yellow]")
+                    
+                    # Create a mock tool use object for list_directory
+                    class ToolUseMock:
+                        def __init__(self, name, input_data):
+                            self.name = name
+                            self.input = input_data
+                    
+                    tool_use = ToolUseMock("list_directory", {"directory_path": directory})
+                    result = self._execute_tool(tool_use)
+                    
+                    # Add the tool call and result to conversation history
+                    self.conversation_history.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": f"auto_list_{directory}",
+                            "type": "function",
+                            "function": {
+                                "name": "list_directory",
+                                "arguments": json.dumps({"directory_path": directory})
+                            }
+                        }]
+                    })
+                    
+                    self.conversation_history.append({
+                        "role": "tool",
+                        "tool_call_id": f"auto_list_{directory}",
+                        "name": "list_directory",
+                        "content": str(result)
+                    })
+                    
+                    self.console.print(f"[green]Directory {directory} explored.[/green]")
+                    
+                    # Check if the directory needs deeper exploration
+                    self._explore_directory_deeper(directory, contents)
+            except Exception as e:
+                self.console.print(f"[red]Error exploring directory {directory}: {str(e)}[/red]")
+                
+    def _explore_directory_deeper(self, directory, contents):
+        """
+        Explore a directory more deeply by examining its contents.
+        This helps ensure that important files and subdirectories are not missed.
+        
+        Args:
+            directory: The directory to explore
+            contents: List of items in the directory
+        """
+        # Check for important files that should be read
+        important_extensions = ['.py', '.js', '.ts', '.jsx', '.tsx', '.json', '.md', '.txt', '.html', '.css']
+        important_filenames = ['README', 'requirements.txt', 'package.json', 'setup.py', 'config.json', '.env']
+        
+        # Find important files to read
+        important_files = []
+        for item in contents:
+            item_path = os.path.join(directory, item)
+            if os.path.isfile(item_path):
+                # Check if it's an important file by extension or name
+                file_ext = os.path.splitext(item)[1].lower()
+                if file_ext in important_extensions or any(name.lower() in item.lower() for name in important_filenames):
+                    important_files.append(item_path)
+            elif os.path.isdir(item_path):
+                # Add subdirectory to current_directories
+                self.context_manager.current_directories.add(item_path)
+        
+        # Read important files (limit to 3 to avoid overwhelming)
+        for file_path in important_files[:3]:
+            if file_path not in self.context_manager.current_files:
+                self.console.print(f"[yellow]Reading important file: {file_path}[/yellow]")
+                
+                # Create a mock tool use object for reading the file
+                class ToolUseMock:
+                    def __init__(self, name, input_data):
+                        self.name = name
+                        self.input = input_data
+                
+                tool_use = ToolUseMock("filecontentreadertool", {"file_paths": [file_path]})
+                result = self._execute_tool(tool_use)
+                
+                # Add the tool call and result to conversation history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [{
+                        "id": f"auto_read_{file_path}",
+                        "type": "function",
+                        "function": {
+                            "name": "filecontentreadertool",
+                            "arguments": json.dumps({"file_paths": [file_path]})
+                        }
+                    }]
+                })
+                
+                self.conversation_history.append({
+                    "role": "tool",
+                    "tool_call_id": f"auto_read_{file_path}",
+                    "name": "filecontentreadertool",
+                    "content": str(result)
+                })
+                
+                self.context_manager.current_files.add(file_path)
+                self.console.print(f"[green]File {file_path} read.[/green]")
+
 class ToolManager:
     """
     A class to manage tools for the LLM_Agent.
@@ -981,7 +1251,7 @@ class ToolManager:
                     try:
                         module_name = f'Agents.tools.{module_info.name}'
                         module = importlib.import_module(module_name)
-                        self.console.print(f"[green]Loaded module using path: {module_name}[/green]")
+                        #self.console.print(f"[green]Loaded module using path: {module_name}[/green]")
                     except ImportError as e1:
                         import_errors.append(f"Error with 'Agents.tools.{module_info.name}': {str(e1)}")
                         try:
@@ -1200,14 +1470,15 @@ class ToolManager:
             description = tool_info.get('description', '').strip()
             
             # Display tool name and description
-            self.console.print(f"🔧 [cyan]{name}[/cyan]:")
+            #self.console.print(f"🔧 [cyan]{name}[/cyan]:")
             
             if description:
                 description_lines = description.split('\n')
                 formatted_description = '\n    '.join(line.strip() for line in description_lines)
-                self.console.print(f"    {formatted_description}")
+                #self.console.print(f"    {formatted_description}")
             else:
-                self.console.print("    [yellow]No description available[/yellow]")
+                #self.console.print("    [yellow]No description available[/yellow]")
+                pass
             
             # Display input schema if available
             if 'input_schema' in tool_info and tool_info['input_schema']:
@@ -1222,7 +1493,7 @@ class ToolManager:
                             param_type = param_info.get('type', 'any')
                             param_desc = param_info.get('description', '')
                             required_mark = "[red]*[/red]" if param_name in required_params else ""
-                            self.console.print(f"      - {param_name}{required_mark} ({param_type}): {param_desc}")
+                            #self.console.print(f"      - {param_name}{required_mark} ({param_type}): {param_desc}")
                 except Exception as e:
                     self.console.print(f"    [yellow]Error displaying schema: {str(e)}[/yellow]")
             
@@ -1352,3 +1623,5 @@ class ContextManager:
             "workspace_root": self.workspace_root,
             "recent_topics": self.recent_topics
         }
+
+# %%

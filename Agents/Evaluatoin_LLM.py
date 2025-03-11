@@ -3,30 +3,23 @@ import os
 import json
 import logging
 from openai import OpenAI
-
+from .config import Config
 import autogen
 
 
 class Evaluatoin_LLM(ConversableAgent):
     def __init__(self):
-
-        self.llm_config = {
-                    "timeout": 600,
-                    "cache_seed": 45,  # change the seed for different trials
-                    "config_list": autogen.config_list_from_json(
-                        "OAI_CONFIG_LIST",
-                        filter_dict={"model": ["gpt-4o"]},  # This Config is set to JSON mode
-                    ),
-                    "temperature": 0,
-                }
+        self.client = OpenAI(api_key=Config.api_key, base_url = Config.base_url)
         
         super().__init__(
             name="Query_Transformation",
             system_message="",
-            llm_config=self.llm_config,
+            llm_config={
+                "model": Config.Model,
+                "api_key": Config.api_key,
+                "base_url": Config.base_url ,
+            },
         )
-        api = self.llm_config["config_list"][0].get("api_key")
-        self.client = OpenAI(api_key=api)
         self.register_reply(
             trigger=self._always_true_trigger,  # Add a specific trigger string
             reply_func=self.handle_message,
@@ -134,7 +127,7 @@ Return ONLY the JSON evaluation output. Do not include any additional explanatio
 """
 
         response = self.client.chat.completions.create(
-            model=self.llm_config["config_list"][0].get("model"),
+            model=Config.Model,
             messages=message,
             temperature=0.3,
             max_tokens=1000,

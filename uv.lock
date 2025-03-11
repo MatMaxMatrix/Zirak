@@ -9,6 +9,12 @@ resolution-markers = [
     "python_full_version >= '3.13'",
 ]
 
+[manifest]
+members = [
+    "ce3",
+    "cursor-test-workspace",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.4.4"
@@ -814,6 +820,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/d1/91/d51202cc41fbfca7f
 wheels = [
     { url = "https://files.pythonhosted.org/packages/06/a9/2da08717a6862c48f1d61ef957a7bba171e7eefa6c0aa0ceb96a140c2a6b/cssselect-1.2.0-py2.py3-none-any.whl", hash = "sha256:da1885f0c10b60c03ed5eccbb6b68d6eff248d91976fcde348f395d54c9fd35e", size = 18687 },
 ]
+
+[[package]]
+name = "cursor-test-workspace"
+version = "0.1.0"
+source = { virtual = "cursor_test_workspace" }
 
 [[package]]
 name = "cycler"

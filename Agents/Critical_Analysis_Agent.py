@@ -11,10 +11,14 @@ class CriticalAnalysisAgent(ConversableAgent):
         super().__init__(
             name="CriticalAnalysisAgent",
             system_message="",
-            llm_config=autogen.config_list_from_json("OAI_CONFIG_LIST",)[2],
+            llm_config={
+                "model": Config.Model,
+                "api_key": Config.api_key,
+                "base_url": Config.base_url,
+            },
         )
-        api = autogen.config_list_from_json("OAI_CONFIG_LIST",)[2]['config_list'][0]['api_key']
-        self.client = OpenAI(api_key=Config.deepseek_api_key, base_url = "https://api.deepseek.com" )  #, base_url="https://api.deepseek.com")
+        # Initialize OpenAI client with the correct API key and base URL
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
         self.register_reply(
             trigger=self._always_true_trigger,  # Add a specific trigger string
             reply_func=self.handle_message,
@@ -30,7 +34,7 @@ class CriticalAnalysisAgent(ConversableAgent):
     def handle_message(self, *args, **kwargs):
             Input_user = self.context.get("User_input")
             clarifications = self.context.get("clarifications")
-            self.console.print(f"[red]{clarifications}.[/red]")
+            #self.console.print(f"[red]{clarifications}.[/red]")
             
             Critic_prompt = f"""Analyze the User's input and generate a JSON summary of assumptions and clarifications needed.
 
@@ -101,6 +105,12 @@ Generate analysis JSON after <thinking>.""",
                     if hasattr(response_text, 'choices'):
                         response_text = response_text.choices[0].message.content
 
+                    # Try to parse the entire response as JSON first
+                    try:
+                        return json.loads(response_text)
+                    except json.JSONDecodeError:
+                        pass  # Continue with other extraction methods
+
                     # Find the start of a JSON code block
                     start_marker = '```json'
                     start_idx = response_text.find(start_marker)
@@ -109,7 +119,15 @@ Generate analysis JSON after <thinking>.""",
                         start_marker = '```'
                         start_idx = response_text.find(start_marker)
                         if start_idx == -1:
-                            return None
+                            # Try to find JSON directly with curly braces
+                            start_idx = response_text.find('{')
+                            if start_idx == -1:
+                                return None
+                            end_idx = response_text.rfind('}')
+                            if end_idx == -1:
+                                return None
+                            json_str = response_text[start_idx:end_idx + 1]
+                            return json.loads(json_str)
                         else:
                             start_idx += len(start_marker)
                     else:
@@ -118,10 +136,13 @@ Generate analysis JSON after <thinking>.""",
                     # Find the end of the code block
                     end_idx = response_text.find('```', start_idx)
                     if end_idx == -1:
-                        return None
-
-                    # Extract the content between the markers
-                    json_text = response_text[start_idx:end_idx].strip()
+                        # If no closing code block, try to find the last curly brace
+                        end_idx = response_text.rfind('}')
+                        if end_idx == -1:
+                            return None
+                        json_text = response_text[start_idx:end_idx + 1].strip()
+                    else:
+                        json_text = response_text[start_idx:end_idx].strip()
 
                     # Find the first '{' and last '}' to handle possible leading/trailing text
                     start_pos = json_text.find('{')
@@ -134,22 +155,33 @@ Generate analysis JSON after <thinking>.""",
                     # Parse the JSON string
                     return json.loads(json_str)
                 except Exception as e:
-                    return None
+                    print(f"Error extracting JSON: {str(e)}")
+                    # Return a default JSON object instead of None
+                    return {
+                        "identified_assumptions": [],
+                        "clarifying_questions": [],
+                        "requires_clarification": False
+                    }
 
 
-
-
-            while True:
-                print("WE GOT HERE")
-                response = self.client.chat.completions.create(
-                    model= Config.DeepSeek_Model,
-                    messages=[{"role": "user", "content": str(Critic_prompt)}],
-                    temperature=0,
-                    max_tokens=1000,
-                )
-                print(response.choices[0].message.content)
-                self.console.print(f"[purple]{response}.[/purple]")
+            # Add a maximum number of attempts to prevent infinite loops
+            max_attempts = 3
+            attempts = 0
+            
+            while attempts < max_attempts:
+                attempts += 1
+                #print("WE GOT HERE")
                 try:
+                    # Make sure we're using the correct model name for OpenAI
+                    response = self.client.chat.completions.create(
+                        model=Config.Model,
+                        messages=[{"role": "user", "content": str(Critic_prompt)}],
+                        temperature=0,
+                        max_tokens=1000,
+                    )
+                    print(response.choices[0].message.content)
+                    #self.console.print(f"[purple]{response}.[/purple]")
+                    
                     json_content = extract_json_from_response(response)
                     if json_content:
                         if json_content.get("clarifying_questions"):
@@ -158,7 +190,15 @@ Generate analysis JSON after <thinking>.""",
                             self.context["identified_assumptions"] = json_content.get("identified_assumptions", [])
                         else:
                             self.context["requires_clarification"] = False
-                        return  {"role": "assistant", "content": json_content}
+                        # Convert the JSON object to a string before returning it
+                        json_str = json.dumps(json_content, indent=2)
+                        # Return a tuple with (final, reply) as expected by autogen
+                        return True, {"role": "assistant", "content": json_str}
                 except Exception as e:
                     print(f"Error processing response: {str(e)}")
-                    continue
+                    # Continue to the next attempt
+            
+            # Return a fallback response if we couldn't get a valid response after max attempts
+            self.context["requires_clarification"] = False
+            # Return a tuple with (final, reply) as expected by autogen
+            return True, {"role": "assistant", "content": "I encountered an issue analyzing the request. Let's proceed with the conversation."}
