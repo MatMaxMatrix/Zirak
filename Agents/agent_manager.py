@@ -13,8 +13,10 @@ from .Step_Generator import Step_Generator
 from .Evaluatoin_LLM import Evaluatoin_LLM
 from .Initiating_agent import EnhancedInitiatingAgent
 from .Critical_Analysis_Agent import CriticalAnalysisAgent
+from .UserProxy_agent import EnhancedUserProxyAgent
 from rich.console import Console
 from .config import Config
+import asyncio
 
 console = Console()
 
@@ -36,6 +38,7 @@ Query_Agent = Query_Transformation()
 Step_agent = Step_Generator()
 Evaluation_agent = Evaluatoin_LLM()
 CriticalAnalysisAgent = CriticalAnalysisAgent()
+UserProxy_agent = EnhancedUserProxyAgent()
 
 # Define the agent list for the group chat
 agents = [
@@ -44,6 +47,7 @@ agents = [
     LLM_agent,
     Query_Agent,
     Step_agent,
+    UserProxy_agent,
 ]
 
 def state_transition(last_speaker, groupchat):
@@ -68,6 +72,11 @@ def state_transition(last_speaker, groupchat):
         if len(messages) <= 1:
             console.print("[bold cyan]Initial message - selecting initiating agent[/bold cyan]")
             return initiating_agent
+        
+        # UserProxy agent transitions
+        if last_speaker is UserProxy_agent:
+            console.print("[bold cyan]User proxy agent finished - proceeding to LLM Agent[/bold cyan]")
+            return LLM_agent
         
         # Initiating agent transitions
         if last_speaker is initiating_agent:
@@ -129,12 +138,15 @@ def state_transition(last_speaker, groupchat):
                     console.print(f"[bold cyan]LLM Agent continuing with step {LLM_agent.current_step_index + 1}/{len(step_keys)}[/bold cyan]")
                     return LLM_agent
                 else:
-                    # All steps completed
-                    console.print("[bold cyan]All steps completed - returning to initiating agent[/bold cyan]")
+                    # All steps completed - return to user proxy agent
+                    console.print("[bold cyan]All steps completed - returning to user proxy agent[/bold cyan]")
+                    return UserProxy_agent
             else:
-                console.print("[bold cyan]No steps defined - returning to initiating agent[/bold cyan]")
-            
-            return initiating_agent
+                console.print("[bold cyan]No steps defined - returning to user proxy agent[/bold cyan]")
+                return UserProxy_agent
+        elif last_speaker is UserProxy_agent:
+            console.print("[bold cyan]User proxy agent finished - proceeding to LLM Agent[/bold cyan]")
+            return LLM_agent
         
         # Default case - return to initiating agent
         console.print("[bold cyan]Default transition - returning to initiating agent[/bold cyan]")

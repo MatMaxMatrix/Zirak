@@ -10,7 +10,7 @@ import time
 import os
 
 # Import the test file
-import tool_tests
+import Tool_test.tool_tests as tool_tests
 
 console = Console()
 

@@ -67,14 +67,14 @@ Examples:
 
 Current Input:
 {Input_user}
-[user_query]
+[QUERY]
 [/QUERY]
 
 [CLARIFICATIONS]
 {clarifications}
 [/CLARIFICATIONS]
 
-Generate analysis JSON after <thinking>.""",
+Generate analysis JSON.""",
             
 
 

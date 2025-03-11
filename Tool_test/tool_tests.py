@@ -12,19 +12,19 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import the tools
 from Agents.tools.base import BaseTool
-from Agents.tools.filecontentreadertool import FileContentReaderTool
-from Agents.tools.filecreatortool import FileCreatorTool
-from Agents.tools.fileedittool import FileEditTool
-from Agents.tools.createfolderstool import CreateFoldersTool
-from Agents.tools.diffeditortool import DiffEditorTool
-from Agents.tools.lintingtool import LintingTool
-from Agents.tools.toolcreator import ToolCreatorTool
-from Agents.tools.uvpackagemanager import UVPackageManager
-from Agents.tools.duckduckgotool import DuckduckgoTool
-from Agents.tools.webscrapertool import WebScraperTool
-from Agents.tools.e2bcodetool import E2bCodeTool
-from Agents.tools.browsertool import BrowserTool
-from Agents.tools.screenshottool import ScreenshotTool
+from ..Agents.tools.filecontentreadertool import FileContentReaderTool
+from ..Agents.tools.filecreatortool import FileCreatorTool
+from ..Agents.tools.fileedittool import FileEditTool
+from ..Agents.tools.createfolderstool import CreateFoldersTool
+from ..Agents.tools.diffeditortool import DiffEditorTool
+from ..Agents.tools.lintingtool import LintingTool
+from ..Agents.tools.toolcreator import ToolCreatorTool
+from ..Agents.tools.uvpackagemanager import UVPackageManager
+from ..Agents.tools.duckduckgotool import DuckduckgoTool
+from ..Agents.tools.webscrapertool import WebScraperTool
+from ..Agents.tools.e2bcodetool import E2bCodeTool
+from ..Agents.tools.browsertool import BrowserTool
+from ..Agents.tools.screenshottool import ScreenshotTool
 
 
 class ToolTestCase(unittest.TestCase):
