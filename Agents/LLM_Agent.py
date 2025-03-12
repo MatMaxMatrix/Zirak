@@ -22,7 +22,8 @@ from .config import Config
 from .tools.base import BaseTool
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
-from .prompts.system_prompts import SystemPrompts
+#from .prompts.system_prompts import SystemPrompts
+from .prompts.revised_prompt import SystemPrompts
 import autogen
 import re
 
@@ -45,9 +46,13 @@ class LLM_Agent(ConversableAgent):
         
         # Context tracking for agentic behavior
         self.context_manager = ContextManager()
-        self.auto_tool_selection = getattr(Config, 'AUTO_TOOL_SELECTION', True)
+        self.auto_tool_selection = False
         self.max_auto_tool_calls = getattr(Config, 'MAX_AUTO_TOOL_CALLS', 5)
         self.current_auto_tool_calls = 0
+        
+        # Cache for processed tools
+        self._processed_tools_cache = None
+        self._last_tools_hash = None
 
         # Initialize the tool manager
         self.tool_manager = ToolManager(console=self.console)
@@ -56,7 +61,8 @@ class LLM_Agent(ConversableAgent):
         tool_info = self.tool_manager.generate_tool_info()
         
         # Enhanced system prompt with agentic capabilities
-        system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
+        #system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
+        system_prompt = f"{SystemPrompts.REVISED_PROMPT}"
         self.conversation_history.append({
             "role": "system",
             "content": system_prompt
@@ -101,6 +107,9 @@ class LLM_Agent(ConversableAgent):
         This is useful when new tools are added or existing tools are modified.
         """
         self.tool_manager.refresh_tools()
+        # Clear the processed tools cache when refreshing tools
+        self._processed_tools_cache = None
+        self._last_tools_hash = None
         self.display_available_tools()
 
     def display_available_tools(self):
@@ -122,8 +131,14 @@ class LLM_Agent(ConversableAgent):
         tool_name = tool_use.name
         tool_input = tool_use.input
         
-        self.console.print(f"\n[bold cyan]Executing tool:[/bold cyan] {tool_name}")
-        self.console.print(f"[cyan]Input:[/cyan] {json.dumps(self._clean_data_for_display(tool_input), indent=2)}")
+        # Create a more visually appealing tool execution header
+        tool_header = Panel(
+            f"[bold cyan]Tool:[/bold cyan] {tool_name}\n[bold cyan]Parameters:[/bold cyan]\n{json.dumps(self._clean_data_for_display(tool_input), indent=2)}",
+            title="[bold]Tool Execution Details[/bold]",
+            border_style="cyan",
+            padding=(1, 2)
+        )
+        self.console.print(tool_header)
         
         # Special handling for common tools
         if tool_name.lower() == "createfolderstool":
@@ -307,15 +322,60 @@ class LLM_Agent(ConversableAgent):
         
         # Clean up result data
         cleaned_result = self._clean_data_for_display(result)
+        
+        # Determine if the result was successful based on improved heuristics
+        success = True
+        
+        # Try to parse the result as JSON if it's a string
+        parsed_result = None
+        if isinstance(result, str):
+            try:
+                parsed_result = json.loads(result)
+            except json.JSONDecodeError:
+                parsed_result = None
+        else:
+            parsed_result = result
+            
+        # Check for explicit failure indicators
+        if parsed_result and isinstance(parsed_result, dict):
+            # For dictionary results, check specific failure indicators
+            if parsed_result.get('error') or parsed_result.get('failed') == True:
+                success = False
+            # For file operations, check if there were any failed files
+            elif 'failed_files' in parsed_result and parsed_result['failed_files'] > 0:
+                success = False
+            # For results with a success field, use that directly
+            elif 'success' in parsed_result and parsed_result['success'] == False:
+                success = False
+        elif isinstance(result, str) and ("error" in result.lower() or "exception" in result.lower()):
+            # For string results, check for error keywords but avoid false positives
+            # Don't check for "failed" as it might appear in successful results like "failed_files": 0
+            success = False
+        
+        # Create a more visually appealing result display
+        status_icon = "✅" if success else "❌"
+        status_color = "green" if success else "red"
+        
+        # Format the result for better readability
+        if isinstance(cleaned_result, str) and len(cleaned_result) > 500:
+            # For long text results, show a preview
+            preview = cleaned_result[:500] + "... (truncated)"
+            result_display = f"[{status_color}]{status_icon} Result:[/{status_color}]\n{preview}"
+        else:
+            # For shorter results, show everything
+            result_display = f"[{status_color}]{status_icon} Result:[/{status_color}]\n{cleaned_result}"
+        
+        # Create a more detailed panel with input and result
+        tool_info = f"""[bold cyan]📥 Input Parameters:[/bold cyan]
+{json.dumps(cleaned_input, indent=2)}
 
-        tool_info = f"""[cyan]📥 Input:[/cyan] {json.dumps(cleaned_input, indent=2)}
-[cyan]📤 Result:[/cyan] {cleaned_result}"""
+{result_display}"""
         
         panel = Panel(
             tool_info,
-            title=f"Tool used: {tool_name}",
-            title_align="left",
-            border_style="cyan",
+            title=f"[bold]{tool_name} - Execution Summary[/bold]",
+            title_align="center",
+            border_style=status_color,
             padding=(1, 2)
         )
         self.console.print(panel)
@@ -390,6 +450,78 @@ class LLM_Agent(ConversableAgent):
 
         self.console.print("---")
 
+    def _process_tools(self):
+        """
+        Process the tools to ensure they have the required properties and truncate long descriptions.
+        This is extracted to a separate method to allow for caching.
+        """
+        updated_tools = []
+        for tool in self.tools:
+            # Create a copy of the tool to avoid modifying the original
+            updated_tool = tool.copy()
+            
+            # Ensure the required type is provided
+            if "type" not in updated_tool:
+                updated_tool["type"] = "function"
+            
+            # Format the tool properly for OpenAI API
+            if "function" not in updated_tool:
+                updated_tool["function"] = {
+                    "name": updated_tool.get("name", ""),
+                    "description": updated_tool.get("description", ""),
+                    "parameters": updated_tool.get("input_schema", {})
+                }
+            
+            # Process all descriptions at once to avoid redundant checks in each loop
+            # Truncate main description if too long
+            if "description" in updated_tool["function"] and len(updated_tool["function"]["description"]) > 1000:
+                updated_tool["function"]["description"] = updated_tool["function"]["description"][:997] + "..."
+            
+            # Truncate parameter-level description if too long
+            if "parameters" in updated_tool["function"]:
+                # Check top-level parameters description
+                if "description" in updated_tool["function"]["parameters"] and len(updated_tool["function"]["parameters"]["description"]) > 1000:
+                    updated_tool["function"]["parameters"]["description"] = updated_tool["function"]["parameters"]["description"][:997] + "..."
+                
+                # Check property-level descriptions
+                if "properties" in updated_tool["function"]["parameters"]:
+                    for prop_name, prop in updated_tool["function"]["parameters"]["properties"].items():
+                        if "description" in prop and len(prop["description"]) > 1000:
+                            prop["description"] = prop["description"][:997] + "..."
+            
+            updated_tools.append(updated_tool)
+        
+        return updated_tools
+    
+    def _get_tools_hash(self):
+        """
+        Generate a hash of the current tools to detect changes.
+        """
+        import hashlib
+        import json
+        
+        # Create a string representation of the tools
+        tools_str = json.dumps(self.tools, sort_keys=True)
+        
+        # Generate a hash
+        return hashlib.md5(tools_str.encode()).hexdigest()
+    
+    def _get_processed_tools(self):
+        """
+        Get the processed tools, using cache if available and tools haven't changed.
+        """
+        current_hash = self._get_tools_hash()
+        
+        # If tools haven't changed, return cached processed tools
+        if self._processed_tools_cache is not None and current_hash == self._last_tools_hash:
+            return self._processed_tools_cache
+        
+        # Process tools and update cache
+        processed_tools = self._process_tools()
+        self._processed_tools_cache = processed_tools
+        self._last_tools_hash = current_hash
+        
+        return processed_tools
 
     def _get_completion(self):
         """
@@ -400,45 +532,12 @@ class LLM_Agent(ConversableAgent):
         self.client = OpenAI(api_key=Config.api_key, base_url = Config.base_url)
         
         try:
-            # Update your tools list to ensure each tool has a "type" property
-            # and that descriptions are not too long
-            updated_tools = []
-            for tool in self.tools:
-                # Create a copy of the tool to avoid modifying the original
-                updated_tool = tool.copy()
-                
-                # Ensure the required type is provided
-                if "type" not in updated_tool:
-                    updated_tool["type"] = "function"
-                
-                # Format the tool properly for OpenAI API
-                if "function" not in updated_tool:
-                    updated_tool["function"] = {
-                        "name": updated_tool.get("name", ""),
-                        "description": updated_tool.get("description", ""),
-                        "parameters": updated_tool.get("input_schema", {})
-                    }
-                
-                # Truncate description if it's too long (max 1000 chars to be safe)
-                if "description" in updated_tool["function"] and len(updated_tool["function"]["description"]) > 1000:
-                    updated_tool["function"]["description"] = updated_tool["function"]["description"][:997] + "..."
-                
-                # Also check for nested descriptions in parameters
-                if "parameters" in updated_tool["function"] and "description" in updated_tool["function"]["parameters"]:
-                    if len(updated_tool["function"]["parameters"]["description"]) > 1000:
-                        updated_tool["function"]["parameters"]["description"] = updated_tool["function"]["parameters"]["description"][:997] + "..."
-                
-                # Check for properties descriptions
-                if ("parameters" in updated_tool["function"] and "properties" in updated_tool["function"]["parameters"]):
-                    for prop_name, prop in updated_tool["function"]["parameters"]["properties"].items():
-                        if "description" in prop and len(prop["description"]) > 1000:
-                            prop["description"] = prop["description"][:997] + "..."
-                
-                updated_tools.append(updated_tool)
-
+            # Get processed tools with caching
+            updated_tools = self._get_processed_tools()
+            self.console.print(f"\n[yellow]updated_tools: {updated_tools}[/yellow]")
             # Get relevant context from the context manager
             context_info = self.context_manager.get_relevant_context()
-            
+            self.console.print(f"\n[yellow]context_info: {context_info}[/yellow]")
             # Add context information as a system message if there's relevant context
             if (context_info["current_files"] or context_info["current_directories"]) and getattr(Config, 'AUTO_CONTEXT_GATHERING', True):
                 context_message = "Current context:\n"
@@ -464,8 +563,6 @@ class LLM_Agent(ConversableAgent):
                 *self.conversation_history,
             ]
             
-            #self.console.print(f"\n[yellow]message to the LLM: {messages}[/yellow]")
-            
             # Create the completion
             response = self.client.chat.completions.create(
                 model=Config.Model,
@@ -487,40 +584,95 @@ class LLM_Agent(ConversableAgent):
 
             # Handle tool use
             if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
-                self.console.print("\n[bold yellow]Handling Function Call...[/bold yellow]\n")
+                self.console.print("\n[bold yellow]Starting workflow execution...[/bold yellow]\n")
                 
+                # Get all tool calls from the response
                 tool_calls = response.choices[0].message.tool_calls
-                for tool_call in tool_calls:
+                
+                # Add the AI's overall plan to the conversation history
+                plan_summary = "I'll execute the following workflow:\n\n"
+                
+                # Create a more visually appealing workflow plan
+                workflow_steps = []
+                for i, tool_call in enumerate(tool_calls):
                     tool_name = tool_call.function.name
                     tool_input = json.loads(tool_call.function.arguments)
+                    step_num = i + 1
                     
-                    # Update context manager with file and directory information from tool calls
-                    if tool_name == "filecontentreadertool" and "file_paths" in tool_input:
-                        for file_path in tool_input["file_paths"]:
-                            if os.path.isfile(file_path):
-                                self.context_manager.current_files.add(file_path)
-                            elif os.path.isdir(file_path):
-                                self.context_manager.current_directories.add(file_path)
-                    elif tool_name == "list_directory" and "directory_path" in tool_input:
-                        directory_path = tool_input["directory_path"]
-                        if os.path.isdir(directory_path):
-                            self.context_manager.current_directories.add(directory_path)
+                    # Create a human-readable description of the tool action
+                    action_desc = self._get_action_description(tool_name, tool_input)
+                    plan_summary += f"Step {step_num}: {action_desc}\n"
                     
-                    # Create a mock tool use object
-                    class ToolUseMock:
-                        def __init__(self, name, input_data):
-                            self.name = name
-                            self.input = input_data
+                    # Add to our workflow steps for display
+                    workflow_steps.append({
+                        "number": step_num,
+                        "tool": tool_name,
+                        "description": action_desc,
+                        "input": tool_input
+                    })
+                
+                # Display the workflow plan with a more structured format
+                self.console.print("\n[bold green]Workflow Plan:[/bold green]")
+                self.console.print(f"\n[yellow]workflow_steps: {workflow_steps}[/yellow]")
+                
+                for step in workflow_steps:
+                    step_panel = Panel(
+                        f"[cyan]Tool:[/cyan] {step['tool']}\n[cyan]Action:[/cyan] {step['description']}",
+                        title=f"[bold]Step {step['number']}/{len(workflow_steps)}[/bold]",
+                        border_style="blue",
+                        padding=(1, 2)
+                    )
+                    self.console.print(step_panel)
+                
+                # Add the plan to conversation history
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": plan_summary
+                })
+                self.console.print(f"\n[yellow]conversation: {self.conversation_history}[/yellow]")
+                # Execute each tool one by one with clear explanations
+                for i, tool_call in enumerate(tool_calls):
+                    tool_name = tool_call.function.name
+                    tool_input = json.loads(tool_call.function.arguments)
+                    step_num = i + 1
                     
-                    tool_use = ToolUseMock(tool_name, tool_input)
-                    result = self._execute_tool(tool_use)
+                    # Create a human-readable description of what will be done
+                    action_desc = self._get_action_description(tool_name, tool_input)
                     
-                    # Check if the result indicates an empty directory
-                    if tool_name == "list_directory" and "No files found" in str(result):
-                        self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
+                    # Display step information with a more prominent header
+                    self.console.print("\n")
+                    step_header = f"[bold white on blue] STEP {step_num}/{len(tool_calls)} [/bold white on blue] [bold cyan]{action_desc}[/bold cyan]"
+                    self.console.print(step_header)
                     
-                    # Add the assistant's message and the tool result to the conversation
-                    self.conversation_history.append({
+                    # Show a spinner while the step is executing
+                    with Live(Spinner("dots", text="[cyan]Executing...[/cyan]"), refresh_per_second=10) as live:
+                        # Update context manager with file and directory information from tool calls
+                        if tool_name == "filecontentreadertool" and "file_paths" in tool_input:
+                            for file_path in tool_input["file_paths"]:
+                                if os.path.isfile(file_path):
+                                    self.context_manager.current_files.add(file_path)
+                                elif os.path.isdir(file_path):
+                                    self.context_manager.current_directories.add(file_path)
+                        elif tool_name == "list_directory" and "directory_path" in tool_input:
+                            directory_path = tool_input["directory_path"]
+                            if os.path.isdir(directory_path):
+                                self.context_manager.current_directories.add(directory_path)
+                        
+                        # Create a mock tool use object
+                        class ToolUseMock:
+                            def __init__(self, name, input_data):
+                                self.name = name
+                                self.input = input_data
+                        
+                        # Execute the tool
+                        tool_use = ToolUseMock(tool_name, tool_input)
+                        result = self._execute_tool(tool_use)
+                    
+                    # Display completion status with a checkmark
+                    self.console.print(f"[bold green]✓ Step {step_num} completed[/bold green]")
+                    
+                    # Add the tool call to conversation history
+                    tool_call_message = {
                         "role": "assistant",
                         "content": None,
                         "tool_calls": [{
@@ -531,7 +683,8 @@ class LLM_Agent(ConversableAgent):
                                 "arguments": json.dumps(tool_input)
                             }
                         }]
-                    })
+                    }
+                    self.conversation_history.append(tool_call_message)
                     
                     self.conversation_history.append({
                         "role": "tool",
@@ -539,8 +692,15 @@ class LLM_Agent(ConversableAgent):
                         "name": tool_name,
                         "content": str(result)
                     })
+                    
+                    # Check if the result indicates an empty directory
+                    if tool_name == "list_directory" and "No files found" in str(result):
+                        self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
                 
-                # Continue the conversation to process any additional tool calls
+                # After all tools are executed, show a completion message
+                self.console.print("\n[bold green on white] WORKFLOW COMPLETED [/bold green on white] All steps executed successfully.\n")
+                
+                # Get a final response that summarizes what was done
                 return self._get_completion()
 
             # Final assistant response
@@ -552,6 +712,7 @@ class LLM_Agent(ConversableAgent):
                     "role": "assistant",
                     "content": final_content
                 })
+                self.console.print(f"\n[yellow]conversation: {self.conversation_history}[/yellow]")
                 
                 return final_content
             else:
@@ -579,7 +740,106 @@ class LLM_Agent(ConversableAgent):
             error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
             return error_msg
         
-
+    def _get_action_description(self, tool_name: str, tool_input: dict) -> str:
+        """
+        Create a human-readable description of a tool action.
+        
+        Args:
+            tool_name: The name of the tool
+            tool_input: The parameters for the tool
+            
+        Returns:
+            A human-readable description of what the tool will do
+        """
+        try:
+            # File creation
+            if tool_name.lower() == "filecreatortool":
+                if isinstance(tool_input.get('files'), dict):
+                    path = tool_input['files'].get('path', 'unknown')
+                    content_preview = tool_input['files'].get('content', '')
+                    if len(content_preview) > 30:
+                        content_preview = content_preview[:30] + "..."
+                    return f"Creating file '{path}' with content starting with '{content_preview}'"
+                elif isinstance(tool_input.get('files'), list) and len(tool_input['files']) > 0:
+                    if len(tool_input['files']) == 1:
+                        path = tool_input['files'][0].get('path', 'unknown')
+                        content_preview = tool_input['files'][0].get('content', '')
+                        if len(content_preview) > 30:
+                            content_preview = content_preview[:30] + "..."
+                        return f"Creating file '{path}' with content starting with '{content_preview}'"
+                    else:
+                        file_names = [f"'{f.get('path', 'unknown')}'" for f in tool_input['files']]
+                        return f"Creating {len(file_names)} files: {', '.join(file_names[:3])}{'...' if len(file_names) > 3 else ''}"
+                return "Creating file(s)"
+                
+            # Directory creation
+            elif tool_name.lower() == "createfolderstool":
+                folder_paths = tool_input.get('folder_paths', tool_input.get('paths', []))
+                if isinstance(folder_paths, list) and len(folder_paths) > 0:
+                    if len(folder_paths) == 1:
+                        return f"Creating directory '{folder_paths[0]}'"
+                    else:
+                        dir_names = [f"'{path}'" for path in folder_paths]
+                        return f"Creating {len(dir_names)} directories: {', '.join(dir_names[:3])}{'...' if len(dir_names) > 3 else ''}"
+                return "Creating directories"
+                
+            # File reading
+            elif tool_name.lower() == "filecontentreadertool":
+                file_paths = tool_input.get('file_paths', [])
+                if isinstance(file_paths, list) and len(file_paths) > 0:
+                    if len(file_paths) == 1:
+                        return f"Reading content of file '{file_paths[0]}'"
+                    else:
+                        file_names = [f"'{path}'" for path in file_paths]
+                        return f"Reading {len(file_names)} files: {', '.join(file_names[:3])}{'...' if len(file_names) > 3 else ''}"
+                return "Reading file content(s)"
+                
+            # Directory listing
+            elif tool_name.lower() == "list_directory":
+                directory_path = tool_input.get('directory_path', '')
+                return f"Listing contents of directory '{directory_path}'"
+                
+            # File editing/updating
+            elif tool_name.lower() == "fileupdatertool":
+                if 'file_path' in tool_input:
+                    content_preview = tool_input.get('content', '')
+                    if content_preview and len(content_preview) > 30:
+                        content_preview = content_preview[:30] + "..."
+                        return f"Updating file '{tool_input['file_path']}' with content starting with '{content_preview}'"
+                    return f"Updating file '{tool_input['file_path']}'"
+                return "Updating file content"
+                
+            # Install package
+            elif tool_name.lower() == "uvpackagemanager":
+                packages = tool_input.get('packages', [])
+                command = tool_input.get('command', 'install')
+                if isinstance(packages, list) and len(packages) > 0:
+                    if len(packages) == 1:
+                        return f"{command.capitalize()}ing package '{packages[0]}'"
+                    else:
+                        package_names = [f"'{pkg}'" for pkg in packages]
+                        return f"{command.capitalize()}ing {len(package_names)} packages: {', '.join(package_names[:3])}{'...' if len(package_names) > 3 else ''}"
+                return f"{command.capitalize()}ing packages"
+                
+            # Web search
+            elif tool_name.lower() == "websearchtool":
+                query = tool_input.get('query', '')
+                return f"Searching the web for '{query}'"
+                
+            # Code search
+            elif tool_name.lower() == "codesearchtool":
+                query = tool_input.get('query', '')
+                return f"Searching codebase for '{query}'"
+                
+            # Default description with more details
+            param_preview = ", ".join([f"{k}={str(v)[:20]}" for k, v in tool_input.items()][:3])
+            if len(tool_input) > 3:
+                param_preview += "..."
+            return f"Using {tool_name} with parameters: {param_preview}"
+            
+        except Exception as e:
+            logging.error(f"Error creating action description: {str(e)}")
+            return f"Using {tool_name}"
 
     def chat(self, user_input):
         """
@@ -598,6 +858,7 @@ class LLM_Agent(ConversableAgent):
                 return "Goodbye!"
 
         try:
+            self.console.print(f"here is conversation history: {self.conversation_history}")
             # Add user message to conversation history
             self.conversation_history.append({
                 "role": "user",
@@ -607,24 +868,14 @@ class LLM_Agent(ConversableAgent):
             # Reset auto tool call counter for new user input
             self.current_auto_tool_calls = 0
             
-            # Analyze user input for context and potential tool needs
-            if self.auto_tool_selection and isinstance(user_input, str):
+            # Update context manager with user input for context tracking
+            if isinstance(user_input, str):
                 self.context_manager.analyze_user_input(user_input)
-                auto_tools = self._determine_auto_tools(user_input)
-                
-                # Execute auto tools if needed
-                if auto_tools:
-                    self.console.print("[cyan]Automatically gathering context...[/cyan]")
-                    for tool_name, tool_params in auto_tools:
-                        if self.current_auto_tool_calls < self.max_auto_tool_calls:
-                            self._auto_execute_tool(tool_name, tool_params)
-                            self.current_auto_tool_calls += 1
-
+            
             # Show thinking indicator if enabled
             if self.thinking_enabled:
-                with Live(Spinner('dots', text='Thinking...', style="cyan"), 
-                         refresh_per_second=10, transient=True):
-                    response = self._get_completion()
+                self.console.print("[cyan]Thinking...[/cyan]")
+                response = self._get_completion()
             else:
                 response = self._get_completion()
                 
@@ -693,23 +944,25 @@ class LLM_Agent(ConversableAgent):
             tool_use = ToolUseMock("filecontentreadertool", {"file_paths": [file_path]})
             result = self._execute_tool(tool_use)
             
-            # Add the tool call and result to conversation history
-            self.conversation_history.append({
+            # Add the tool call to conversation history
+            tool_call_id = f"auto_read_{file_path}"
+            tool_call_message = {
                 "role": "assistant",
                 "content": None,
                 "tool_calls": [{
-                    "id": f"auto_read_{file_path}",
+                    "id": tool_call_id,
                     "type": "function",
                     "function": {
                         "name": "filecontentreadertool",
                         "arguments": json.dumps({"file_paths": [file_path]})
                     }
                 }]
-            })
+            }
+            self.conversation_history.append(tool_call_message)
             
             self.conversation_history.append({
                 "role": "tool",
-                "tool_call_id": f"auto_read_{file_path}",
+                "tool_call_id": tool_call_id,
                 "name": "filecontentreadertool",
                 "content": str(result)
             })
@@ -809,7 +1062,7 @@ Available tools:
                     if hasattr(self, 'context') and 'steps' in self.context:
                         step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
                         
-                        if self.current_step_index < len(step_keys):
+                        while self.current_step_index < len(step_keys):
                             current_step_key = step_keys[self.current_step_index]
                             current_step = self.context['steps'][current_step_key]
                             
@@ -833,41 +1086,35 @@ Available tools:
                                 
                                 # Process the step
                                 response = self.chat(f"Execute step: {current_step}")
-                            
-                            return False, {"role": "assistant", "content": response}
-                        else:
-                            self.console.print("[bold yellow]All steps completed.[/bold yellow]")
-                            return False, {"role": "assistant", "content": "All steps have been completed. Is there anything else you'd like me to help with?"}
+                        self.console.print("[bold yellow]All steps completed.[/bold yellow]")
+                        return False, {"role": "assistant", "content": response}
                     
                     # If no steps are defined, just process the message
                     response = self.chat(content)
                     return False, {"role": "assistant", "content": response}
             
             # If we're not being called from the AutoGen framework, prompt for user input
-            console = self.console
-            console.print("\n[bold yellow]No steps found in context. Waiting for user input.[/bold yellow]")
-            user_input = prompt("\n[purple]You:[/purple] ", style=Style.from_dict({'prompt': 'purple'}))
-            
+            user_input = self.context.get('user_input', '')
             if user_input.lower() == 'quit':
-                console.print("\n[bold blue]👋 Goodbye![/bold blue]")
+                self.console.print("\n[bold blue]👋 Goodbye![/bold blue]")
                 return True, {"role": "assistant", "content": "Execution completed successfully"}
             elif user_input.lower() == 'reset':
                 self.reset()
                 return self.main(*args, **kwargs)
             
             response = self.chat(user_input)
-            console.print("\n[bold purple]Claude Engineer:[/bold purple]")
+            self.console.print("\n[bold purple]Claude Engineer:[/bold purple]")
             
             if isinstance(response, str):
                 safe_response = response.replace('[', '\\[').replace(']', '\\]')
-                console.print(f"\n{safe_response}")
+                self.console.print(f"\n{safe_response}")
             else:
-                console.print(f"\n{str(response)}")
+                self.console.print(f"\n{str(response)}")
             
             return False, {"role": "assistant", "content": response}
                 
         except KeyboardInterrupt:
-            console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
+            self.console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
             return True, {"role": "assistant", "content": "Operation interrupted by user"}
 
     def _is_step_fully_processed(self):
@@ -960,101 +1207,6 @@ Available tools:
             
         return tool_info
 
-    def _determine_auto_tools(self, user_input: str) -> List[tuple]:
-        """
-        Analyze user input to determine which tools should be automatically executed
-        to gather context before generating a response.
-        
-        Returns:
-            List of tuples (tool_name, tool_params) to execute
-        """
-        auto_tools = []
-        
-        # Check if input mentions files or directories
-        file_patterns = [
-            r'file[s]?\s+(?:named|called)?\s+["\']?([^"\']+)["\']?',
-            r'(?:read|open|check|view|show)\s+(?:the\s+)?(?:file|directory|folder|content[s]?)\s+(?:of\s+)?["\']?([^"\']+)["\']?',
-            r'(?:what\'s|what\s+is|show)\s+(?:in|inside)\s+["\']?([^"\']+)["\']?',
-            r'(?:content[s]?\s+of)\s+["\']?([^"\']+)["\']?',
-            r'(?:look\s+at)\s+["\']?([^"\']+)["\']?'
-        ]
-        
-        # Check if input mentions code or project structure
-        structure_patterns = [
-            r'(?:project|code|directory|folder)\s+structure',
-            r'(?:list|show|display)\s+(?:all|the)?\s+(?:files|directories|folders)',
-            r'(?:what|which)\s+(?:files|directories|folders)\s+(?:do\s+we|are|exist)'
-        ]
-        
-        # Check if input mentions changes or diffs
-        diff_patterns = [
-            r'(?:what|which)\s+(?:changes|modifications|edits)',
-            r'(?:show|display|list)\s+(?:the\s+)?(?:changes|modifications|edits|diff)',
-            r'(?:what|which)\s+(?:has|have)\s+(?:changed|been\s+modified|been\s+edited)'
-        ]
-        
-        # Check for file patterns
-        for pattern in file_patterns:
-            import re
-            matches = re.findall(pattern, user_input, re.IGNORECASE)
-            for match in matches:
-                if match and len(match) > 2:  # Avoid very short matches
-                    # Check if it's likely a file or directory
-                    if os.path.exists(match):
-                        if os.path.isdir(match):
-                            auto_tools.append(("filecontentreadertool", {"file_paths": [match]}))
-                        else:
-                            auto_tools.append(("filecontentreadertool", {"file_paths": [match]}))
-        
-        # Check for structure patterns
-        for pattern in structure_patterns:
-            if re.search(pattern, user_input, re.IGNORECASE):
-                # Get current directory or project root
-                current_dir = os.getcwd()
-                auto_tools.append(("filecontentreadertool", {"file_paths": [current_dir]}))
-                break
-        
-        # Check for diff patterns
-        for pattern in diff_patterns:
-            if re.search(pattern, user_input, re.IGNORECASE):
-                # Use a diff tool if available
-                diff_tool = self.tool_manager.find_tool("diffeditortool")
-                if diff_tool:
-                    auto_tools.append(("diffeditortool", {}))
-                break
-        
-        return auto_tools
-
-    def _auto_execute_tool(self, tool_name: str, tool_params: Dict[str, Any]) -> None:
-        """Automatically execute a tool with the given parameters."""
-        try:
-            # Create a mock tool use object
-            class ToolUseMock:
-                def __init__(self, name, input_data):
-                    self.name = name
-                    self.input_data = input_data
-
-            mock_tool_use = ToolUseMock(tool_name, tool_params)
-            
-            # Execute the tool
-            result = self._execute_tool(mock_tool_use)
-            
-            # Display the result
-            self.console.print("[cyan]Tool execution successful[/cyan]")
-            self.console.print(f"[cyan]Result: [/cyan]\n{result}")
-            
-            # Add the result to the conversation history
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": f"I executed the {tool_name} tool with the following parameters: {json.dumps(tool_params, indent=2)}\n\nResult: {result}"
-            })
-        except Exception as e:
-            # Fix: Create the error message first, then escape brackets
-            error_msg = f"Error auto-executing tool {tool_name}: {str(e)}"
-            # Replace brackets outside of the f-string
-            error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
-            self.console.print(f"[yellow]{error_msg}[/yellow]")
-
     def _ensure_directories_explored(self):
         """
         Ensure that all directories in the current context are explored for file content.
@@ -1098,11 +1250,12 @@ Available tools:
                     result = self._execute_tool(tool_use)
                     
                     # Add the tool call and result to conversation history
+                    tool_call_id = f"auto_list_{directory}"
                     self.conversation_history.append({
                         "role": "assistant",
                         "content": None,
                         "tool_calls": [{
-                            "id": f"auto_list_{directory}",
+                            "id": tool_call_id,
                             "type": "function",
                             "function": {
                                 "name": "list_directory",
@@ -1113,7 +1266,7 @@ Available tools:
                     
                     self.conversation_history.append({
                         "role": "tool",
-                        "tool_call_id": f"auto_list_{directory}",
+                        "tool_call_id": tool_call_id,
                         "name": "list_directory",
                         "content": str(result)
                     })
