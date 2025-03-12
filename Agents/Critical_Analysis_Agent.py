@@ -32,7 +32,7 @@ class CriticalAnalysisAgent(ConversableAgent):
     
 
     def handle_message(self, *args, **kwargs):
-            Input_user = self.context.get("User_input")
+            Input_user = self.context.get("user_input")
             clarifications = self.context.get("clarifications")
             #self.console.print(f"[red]{clarifications}.[/red]")
             
