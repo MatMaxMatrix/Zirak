@@ -5,6 +5,12 @@ import logging
 from prompt_toolkit import prompt
 from prompt_toolkit.styles import Style
 from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, TimeElapsedColumn, TextColumn
+from rich.live import Live
+import time
+import threading
 from .config import Config
 
 
@@ -29,6 +35,7 @@ class EnhancedInitiatingAgent(ConversableAgent):
         self.console = Console()
         self.conversation_context = {}
         self.automated_mode = False  # Flag to indicate if we're running in automated mode
+        self.input_timeout = 60  # Default timeout in seconds
         
     def _always_true_trigger(self, sender):
         return True
@@ -55,9 +62,16 @@ class EnhancedInitiatingAgent(ConversableAgent):
                     clarification_responses[question] = "Default automated response"
             else:
                 # Interactive mode - get user input for each question
-                for question in clarifying_questions:
+                self.console.print(Panel(
+                    "[bold blue]I need some clarifications to better assist you.[/bold blue]",
+                    title="Clarification Needed",
+                    border_style="blue"
+                ))
+                
+                for i, question in enumerate(clarifying_questions):
                     try:
                         # Get user input for each clarifying question with a timeout
+                        self.console.print(f"[cyan]Question {i+1}/{len(clarifying_questions)}[/cyan]")
                         response = self.get_human_input(question)
                         if response is None:  # Timeout or error occurred
                             self.console.print("[bold yellow]Timeout or error getting input - using default response[/bold yellow]")
@@ -87,45 +101,73 @@ class EnhancedInitiatingAgent(ConversableAgent):
             welcome_message = self.context.get("welcome_message", "Welcome! How can I help you today?")
             return True, {"role": "user", "content": welcome_message}
 
-    def get_human_input(self, Question: str = ""):
+    def get_human_input(self, question: str = ""):
         """Enhanced method to get human input with validation and timeout handling"""
-        style = Style.from_dict({'prompt': 'purple'})
-
         try:
             # Check if we're in automated mode
             if self.automated_mode or "automated_mode" in self.context and self.context["automated_mode"]:
-                self.console.print(f"[yellow]Automated response for: {Question}[/yellow]")
+                self.console.print(f"[yellow]Automated response for: {question}[/yellow]")
                 return "Default automated response"
-                
-            prompt_text = f"You, {Question}: " if Question else "You: "
+            
+            # Format the question in a nice panel
+            formatted_question = Text(question)
+            self.console.print(Panel(
+                formatted_question,
+                title="Please Answer",
+                border_style="green"
+            ))
             
             # Set up a timeout for input
-            import signal
+            timeout_reached = threading.Event()
+            user_input = [None]  # Using a list to store the input from the thread
             
-            def input_timeout_handler(signum, frame):
-                raise TimeoutError("Input timed out")
+            # Create a simple message for the countdown
+            self.console.print(f"[blue]You have {self.input_timeout} seconds to answer.[/blue]")
             
-            # Set a 10-second timeout for input
-            signal.signal(signal.SIGALRM, input_timeout_handler)
-            signal.alarm(10)
+            # Use a completely separate approach for input and countdown
+            def input_thread():
+                try:
+                    # Use the most basic input method to avoid any interference
+                    user_input[0] = input("Your answer: ")
+                except Exception as e:
+                    logging.error(f"Error in input thread: {str(e)}")
+                finally:
+                    timeout_reached.set()  # Signal that we're done
             
-            try:
-                user_input = self.console.input(f"[yellow]{prompt_text}[/yellow]").strip()
-                # Cancel the timeout
-                signal.alarm(0)
+            # Start the input thread
+            input_thread_handle = threading.Thread(target=input_thread)
+            input_thread_handle.daemon = True
+            input_thread_handle.start()
+            
+            # Instead of a separate countdown thread, just wait with periodic status updates
+            remaining = self.input_timeout
+            while remaining > 0 and input_thread_handle.is_alive():
+                # Sleep for a short interval
+                time.sleep(1)
+                remaining -= 1
                 
-                if user_input.strip():  # Basic validation
-                    return user_input
-                self.console.print("[yellow]Please provide a non-empty response. Using default.[/yellow]")
-                return "Default response"
-            except TimeoutError:
-                # Timeout occurred
-                signal.alarm(0)  # Cancel the alarm
-                self.console.print("[yellow]Input timed out. Using default response.[/yellow]")
+                # Only show countdown at specific intervals
+                if remaining <= 10 or remaining % 15 == 0:
+                    self.console.print(f"[dim blue]Time remaining: {remaining} seconds[/dim blue]")
+            
+            # Signal that we're done with the countdown
+            timeout_reached.set()
+            
+            # Check if we got input
+            if input_thread_handle.is_alive():
+                # Thread is still running, which means timeout occurred
+                self.console.print("[bold yellow]Input timed out. Using default response.[/bold yellow]")
                 return "Default response due to timeout"
+            
+            # We got input, validate it
+            if user_input[0] and user_input[0].strip():
+                return user_input[0].strip()
+            
+            self.console.print("[yellow]Empty response provided. Using default.[/yellow]")
+            return "Default response for empty input"
                 
         except Exception as e:
             logging.error(f"Error getting human input: {str(e)}")
-            self.console.print("[red]An error occurred. Using default response.[/red]")
+            self.console.print("[bold red]An error occurred while processing your input.[/bold red]")
             return "Default response due to error"
 

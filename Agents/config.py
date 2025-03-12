@@ -9,7 +9,7 @@ class Config:
 
     # Reduced max tokens to be compatible with OpenAI models
     MAX_TOKENS = 4000  # Changed from 8000 to 4000 for OpenAI compatibility
-    MAX_CONVERSATION_TOKENS = 125000  # Reduced from 200000 to be more compatible with OpenAI models
+    MAX_CONVERSATION_TOKENS = 325000  # Reduced from 200000 to be more compatible with OpenAI models
 
     # Paths
     BASE_DIR = Path(__file__).parent
@@ -30,9 +30,9 @@ class Config:
     OpenAI_base_url = "https://api.openai.com/v1"  # Added /v1 to the base URL
     
     # Use the latest OpenAI client configuration
-    api_key =  openai_api_key
-    base_url = OpenAI_base_url 
-    Model = OpenAI_Model
+    api_key =  deepseek_api_key
+    base_url = DeepSeek_base_url 
+    Model = DeepSeek_Model
     
     # Agentic Behavior Configuration
     AUTO_TOOL_SELECTION = True  # Enable automatic tool selection and execution
@@ -41,6 +41,7 @@ class Config:
     REMEMBER_FILES = True       # Remember files mentioned in conversation
     REMEMBER_DIRECTORIES = True # Remember directories mentioned in conversation
     AUTO_EXPLORE_CODEBASE = True  # Automatically explore codebase structure when relevant
+    RECENT_MESSAGE_COUNT = 3    # Number of recent non-system messages to include in API calls
     
     # Workflow Configuration
     MAX_CONVERSATION_ROUNDS = 30  # Maximum number of conversation rounds
