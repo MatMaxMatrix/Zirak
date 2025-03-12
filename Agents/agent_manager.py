@@ -129,20 +129,8 @@ def state_transition(last_speaker, groupchat):
         
         # LLM Agent transitions
         elif last_speaker is LLM_agent:
-            # Check if there are more steps to process
-            if hasattr(LLM_agent, 'current_step_index') and 'steps' in context:
-                step_keys = sorted([k for k in context['steps'].keys() if k.startswith('step')])
-                
-                if LLM_agent.current_step_index < len(step_keys):
-                    # There are more steps to process
-                    console.print(f"[bold cyan]LLM Agent continuing with step {LLM_agent.current_step_index + 1}/{len(step_keys)}[/bold cyan]")
-                    return LLM_agent
-                else:
-                    # All steps completed - return to user proxy agent
-                    console.print("[bold cyan]All steps completed - returning to user proxy agent[/bold cyan]")
-                    return UserProxy_agent
-            else:
-                console.print("[bold cyan]No steps defined - returning to user proxy agent[/bold cyan]")
+            # Check if there are more steps to proce
+                console.print("[bold cyan]All steps completed - returning to user proxy agent[/bold cyan]")
                 return UserProxy_agent
         elif last_speaker is UserProxy_agent:
             console.print("[bold cyan]User proxy agent finished - proceeding to LLM Agent[/bold cyan]")

@@ -19,12 +19,7 @@ import json
 import sys
 from pathlib import Path
 from .config import Config
-from .tools.base import BaseTool
-from prompt_toolkit import prompt
-from prompt_toolkit.styles import Style
-#from .prompts.system_prompts import SystemPrompts
 from .prompts.revised_prompt import SystemPrompts
-import autogen
 import re
 
 
@@ -195,7 +190,7 @@ class LLM_Agent(ConversableAgent):
                     full_module_name = import_path_func(module_name)
                     self.console.print(f"[cyan]Trying to import module: {full_module_name}[/cyan]")
                     module = importlib.import_module(full_module_name)
-                    self.console.print(f"[green]Successfully imported module: {full_module_name}[/green]")
+                    #self.console.print(f"[green]Successfully imported module: {full_module_name}[/green]")
                     break
                 except ImportError as e:
                     self.console.print(f"[yellow]Failed to import {import_path_func(module_name)}: {str(e)}[/yellow]")
@@ -208,7 +203,7 @@ class LLM_Agent(ConversableAgent):
                 # Try to find a tool instance with the matching name
                 tool_instance = self._find_tool_instance_in_module(module, tool_name)
                 if tool_instance:
-                    self.console.print(f"[green]Found tool '{tool_name}' in module '{module_name}'[/green]")
+                    #self.console.print(f"[green]Found tool '{tool_name}' in module '{module_name}'[/green]")
                     
                     # Execute the tool
                     try:
@@ -230,7 +225,7 @@ class LLM_Agent(ConversableAgent):
         if result is None:
             result = f"Error: Tool '{tool_name}' not found or failed to execute"
         
-        self.console.print(f"[cyan]Result:[/cyan] {self._clean_parsed_data(result)}")
+        #self.console.print(f"[cyan]Result:[/cyan] {self._clean_parsed_data(result)}")
         
         # Display tool usage in a formatted way
         if getattr(Config, 'SHOW_TOOL_USAGE', True):
@@ -347,10 +342,14 @@ class LLM_Agent(ConversableAgent):
             # For results with a success field, use that directly
             elif 'success' in parsed_result and parsed_result['success'] == False:
                 success = False
-        elif isinstance(result, str) and ("error" in result.lower() or "exception" in result.lower()):
-            # For string results, check for error keywords but avoid false positives
-            # Don't check for "failed" as it might appear in successful results like "failed_files": 0
-            success = False
+        elif isinstance(result, str):
+            # For string results, check for positive indicators first
+            if "successfully" in result.lower() or "success" in result.lower():
+                success = True
+            # Then check for error keywords but avoid false positives
+            elif ("error:" in result.lower() or "exception:" in result.lower() or 
+                  result.lower().startswith("error") or "not found" in result.lower()):
+                success = False
         
         # Create a more visually appealing result display
         status_icon = "✅" if success else "❌"
@@ -449,6 +448,49 @@ class LLM_Agent(ConversableAgent):
             self.console.print(f"[bold red]Warning: Only {remaining_tokens:,} tokens remaining![/bold red]")
 
         self.console.print("---")
+        
+        # Display conversation optimization stats
+        self._get_conversation_stats()
+
+    def _get_conversation_stats(self):
+        """
+        Calculate and display statistics about the conversation history and token savings
+        from using the optimized approach of only sending recent messages to the API.
+        """
+        if not self.conversation_history:
+            return
+            
+        # Count messages by role
+        system_messages = [msg for msg in self.conversation_history if msg.get("role") == "system"]
+        other_messages = [msg for msg in self.conversation_history if msg.get("role") != "system"]
+        
+        # Get the number of recent messages included in API calls
+        recent_message_count = getattr(Config, 'RECENT_MESSAGE_COUNT', 3)
+        recent_history = other_messages[-recent_message_count:] if other_messages else []
+        
+        # Calculate approximate token counts (rough estimate)
+        def estimate_tokens(messages):
+            total = 0
+            for msg in messages:
+                content = msg.get("content", "")
+                if content:
+                    # Rough estimate: 1 token ≈ 4 characters for English text
+                    total += len(content) // 4
+            return total
+            
+        full_history_tokens = estimate_tokens(self.conversation_history)
+        optimized_tokens = estimate_tokens(system_messages + recent_history)
+        
+        if full_history_tokens > 0:
+            savings_percentage = ((full_history_tokens - optimized_tokens) / full_history_tokens) * 100
+            
+            # Only display if there are significant savings
+            if savings_percentage > 10 and len(other_messages) > recent_message_count:
+                self.console.print(f"[green]Conversation optimization:[/green]")
+                self.console.print(f"  Full history: {len(self.conversation_history)} messages (~{full_history_tokens:,} tokens)")
+                self.console.print(f"  Optimized: {len(system_messages) + len(recent_history)} messages (~{optimized_tokens:,} tokens)")
+                self.console.print(f"  [bold green]Estimated savings: {savings_percentage:.1f}% ({full_history_tokens - optimized_tokens:,} tokens)[/bold green]")
+                self.console.print("---")
 
     def _process_tools(self):
         """
@@ -525,54 +567,60 @@ class LLM_Agent(ConversableAgent):
 
     def _get_completion(self):
         """
-        Get a completion from the Anthropic API.
-        Handles both text-only and multimodal messages.
+        Get a completion from the Anthropic/OpenAI API.
+        This function processes both text-only and multimodal messages.
+        It also detects if tool calls were issued; if so, the tool workflow is executed,
+        the conversation history is updated, and then _get_completion is called recursively
+        to re-check whether all requirements have been fulfilled.
         """
         from openai import OpenAI
-        self.client = OpenAI(api_key=Config.api_key, base_url = Config.base_url)
-        
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
+
         try:
             # Get processed tools with caching
             updated_tools = self._get_processed_tools()
-            self.console.print(f"\n[yellow]updated_tools: {updated_tools}[/yellow]")
-            # Get relevant context from the context manager
+            #self.console.print(f"\n[yellow]updated_tools: {updated_tools}[/yellow]")
+
+            # Gather relevant context and append a context system message if necessary
             context_info = self.context_manager.get_relevant_context()
             self.console.print(f"\n[yellow]context_info: {context_info}[/yellow]")
-            # Add context information as a system message if there's relevant context
             if (context_info["current_files"] or context_info["current_directories"]) and getattr(Config, 'AUTO_CONTEXT_GATHERING', True):
                 context_message = "Current context:\n"
-                
                 if context_info["current_files"]:
                     context_message += "Files in current context:\n"
                     for file in context_info["current_files"]:
                         context_message += f"- {file}\n"
-                
                 if context_info["current_directories"]:
                     context_message += "Directories in current context:\n"
                     for directory in context_info["current_directories"]:
                         context_message += f"- {directory}\n"
-                
-                # Add context message to conversation history
                 self.conversation_history.append({
                     "role": "system",
                     "content": context_message
                 })
 
-            # Prepend the system prompt to the conversation history
-            messages = [
-                *self.conversation_history,
-            ]
+            # Build a short prompt: system messages + only the last few (e.g. 3) non-system messages
+            # This optimizes token usage while maintaining context
+            system_messages = [msg for msg in self.conversation_history if msg.get("role") == "system"]
+            other_messages = [msg for msg in self.conversation_history if msg.get("role") != "system"]
             
+            # Get the number of recent messages to include from config or use default (3)
+            recent_message_count = getattr(Config, 'RECENT_MESSAGE_COUNT', 3)
+            recent_history = other_messages[-recent_message_count:] if other_messages else []
+            
+            # Combine system messages with recent history for the API call
+            messages = system_messages + recent_history
+
             # Create the completion
             response = self.client.chat.completions.create(
                 model=Config.Model,
                 messages=messages,
                 max_tokens=min(Config.MAX_TOKENS, Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used),
                 temperature=self.temperature,
-                tools=updated_tools,  # Use the updated tools with truncated descriptions
+                tools=updated_tools,  # Updated tools with truncated descriptions
             )
 
-            # Update token usage based on response usage
+            # Update token usage
             if hasattr(response, 'usage') and response.usage:
                 message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
                 self.total_tokens_used += message_tokens
@@ -582,39 +630,35 @@ class LLM_Agent(ConversableAgent):
                 self.console.print("\n[bold red]Token limit reached! Please reset the conversation.[/bold red]")
                 return "Token limit reached! Please type 'reset' to start a new conversation."
 
-            # Handle tool use
+            # If the LLM has issued tool calls, process them before returning a final answer
             if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
                 self.console.print("\n[bold yellow]Starting workflow execution...[/bold yellow]\n")
-                
-                # Get all tool calls from the response
                 tool_calls = response.choices[0].message.tool_calls
-                
-                # Add the AI's overall plan to the conversation history
+
+                # Increment the auto tool call counter; if too many iterations, warn and break out
+                self.current_auto_tool_calls += 1
+                MAX_AUTO_TOOL_CALLS = getattr(Config, "MAX_AUTO_TOOL_CALLS", 10)
+                if self.current_auto_tool_calls > MAX_AUTO_TOOL_CALLS:
+                    self.console.print("[red]Too many automatic tool call iterations. Aborting further tool executions.[/red]")
+                    return "Aborted: maximum recursive tool calls reached."
+
                 plan_summary = "I'll execute the following workflow:\n\n"
-                
-                # Create a more visually appealing workflow plan
                 workflow_steps = []
                 for i, tool_call in enumerate(tool_calls):
                     tool_name = tool_call.function.name
                     tool_input = json.loads(tool_call.function.arguments)
                     step_num = i + 1
-                    
-                    # Create a human-readable description of the tool action
                     action_desc = self._get_action_description(tool_name, tool_input)
                     plan_summary += f"Step {step_num}: {action_desc}\n"
-                    
-                    # Add to our workflow steps for display
                     workflow_steps.append({
                         "number": step_num,
                         "tool": tool_name,
                         "description": action_desc,
                         "input": tool_input
                     })
-                
-                # Display the workflow plan with a more structured format
+
                 self.console.print("\n[bold green]Workflow Plan:[/bold green]")
                 self.console.print(f"\n[yellow]workflow_steps: {workflow_steps}[/yellow]")
-                
                 for step in workflow_steps:
                     step_panel = Panel(
                         f"[cyan]Tool:[/cyan] {step['tool']}\n[cyan]Action:[/cyan] {step['description']}",
@@ -623,55 +667,45 @@ class LLM_Agent(ConversableAgent):
                         padding=(1, 2)
                     )
                     self.console.print(step_panel)
-                
-                # Add the plan to conversation history
+
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": plan_summary
                 })
-                self.console.print(f"\n[yellow]conversation: {self.conversation_history}[/yellow]")
-                # Execute each tool one by one with clear explanations
+                self.console.print(f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]")
+
+                # Execute each tool call sequentially
                 for i, tool_call in enumerate(tool_calls):
                     tool_name = tool_call.function.name
                     tool_input = json.loads(tool_call.function.arguments)
                     step_num = i + 1
-                    
-                    # Create a human-readable description of what will be done
                     action_desc = self._get_action_description(tool_name, tool_input)
-                    
-                    # Display step information with a more prominent header
                     self.console.print("\n")
                     step_header = f"[bold white on blue] STEP {step_num}/{len(tool_calls)} [/bold white on blue] [bold cyan]{action_desc}[/bold cyan]"
                     self.console.print(step_header)
-                    
-                    # Show a spinner while the step is executing
+
                     with Live(Spinner("dots", text="[cyan]Executing...[/cyan]"), refresh_per_second=10) as live:
-                        # Update context manager with file and directory information from tool calls
-                        if tool_name == "filecontentreadertool" and "file_paths" in tool_input:
+                        # Update context manager based on tool call details
+                        if tool_name.lower() == "filecontentreadertool" and "file_paths" in tool_input:
                             for file_path in tool_input["file_paths"]:
                                 if os.path.isfile(file_path):
                                     self.context_manager.current_files.add(file_path)
                                 elif os.path.isdir(file_path):
                                     self.context_manager.current_directories.add(file_path)
-                        elif tool_name == "list_directory" and "directory_path" in tool_input:
+                        elif tool_name.lower() == "list_directory" and "directory_path" in tool_input:
                             directory_path = tool_input["directory_path"]
                             if os.path.isdir(directory_path):
                                 self.context_manager.current_directories.add(directory_path)
-                        
-                        # Create a mock tool use object
+
                         class ToolUseMock:
                             def __init__(self, name, input_data):
                                 self.name = name
                                 self.input = input_data
-                        
-                        # Execute the tool
+
                         tool_use = ToolUseMock(tool_name, tool_input)
                         result = self._execute_tool(tool_use)
-                    
-                    # Display completion status with a checkmark
+
                     self.console.print(f"[bold green]✓ Step {step_num} completed[/bold green]")
-                    
-                    # Add the tool call to conversation history
                     tool_call_message = {
                         "role": "assistant",
                         "content": None,
@@ -685,61 +719,52 @@ class LLM_Agent(ConversableAgent):
                         }]
                     }
                     self.conversation_history.append(tool_call_message)
-                    
                     self.conversation_history.append({
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
                         "content": str(result)
                     })
-                    
-                    # Check if the result indicates an empty directory
-                    if tool_name == "list_directory" and "No files found" in str(result):
+
+                    if tool_name.lower() == "list_directory" and "No files found" in str(result):
                         self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
-                
-                # After all tools are executed, show a completion message
+
                 self.console.print("\n[bold green on white] WORKFLOW COMPLETED [/bold green on white] All steps executed successfully.\n")
-                
-                # Get a final response that summarizes what was done
+
+                # After executing ALL tool calls, call _get_completion recursively.
+                # This ensures that the LLM checks that everything is complete.
                 return self._get_completion()
 
-            # Final assistant response
+            # If no tool calls were issued, finalize the assistant's response
             if response.choices and len(response.choices) > 0:
                 final_content = response.choices[0].message.content
-                
-                # Add the assistant's response to the conversation history
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": final_content
                 })
-                self.console.print(f"\n[yellow]conversation: {self.conversation_history}[/yellow]")
-                
+                self.console.print(f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]")
+                # Reset the auto tool call counter (since we have a final answer)
+                self.current_auto_tool_calls = 0
                 return final_content
             else:
                 return "No response generated."
-                
+
         except Exception as e:
             logging.error(f"Error in _get_completion: {str(e)}")
             import traceback
             logging.error(traceback.format_exc())
-            # Check if this is a tag mismatch error
             if "closing tag" in str(e) and "doesn't match any open tag" in str(e):
-                # Log more detailed information for debugging
                 logging.error("XML tag mismatch detected. This might be due to malformed tags in templates or responses.")
-                # Try to extract the problematic tag from the error message
                 import re
                 tag_match = re.search(r"closing tag '([^']+)'", str(e))
                 if tag_match:
                     problematic_tag = tag_match.group(1)
                     logging.error(f"Problematic tag: {problematic_tag}")
-                # Return a more user-friendly error message
-                return f"Error: There's an issue with the formatting of the response. Please check the template tags in your agent definitions."
-            # Fix: Create the error message first, then escape brackets
+                return "Error: There's an issue with the formatting of the response. Please check the template tags in your agent definitions."
             error_msg = f"Error: {str(e)}"
-            # Replace brackets outside of the f-string
             error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
             return error_msg
-        
+
     def _get_action_description(self, tool_name: str, tool_input: dict) -> str:
         """
         Create a human-readable description of a tool action.
@@ -846,7 +871,6 @@ class LLM_Agent(ConversableAgent):
         Process a chat message from the user.
         user_input can be either a string (text-only) or a list (multimodal message)
         """
-        # Handle special commands only for text-only messages
         if isinstance(user_input, str):
             if user_input.lower() == 'refresh':
                 self.refresh_tools()
@@ -856,34 +880,28 @@ class LLM_Agent(ConversableAgent):
                 return "Conversation reset!"
             elif user_input.lower() == 'quit':
                 return "Goodbye!"
+            elif user_input.lower() == 'info':
+                return self._display_conversation_info()
 
         try:
-            self.console.print(f"here is conversation history: {self.conversation_history}")
-            # Add user message to conversation history
+            self.console.print(f"Here is conversation history: {self.conversation_history}")
             self.conversation_history.append({
                 "role": "user",
-                "content": user_input  # This can be either string or list
+                "content": user_input
             })
-            
-            # Reset auto tool call counter for new user input
-            self.current_auto_tool_calls = 0
-            
-            # Update context manager with user input for context tracking
+            self.current_auto_tool_calls = 0  # Reset counter for new input
+
             if isinstance(user_input, str):
                 self.context_manager.analyze_user_input(user_input)
-            
-            # Show thinking indicator if enabled
+
             if self.thinking_enabled:
                 self.console.print("[cyan]Thinking...[/cyan]")
-                response = self._get_completion()
-            else:
-                response = self._get_completion()
-                
-            # After getting a response, ensure all directories in context are properly explored
-            self._ensure_directories_explored()
-            
-            # Check if any files were mentioned but not read
-            self._check_mentioned_files()
+
+            response = self._get_completion()
+
+            # After receiving a response, verify the context for directories and files
+            self._ensure_directories_explored()  # Ensure directory structures have been verified
+            self._check_mentioned_files()          # Check for any files mentioned but not read
 
             return response
 
@@ -891,24 +909,18 @@ class LLM_Agent(ConversableAgent):
             logging.error(f"Error in chat: {str(e)}")
             import traceback
             logging.error(traceback.format_exc())
-            # Check if this is a tag mismatch error
             if "closing tag" in str(e) and "doesn't match any open tag" in str(e):
-                # Log more detailed information for debugging
                 logging.error("XML tag mismatch detected. This might be due to malformed tags in templates or responses.")
-                # Try to extract the problematic tag from the error message
                 import re
                 tag_match = re.search(r"closing tag '([^']+)'", str(e))
                 if tag_match:
                     problematic_tag = tag_match.group(1)
                     logging.error(f"Problematic tag: {problematic_tag}")
-                # Return a more user-friendly error message
                 return f"Error: There's an issue with the formatting of the response. Please check the template tags in your agent definitions."
-            # Fix: Create the error message first, then escape brackets
             error_msg = f"Error: {str(e)}"
-            # Replace brackets outside of the f-string
             error_msg = error_msg.replace('[', r'\[').replace(']', r'\]')
             return error_msg
-            
+
     def _check_mentioned_files(self):
         """
         Check if any files were mentioned in the conversation but not read.
@@ -1018,6 +1030,7 @@ class LLM_Agent(ConversableAgent):
 
 Type 'refresh' to reload available tools
 Type 'reset' to clear conversation history
+Type 'info' to display conversation optimization information
 Type 'quit' to exit
 
 Available tools:
@@ -1025,75 +1038,113 @@ Available tools:
         self.console.print(Markdown(welcome_text))
         self.display_available_tools()
 
+    def _display_conversation_info(self):
+        """
+        Display information about the conversation optimization feature.
+        This is shown when users type 'info' in the chat.
+        """
+        recent_message_count = getattr(Config, 'RECENT_MESSAGE_COUNT', 3)
+        
+        info_text = f"""
+# Conversation Optimization Information
+
+This agent uses an optimized conversation history approach to reduce token usage and improve performance:
+
+- **Full History**: The agent maintains a complete conversation history internally for context tracking and tool execution.
+- **Optimized API Calls**: When making API calls to the language model, only system messages and the {recent_message_count} most recent non-system messages are included.
+- **Token Savings**: This optimization can significantly reduce token usage for longer conversations, allowing for more efficient operation.
+
+## Current Settings:
+- Recent message count: {recent_message_count} (configurable via Config.RECENT_MESSAGE_COUNT)
+- Maximum conversation tokens: {Config.MAX_CONVERSATION_TOKENS:,}
+- Current token usage: {self.total_tokens_used:,} ({(self.total_tokens_used / Config.MAX_CONVERSATION_TOKENS) * 100:.1f}%)
+
+## Commands:
+- Type 'refresh' to reload available tools
+- Type 'reset' to clear conversation history
+- Type 'info' to display this information
+- Type 'quit' to exit
+"""
+        
+        # Add conversation statistics if available
+        if self.conversation_history:
+            system_messages = [msg for msg in self.conversation_history if msg.get("role") == "system"]
+            other_messages = [msg for msg in self.conversation_history if msg.get("role") != "system"]
+            recent_history = other_messages[-recent_message_count:] if other_messages else []
+            
+            info_text += f"""
+## Current Conversation Stats:
+- Total messages: {len(self.conversation_history)}
+- System messages: {len(system_messages)}
+- Non-system messages: {len(other_messages)}
+- Messages included in API calls: {len(system_messages) + len(recent_history)} ({len(system_messages)} system + {len(recent_history)} recent)
+"""
+            
+            # Add token savings estimate if significant
+            if len(other_messages) > recent_message_count:
+                def estimate_tokens(messages):
+                    total = 0
+                    for msg in messages:
+                        content = msg.get("content", "")
+                        if content:
+                            total += len(content) // 4
+                    return total
+                
+                full_history_tokens = estimate_tokens(self.conversation_history)
+                optimized_tokens = estimate_tokens(system_messages + recent_history)
+                
+                if full_history_tokens > 0:
+                    savings_percentage = ((full_history_tokens - optimized_tokens) / full_history_tokens) * 100
+                    info_text += f"""
+## Estimated Token Savings:
+- Full history tokens: ~{full_history_tokens:,}
+- Optimized tokens: ~{optimized_tokens:,}
+- Savings: ~{savings_percentage:.1f}% ({full_history_tokens - optimized_tokens:,} tokens)
+"""
+        
+        return info_text
 
     def main(self, *args, **kwargs):
         """
-        Main entry point for the agent. This method is called by the AutoGen framework.
-        
-        Args:
-            *args: Variable length argument list
-            **kwargs: Arbitrary keyword arguments
-            
-        Returns:
-            A tuple (final, reply) where final is a boolean indicating if the conversation should end,
-            and reply is the response message.
+        Main entry point for the agent.
+        Called by the AutoGen framework.
+        Returns a tuple (final, reply) where final is a boolean indicating if the conversation should end,
+        and reply is the response message.
         """
         try:
-            # Check if we're being called from the AutoGen framework
             if args or kwargs:
                 messages = kwargs.get('messages', [])
                 if messages:
                     last_message = messages[-1]
                     sender_name = last_message.get('name', '')
                     content = last_message.get('content', '')
-                    
-                    # Check if the message is from the UserProxyAgent
+
                     if sender_name == "UserProxyAgent":
                         self.console.print(f"[cyan]Received request from UserProxyAgent: {content}[/cyan]")
-                        
-                        # Process the user query directly
                         response = self.chat(content)
-                        return False, {"role": "assistant", "content": response}
-                    
-                    # Handle normal message processing
+                        return True, {"role": "assistant", "content": response}
+
                     self.console.print(f"[cyan]Processing message from {sender_name}: {content}[/cyan]")
-                    
-                    # Check if we have steps to process
+
                     if hasattr(self, 'context') and 'steps' in self.context:
                         step_keys = sorted([k for k in self.context['steps'].keys() if k.startswith('step')])
-                        
                         while self.current_step_index < len(step_keys):
                             current_step_key = step_keys[self.current_step_index]
                             current_step = self.context['steps'][current_step_key]
-                            
-                            # Check if current_step is a string or a dictionary
                             if isinstance(current_step, dict) and 'description' in current_step:
                                 step_description = current_step['description']
                                 step_details = current_step.get('details', '')
                                 self.console.print(f"[bold cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}: {step_description}[/bold cyan]")
-                                
-                                # Increment the step index for the next call
                                 self.current_step_index += 1
-                                
-                                # Process the step
                                 response = self.chat(f"Execute step: {step_description}\n\nDetails: {step_details}")
                             else:
-                                # If current_step is a string, use it directly
                                 self.console.print(f"[bold cyan]Processing step {self.current_step_index + 1}/{len(step_keys)}[/bold cyan]")
-                                
-                                # Increment the step index for the next call
                                 self.current_step_index += 1
-                                
-                                # Process the step
                                 response = self.chat(f"Execute step: {current_step}")
                         self.console.print("[bold yellow]All steps completed.[/bold yellow]")
-                        return False, {"role": "assistant", "content": response}
-                    
-                    # If no steps are defined, just process the message
-                    response = self.chat(content)
-                    return False, {"role": "assistant", "content": response}
-            
-            # If we're not being called from the AutoGen framework, prompt for user input
+                        
+                        return True, {"role": "assistant", "content": response}
+
             user_input = self.context.get('user_input', '')
             if user_input.lower() == 'quit':
                 self.console.print("\n[bold blue]👋 Goodbye![/bold blue]")
@@ -1101,18 +1152,17 @@ Available tools:
             elif user_input.lower() == 'reset':
                 self.reset()
                 return self.main(*args, **kwargs)
-            
+
             response = self.chat(user_input)
             self.console.print("\n[bold purple]Claude Engineer:[/bold purple]")
-            
             if isinstance(response, str):
                 safe_response = response.replace('[', '\\[').replace(']', '\\]')
                 self.console.print(f"\n{safe_response}")
             else:
                 self.console.print(f"\n{str(response)}")
-            
+
             return False, {"role": "assistant", "content": response}
-                
+
         except KeyboardInterrupt:
             self.console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
             return True, {"role": "assistant", "content": "Operation interrupted by user"}
