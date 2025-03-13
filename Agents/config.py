@@ -30,9 +30,9 @@ class Config:
     OpenAI_base_url = "https://api.openai.com/v1"  # Added /v1 to the base URL
     
     # Use the latest OpenAI client configuration
-    api_key =  deepseek_api_key
-    base_url = DeepSeek_base_url 
-    Model = DeepSeek_Model
+    api_key =  openai_api_key
+    base_url = OpenAI_base_url 
+    Model = OpenAI_Model
     
     # Agentic Behavior Configuration
     AUTO_TOOL_SELECTION = True  # Enable automatic tool selection and execution

@@ -579,38 +579,13 @@ class LLM_Agent(ConversableAgent):
         try:
             # Get processed tools with caching
             updated_tools = self._get_processed_tools()
-            #self.console.print(f"\n[yellow]updated_tools: {updated_tools}[/yellow]")
+            self.console.print(f"\n[yellow]updated_tools: {updated_tools}[/yellow]")
 
-            # Gather relevant context and append a context system message if necessary
-            context_info = self.context_manager.get_relevant_context()
-            self.console.print(f"\n[yellow]context_info: {context_info}[/yellow]")
-            if (context_info["current_files"] or context_info["current_directories"]) and getattr(Config, 'AUTO_CONTEXT_GATHERING', True):
-                context_message = "Current context:\n"
-                if context_info["current_files"]:
-                    context_message += "Files in current context:\n"
-                    for file in context_info["current_files"]:
-                        context_message += f"- {file}\n"
-                if context_info["current_directories"]:
-                    context_message += "Directories in current context:\n"
-                    for directory in context_info["current_directories"]:
-                        context_message += f"- {directory}\n"
-                self.conversation_history.append({
-                    "role": "system",
-                    "content": context_message
-                })
-
-            # Build a short prompt: system messages + only the last few (e.g. 3) non-system messages
-            # This optimizes token usage while maintaining context
-            system_messages = [msg for msg in self.conversation_history if msg.get("role") == "system"]
-            other_messages = [msg for msg in self.conversation_history if msg.get("role") != "system"]
-            
-            # Get the number of recent messages to include from config or use default (3)
-            recent_message_count = getattr(Config, 'RECENT_MESSAGE_COUNT', 3)
-            recent_history = other_messages[-recent_message_count:] if other_messages else []
-            
             # Combine system messages with recent history for the API call
-            messages = system_messages + recent_history
-
+            messages = [
+                *self.conversation_history,
+            ]
+            self.console.print(f"[yellow]messages: {messages}[/yellow]")
             # Create the completion
             response = self.client.chat.completions.create(
                 model=Config.Model,
@@ -704,7 +679,7 @@ class LLM_Agent(ConversableAgent):
 
                         tool_use = ToolUseMock(tool_name, tool_input)
                         result = self._execute_tool(tool_use)
-
+                    self.console.print(f"[red]result: {result}[/red]")
                     self.console.print(f"[bold green]✓ Step {step_num} completed[/bold green]")
                     tool_call_message = {
                         "role": "assistant",
@@ -719,12 +694,15 @@ class LLM_Agent(ConversableAgent):
                         }]
                     }
                     self.conversation_history.append(tool_call_message)
-                    self.conversation_history.append({
+                    
+                    # Instead of appending the full tool result, just append a success message
+                    success_message = {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
-                        "content": str(result)
-                    })
+                        "content": "Tool execution successful"
+                    }
+                    self.conversation_history.append(success_message)
 
                     if tool_name.lower() == "list_directory" and "No files found" in str(result):
                         self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
@@ -884,6 +862,8 @@ class LLM_Agent(ConversableAgent):
                 return self._display_conversation_info()
 
         try:
+
+            
             self.console.print(f"Here is conversation history: {self.conversation_history}")
             self.conversation_history.append({
                 "role": "user",
@@ -972,11 +952,12 @@ class LLM_Agent(ConversableAgent):
             }
             self.conversation_history.append(tool_call_message)
             
+            # Instead of appending the full tool result, just append a success message
             self.conversation_history.append({
                 "role": "tool",
                 "tool_call_id": tool_call_id,
                 "name": "filecontentreadertool",
-                "content": str(result)
+                "content": "Tool execution successful"
             })
             
             self.console.print(f"[green]File {file_path} read.[/green]")
@@ -1386,7 +1367,7 @@ This agent uses an optimized conversation history approach to reduce token usage
                     "role": "tool",
                     "tool_call_id": f"auto_read_{file_path}",
                     "name": "filecontentreadertool",
-                    "content": str(result)
+                    "content": "Tool execution successful"
                 })
                 
                 self.context_manager.current_files.add(file_path)
