@@ -1,5 +1,4 @@
 # File: /Framework/agents/corrective_action_agent.py
-#%%
 from autogen import ConversableAgent
 import os
 import logging
@@ -585,7 +584,7 @@ class LLM_Agent(ConversableAgent):
             messages = [
                 *self.conversation_history,
             ]
-            self.console.print(f"[yellow]messages: {messages}[/yellow]")
+            self.console.print(f"[red]messages: {messages}[/red]")
             # Create the completion
             response = self.client.chat.completions.create(
                 model=Config.Model,
@@ -594,7 +593,9 @@ class LLM_Agent(ConversableAgent):
                 temperature=self.temperature,
                 tools=updated_tools,  # Updated tools with truncated descriptions
             )
-
+            self.console.print(f"[purple]response: {response}[/purple]")
+            self.console.print(f"[yellow]response: {response.choices[0].message.content}[/yellow]")
+            self.console.print(f"[green]response.choices[0].message.tool_calls: {response.choices[0].message.tool_calls}[/green]")
             # Update token usage
             if hasattr(response, 'usage') and response.usage:
                 message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
@@ -647,7 +648,7 @@ class LLM_Agent(ConversableAgent):
                     "role": "assistant",
                     "content": plan_summary
                 })
-                self.console.print(f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]")
+                #self.console.print(f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]")
 
                 # Execute each tool call sequentially
                 for i, tool_call in enumerate(tool_calls):
@@ -678,9 +679,35 @@ class LLM_Agent(ConversableAgent):
                                 self.input = input_data
 
                         tool_use = ToolUseMock(tool_name, tool_input)
+                        
+                        # For interactive terminal commands, set the interactive flag
+                        if tool_name.lower() == "terminalcommandtool":
+                            # Check if the command might be interactive (like npm/npx commands, read, etc.)
+                            command = tool_input.get("command", "")
+                            interactive_commands = ["npm", "npx", "yarn", "create-react-app", "read", "python -m pip", "pip install"]
+                            is_interactive = any(cmd in command for cmd in interactive_commands)
+                            
+                            if is_interactive and "interactive" not in tool_input:
+                                tool_input["interactive"] = True
+                                self.console.print("[yellow]Command appears to be interactive. Setting interactive mode.[/yellow]")
+                            
+                            # Ensure project_root is set
+                            if "project_root" not in tool_input:
+                                # Use the current working directory as the default project root
+                                project_root = os.getcwd()
+                                tool_input["project_root"] = project_root
+                                self.console.print(f"[yellow]Setting project_root to current directory: {project_root}[/yellow]")
+                            
+                            # If working_directory is not set, use project_root
+                            if "working_directory" not in tool_input:
+                                tool_input["working_directory"] = tool_input["project_root"]
+                                self.console.print(f"[yellow]Setting working_directory to project_root: {tool_input['project_root']}[/yellow]")
+                        
                         result = self._execute_tool(tool_use)
                     self.console.print(f"[red]result: {result}[/red]")
                     self.console.print(f"[bold green]✓ Step {step_num} completed[/bold green]")
+                    
+                    # Add the tool call message to the conversation history
                     tool_call_message = {
                         "role": "assistant",
                         "content": None,
@@ -695,14 +722,14 @@ class LLM_Agent(ConversableAgent):
                     }
                     self.conversation_history.append(tool_call_message)
                     
-                    # Instead of appending the full tool result, just append a success message
-                    success_message = {
+                    # Add the tool response message
+                    tool_response_message = {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": tool_name,
-                        "content": "Tool execution successful"
+                        "content": json.dumps(result)
                     }
-                    self.conversation_history.append(success_message)
+                    self.conversation_history.append(tool_response_message)
 
                     if tool_name.lower() == "list_directory" and "No files found" in str(result):
                         self.console.print(f"[yellow]Directory {tool_input.get('directory_path', '')} appears to be empty.[/yellow]")
@@ -834,6 +861,17 @@ class LLM_Agent(ConversableAgent):
                 query = tool_input.get('query', '')
                 return f"Searching codebase for '{query}'"
                 
+            # Terminal command
+            elif tool_name.lower() == "terminalcommandtool":
+                command = tool_input.get('command', '')
+                working_dir = tool_input.get('working_directory', 'current directory')
+                run_in_background = tool_input.get('run_in_background', False)
+                
+                if run_in_background:
+                    return f"Running command in background: '{command}' in directory '{working_dir}'"
+                else:
+                    return f"Executing terminal command: '{command}' in directory '{working_dir}'"
+                
             # Default description with more details
             param_preview = ", ".join([f"{k}={str(v)[:20]}" for k, v in tool_input.items()][:3])
             if len(tool_input) > 3:
@@ -864,11 +902,12 @@ class LLM_Agent(ConversableAgent):
         try:
 
             
-            self.console.print(f"Here is conversation history: {self.conversation_history}")
+            
             self.conversation_history.append({
                 "role": "user",
                 "content": user_input
             })
+            self.console.print(f"Here is conversation history: {self.conversation_history}")
             self.current_auto_tool_calls = 0  # Reset counter for new input
 
             if isinstance(user_input, str):
@@ -1830,5 +1869,3 @@ class ContextManager:
             "workspace_root": self.workspace_root,
             "recent_topics": self.recent_topics
         }
-
-# %%
