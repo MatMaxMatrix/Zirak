@@ -723,9 +723,14 @@ class LLM_Agent(ConversableAgent):
                 temperature=self.temperature,
                 tools=updated_tools,  # Updated tools with truncated descriptions
             )
-            self.console.print(f"[purple]response: {response}[/purple]")
+            #self.console.print(f"[purple]response: {response}[/purple]")
             self.console.print(f"[yellow]response: {response.choices[0].message.content}[/yellow]")
             self.console.print(f"[green]response.choices[0].message.tool_calls: {response.choices[0].message.tool_calls}[/green]")
+
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": response.choices[0].message.content
+            })
             # Update token usage
             if hasattr(response, 'usage') and response.usage:
                 message_tokens = response.usage.prompt_tokens + response.usage.completion_tokens
@@ -773,7 +778,7 @@ class LLM_Agent(ConversableAgent):
                         padding=(1, 2)
                     )
                     self.console.print(step_panel)
-
+                self.console.print(f"[yellow]plan_summary: {plan_summary}[/yellow]")
                 self.conversation_history.append({
                     "role": "assistant",
                     "content": plan_summary
@@ -872,6 +877,7 @@ class LLM_Agent(ConversableAgent):
                             }
                         }]
                     }
+                    self.console.print(f"[yellow]tool_call_message: {tool_call_message}[/yellow]")
                     self.conversation_history.append(tool_call_message)
                     
                     # Add the tool response message
@@ -881,6 +887,7 @@ class LLM_Agent(ConversableAgent):
                         "name": tool_name,
                         "content": json.dumps(result)
                     }
+                    self.console.print(f"[yellow]tool_response_message: {tool_response_message}[/yellow]")
                     self.conversation_history.append(tool_response_message)
 
                     if tool_name.lower() == "list_directory" and "No files found" in str(result):
