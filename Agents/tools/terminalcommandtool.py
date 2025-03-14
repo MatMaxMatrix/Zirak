@@ -5,32 +5,22 @@ import os
 import shlex
 import signal
 import sys
-import re
 from typing import Dict, List, Optional, Union
-from pathlib import Path
 
 class TerminalCommandTool(BaseTool):
     name = "terminalcommandtool"
     description = '''
-    Executes terminal commands in a sandboxed environment within the project directory.
+    Executes terminal commands in the system shell and returns the output.
     This tool allows running shell commands with options for timeout, working directory, and environment variables.
     Commands can be run in the background if needed for long-running processes.
     Handles command execution errors gracefully and provides detailed output including stdout, stderr, and exit code.
-    
-    SECURITY NOTICE: Commands are restricted to run only within the specified project directory.
-    Commands that attempt to access or modify files outside the project directory will be blocked.
+    Use with caution as this tool has direct access to the system.
     '''
     
     # List of potentially dangerous commands that should be used with caution
     DANGEROUS_COMMANDS = {
         'rm', 'rmdir', 'dd', 'mkfs', 'format', 'del', 'fdisk', 'shutdown', 'reboot',
         'halt', 'poweroff', 'init', 'sudo', 'su', 'chmod', 'chown', ':(){:|:&};:'
-    }
-    
-    # List of commands that are completely blocked
-    BLOCKED_COMMANDS = {
-        'ssh', 'scp', 'ftp', 'telnet', 'nc', 'netcat', 'curl', 'wget', 'rsync',
-        'dd', 'mkfs', 'fdisk', 'shutdown', 'reboot', 'halt', 'poweroff', 'init'
     }
     
     # Maximum allowed timeout in seconds
@@ -41,15 +31,11 @@ class TerminalCommandTool(BaseTool):
         "properties": {
             "command": {
                 "type": "string",
-                "description": "The terminal command to execute (will be restricted to project directory)"
-            },
-            "project_root": {
-                "type": "string",
-                "description": "The root directory of the project (commands will be restricted to this directory)"
+                "description": "The terminal command to execute"
             },
             "working_directory": {
                 "type": "string",
-                "description": "The working directory for the command (must be within project_root)"
+                "description": "The working directory for the command (defaults to current directory)"
             },
             "timeout": {
                 "type": "integer",
@@ -68,20 +54,8 @@ class TerminalCommandTool(BaseTool):
                 "description": "Whether the command requires user interaction (will use direct terminal access)"
             }
         },
-        "required": ["command", "project_root"]
+        "required": ["command"]
     }
-    
-    def _is_path_in_project(self, path: str, project_root: str) -> bool:
-        """Check if a path is within the project directory."""
-        try:
-            # Convert both paths to absolute paths
-            abs_path = os.path.abspath(path)
-            abs_project_root = os.path.abspath(project_root)
-            
-            # Check if the path is within the project root
-            return abs_path.startswith(abs_project_root)
-        except Exception:
-            return False
     
     def _is_dangerous_command(self, command: str) -> bool:
         """Check if the command contains potentially dangerous operations."""
@@ -101,94 +75,12 @@ class TerminalCommandTool(BaseTool):
             
         return False
     
-    def _is_blocked_command(self, command: str) -> bool:
-        """Check if the command is completely blocked."""
-        command_parts = command.split()
-        if not command_parts:
-            return False
-            
-        base_cmd = command_parts[0]
-        
-        # Check against blocked commands list
-        if base_cmd in self.BLOCKED_COMMANDS:
-            return True
-            
-        return False
-    
-    def _validate_command(self, command: str, project_root: str) -> Dict[str, Union[bool, str]]:
-        """
-        Validate that a command is safe to run within the project directory.
-        
-        Returns:
-            Dict with 'valid' (bool) and 'reason' (str) if invalid
-        """
-        # Check if command is empty
-        if not command.strip():
-            return {"valid": False, "reason": "Empty command"}
-        
-        # Check if command is in the blocked list
-        if self._is_blocked_command(command):
-            return {"valid": False, "reason": "Command is blocked for security reasons"}
-        
-        # Check for commands that might access files outside the project
-        command_parts = shlex.split(command)
-        base_cmd = command_parts[0]
-        
-        # Check for path traversal attempts
-        if '..' in command or '~' in command:
-            # Look for patterns that might be trying to escape the directory
-            if re.search(r'(^|[^\w])\.\./', command) or re.search(r'(^|[^\w])~/', command):
-                return {"valid": False, "reason": "Path traversal attempts are not allowed"}
-        
-        # Check for absolute paths in file operations
-        file_operation_cmds = {'cat', 'less', 'more', 'head', 'tail', 'cp', 'mv', 'rm', 'touch', 'mkdir', 'rmdir'}
-        if base_cmd in file_operation_cmds:
-            for part in command_parts[1:]:
-                if part.startswith('/') and not self._is_path_in_project(part, project_root):
-                    return {"valid": False, "reason": f"Cannot access path outside project: {part}"}
-        
-        # Check for redirection to external files
-        if '>' in command or '>>' in command:
-            # Simple check for redirections to absolute paths
-            redirect_match = re.search(r'[>]{1,2}\s*(/[^\s]+)', command)
-            if redirect_match:
-                redirect_path = redirect_match.group(1)
-                if not self._is_path_in_project(redirect_path, project_root):
-                    return {"valid": False, "reason": f"Cannot write to path outside project: {redirect_path}"}
-        
-        return {"valid": True}
-    
-    def _run_command_interactive(self, command: str, project_root: str, cwd: Optional[str] = None, 
+    def _run_command_interactive(self, command: str, cwd: Optional[str] = None, 
                     timeout: Optional[int] = None, 
                     env_vars: Optional[Dict[str, str]] = None,
                     interactive: bool = False) -> Dict[str, Union[str, int]]:
         """Run a command interactively in the same terminal and return its output."""
         try:
-            # Validate the command
-            validation = self._validate_command(command, project_root)
-            if not validation["valid"]:
-                return {
-                    "stdout": "",
-                    "stderr": f"Command validation failed: {validation['reason']}",
-                    "exit_code": -1,
-                    "success": False,
-                    "error": validation["reason"]
-                }
-            
-            # Ensure working directory is within project root
-            if cwd:
-                if not self._is_path_in_project(cwd, project_root):
-                    return {
-                        "stdout": "",
-                        "stderr": f"Working directory must be within project root: {project_root}",
-                        "exit_code": -1,
-                        "success": False,
-                        "error": "Invalid working directory"
-                    }
-            else:
-                # Default to project root if no working directory specified
-                cwd = project_root
-            
             # Prepare environment variables
             env = os.environ.copy()
             if env_vars:
@@ -202,8 +94,6 @@ class TerminalCommandTool(BaseTool):
             
             # Print command to be executed
             print(f"\n\033[1;36mExecuting command: {command}\033[0m")
-            print(f"\033[1;36mProject root: {project_root}\033[0m")
-            print(f"\033[1;36mWorking directory: {cwd}\033[0m")
             print("-" * 80)
             
             # For interactive commands, use subprocess.run with direct terminal access
@@ -348,35 +238,10 @@ class TerminalCommandTool(BaseTool):
                 "error": error_msg
             }
     
-    def _run_background_command_interactive(self, command: str, project_root: str, cwd: Optional[str] = None,
+    def _run_background_command_interactive(self, command: str, cwd: Optional[str] = None,
                                env_vars: Optional[Dict[str, str]] = None) -> Dict[str, Union[str, int]]:
         """Run a command in the background and return its process ID."""
         try:
-            # Validate the command
-            validation = self._validate_command(command, project_root)
-            if not validation["valid"]:
-                return {
-                    "stdout": "",
-                    "stderr": f"Command validation failed: {validation['reason']}",
-                    "exit_code": -1,
-                    "success": False,
-                    "error": validation["reason"]
-                }
-            
-            # Ensure working directory is within project root
-            if cwd:
-                if not self._is_path_in_project(cwd, project_root):
-                    return {
-                        "stdout": "",
-                        "stderr": f"Working directory must be within project root: {project_root}",
-                        "exit_code": -1,
-                        "success": False,
-                        "error": "Invalid working directory"
-                    }
-            else:
-                # Default to project root if no working directory specified
-                cwd = project_root
-            
             # Prepare environment variables
             env = os.environ.copy()
             if env_vars:
@@ -384,8 +249,6 @@ class TerminalCommandTool(BaseTool):
             
             # Print command to be executed
             print(f"\n\033[1;36mExecuting background command: {command}\033[0m")
-            print(f"\033[1;36mProject root: {project_root}\033[0m")
-            print(f"\033[1;36mWorking directory: {cwd}\033[0m")
             print("-" * 80)
                 
             # Modify command to run in background with nohup
@@ -446,37 +309,15 @@ class TerminalCommandTool(BaseTool):
     
     def execute(self, **kwargs) -> str:
         command = kwargs.get('command', '')
-        project_root = kwargs.get('project_root', '')
         working_directory = kwargs.get('working_directory')
         timeout = kwargs.get('timeout')
         run_in_background = kwargs.get('run_in_background', False)
         env_vars = kwargs.get('env_vars', {})
         interactive = kwargs.get('interactive', False)
         
-        # Validate command and project_root
+        # Validate command
         if not command:
             return json.dumps({"error": "No command provided"}, indent=2)
-            
-        if not project_root:
-            return json.dumps({"error": "No project root directory provided"}, indent=2)
-            
-        # Ensure project_root exists
-        if not os.path.isdir(project_root):
-            return json.dumps({
-                "error": f"Project root directory does not exist: {project_root}",
-                "success": False
-            }, indent=2)
-        
-        # If working_directory is not provided, use project_root
-        if not working_directory:
-            working_directory = project_root
-        
-        # Check if working_directory is within project_root
-        if not self._is_path_in_project(working_directory, project_root):
-            return json.dumps({
-                "error": f"Working directory must be within project root: {project_root}",
-                "success": False
-            }, indent=2)
             
         # Check for dangerous commands
         if self._is_dangerous_command(command):
@@ -492,9 +333,9 @@ class TerminalCommandTool(BaseTool):
         # Execute the command
         try:
             if run_in_background:
-                cmd_result = self._run_background_command_interactive(command, project_root, working_directory, env_vars)
+                cmd_result = self._run_background_command_interactive(command, working_directory, env_vars)
             else:
-                cmd_result = self._run_command_interactive(command, project_root, working_directory, timeout, env_vars, interactive)
+                cmd_result = self._run_command_interactive(command, working_directory, timeout, env_vars, interactive)
                 
             result.update(cmd_result)
             

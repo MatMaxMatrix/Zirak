@@ -50,6 +50,7 @@ dependencies = [
     "ollama>=0.4.7",
     "pyautogen>=0.7.2",
     "duckduckgo-search>=7.5.1",
+    "autogen>=0.8.1",
 ]
 
 [project.optional-dependencies]
