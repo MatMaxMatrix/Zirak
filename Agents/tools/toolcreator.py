@@ -5,7 +5,8 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 import re
-import anthropic
+from openai import OpenAI
+from Agents.config import Config
 
 load_dotenv()
 
@@ -29,9 +30,10 @@ class ToolCreatorTool(BaseTool):
     }
 
     def __init__(self):
-        self.client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+        # Use Config class for API key, base URL, and model
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
         self.console = Console()
-        self.tools_dir = Path(__file__).parent.parent / "tools"  # Fixed path
+        self.tools_dir = Path(__file__).parent  # Fixed path to current directory
 
     def _sanitize_filename(self, name: str) -> str:
         """Convert tool name to valid Python filename"""
@@ -86,17 +88,17 @@ Return ONLY the Python code without any explanation or markdown formatting.
 """
 
         try:
-            # Get tool implementation from Claude with animation
-            response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=4000,
-                temperature=0,
+            # Get tool implementation from OpenAI using Config.Model
+            response = self.client.chat.completions.create(
+                model=Config.Model,
+                temperature=Config.DEFAULT_TEMPERATURE,
                 messages=[
+                    {"role": "system", "content": "You are a helpful assistant that generates Python code."},
                     {"role": "user", "content": prompt}
                 ]
             )
 
-            tool_code = response.content[0].text.strip()
+            tool_code = response.choices[0].message.content.strip()
 
             # Extract tool name from the generated code
             name_match = re.search(r'name\s*=\s*["\']([a-zA-Z0-9_-]+)["\']', tool_code)

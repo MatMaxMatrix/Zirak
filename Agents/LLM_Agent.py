@@ -38,6 +38,9 @@ class LLM_Agent(ConversableAgent):
         self.total_tokens_used = 0
         self.current_step_index = 0 
         
+        # Track current working directory for terminal commands
+        self.current_working_directory = os.getcwd()
+        
         # Context tracking for agentic behavior
         self.context_manager = ContextManager()
         self.auto_tool_selection = False
@@ -134,6 +137,32 @@ class LLM_Agent(ConversableAgent):
         )
         self.console.print(tool_header)
         
+        # Special handling for terminal command tool to track working directory
+        if tool_name.lower() == "terminalcommandtool":
+            command = tool_input.get("command", "")
+            
+            # If working_directory is not specified, use the tracked current_working_directory
+            if "working_directory" not in tool_input:
+                tool_input["working_directory"] = self.current_working_directory
+                self.console.print(f"[yellow]Using tracked working directory: {self.current_working_directory}[/yellow]")
+            
+            # Check if this is a cd command and update the working directory
+            if command.strip().startswith("cd "):
+                # Extract the target directory
+                target_dir = command.strip()[3:].strip()
+                
+                # Handle relative paths
+                if not os.path.isabs(target_dir):
+                    new_dir = os.path.normpath(os.path.join(self.current_working_directory, target_dir))
+                else:
+                    new_dir = target_dir
+                
+                # Check if the directory exists
+                if os.path.isdir(new_dir):
+                    # Update the current working directory for future commands
+                    self.current_working_directory = new_dir
+                    self.console.print(f"[green]Updated working directory to: {new_dir}[/green]")
+        
         # Special handling for common tools
         if tool_name.lower() == "createfolderstool":
             self.console.print(f"[cyan]Special handling for createfolderstool[/cyan]")
@@ -209,6 +238,14 @@ class LLM_Agent(ConversableAgent):
                         self.console.print(f"[cyan]Executing tool with parameters: {json.dumps(tool_input, indent=2)}[/cyan]")
                         result = tool_instance.execute(**tool_input)
                         self.console.print(f"[green]Tool execution successful[/green]")
+                        
+                        # For terminal commands, check if a directory was created
+                        if tool_name.lower() == "terminalcommandtool":
+                            command = tool_input.get("command", "")
+                            # Check for directory creation commands
+                            if "npx create-react-app" in command or "mkdir" in command or "npm init" in command or "yarn create" in command:
+                                self._check_for_created_directories(command, result, tool_input.get("working_directory", self.current_working_directory))
+                        
                         break
                     except Exception as exec_err:
                         self.console.print(f"[red]Error executing tool: {str(exec_err)}[/red]")
@@ -231,6 +268,99 @@ class LLM_Agent(ConversableAgent):
             self._display_tool_usage(tool_name, tool_input, result)
         
         return result
+
+    def _check_for_created_directories(self, command, result, working_directory):
+        """
+        Check if a command created a new directory and update the working directory if needed.
+        
+        Args:
+            command: The command that was executed
+            result: The result of the command execution
+            working_directory: The working directory where the command was executed
+        """
+        import re
+        import json
+        
+        # Parse the result if it's a JSON string
+        result_data = {}
+        if isinstance(result, str):
+            try:
+                result_data = json.loads(result)
+            except json.JSONDecodeError:
+                # Not JSON, use the string directly
+                result_data = {"stdout": result}
+        elif isinstance(result, dict):
+            result_data = result
+            
+        stdout = result_data.get("stdout", "")
+        
+        # Check for common patterns in command output that indicate directory creation
+        created_dir = None
+        auto_cd = False  # Flag to indicate if we should automatically change directory
+        
+        # Pattern for npx create-react-app
+        if "npx create-react-app" in command:
+            # Extract the app name from the command
+            match = re.search(r'npx create-react-app\s+([^\s]+)', command)
+            if match:
+                app_name = match.group(1)
+                potential_dir = os.path.join(working_directory, app_name)
+                if os.path.isdir(potential_dir):
+                    created_dir = potential_dir
+                    self.console.print(f"[green]Detected React app creation in directory: {created_dir}[/green]")
+                    auto_cd = True  # Auto-change to React app directory
+        
+        # Pattern for mkdir
+        elif "mkdir" in command:
+            # Extract directory name from mkdir command
+            match = re.search(r'mkdir\s+(-p\s+)?([^\s]+)', command)
+            if match:
+                dir_name = match.group(2)
+                potential_dir = os.path.join(working_directory, dir_name)
+                if os.path.isdir(potential_dir):
+                    created_dir = potential_dir
+                    self.console.print(f"[green]Detected directory creation: {created_dir}[/green]")
+                    # Don't auto-cd for mkdir, as it's often used for utility directories
+        
+        # Pattern for npm init or yarn create
+        elif "npm init" in command or "yarn create" in command:
+            # Look for common project creation patterns in output
+            if "package.json" in stdout:
+                # The current directory is likely the project directory
+                created_dir = working_directory
+                self.console.print(f"[green]Detected project initialization in: {created_dir}[/green]")
+        
+        # If a directory was created, suggest it as the new working directory
+        if created_dir:
+            # Add the new directory to tracked directories
+            self.context_manager.current_directories.add(created_dir)
+            
+            # Check for important subdirectories
+            if os.path.isdir(created_dir):
+                subdirs = [d for d in os.listdir(created_dir) 
+                          if os.path.isdir(os.path.join(created_dir, d))]
+                if subdirs:
+                    self.console.print(f"[cyan]Found subdirectories in {created_dir}: {', '.join(subdirs)}[/cyan]")
+                    # Add important subdirectories to tracked directories
+                    for subdir in subdirs:
+                        if subdir in ['src', 'public', 'components', 'pages', 'api', 'lib', 'utils']:
+                            full_path = os.path.join(created_dir, subdir)
+                            self.context_manager.current_directories.add(full_path)
+                            self.console.print(f"[green]Added important subdirectory {full_path} to tracked directories[/green]")
+            
+            # For certain commands like create-react-app, automatically change directory
+            if auto_cd:
+                self.console.print(f"[yellow]Automatically changing working directory to: {created_dir}[/yellow]")
+                self.current_working_directory = created_dir
+                # Add a message to the conversation history about the directory change
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": f"I've automatically changed the working directory to the newly created project folder: `{created_dir}`"
+                })
+            else:
+                # Just suggest changing directory
+                self.console.print(f"[yellow]A new directory was created: {created_dir}[/yellow]")
+                self.console.print(f"[yellow]You may want to change to this directory with 'cd {os.path.basename(created_dir)}'[/yellow]")
 
     def _find_tool_instance_in_module(self, module, tool_name: str):
         """
@@ -698,12 +828,34 @@ class LLM_Agent(ConversableAgent):
                                 tool_input["project_root"] = project_root
                                 self.console.print(f"[yellow]Setting project_root to current directory: {project_root}[/yellow]")
                             
-                            # If working_directory is not set, use project_root
+                            # If working_directory is not set, use the tracked current_working_directory
                             if "working_directory" not in tool_input:
-                                tool_input["working_directory"] = tool_input["project_root"]
-                                self.console.print(f"[yellow]Setting working_directory to project_root: {tool_input['project_root']}[/yellow]")
+                                tool_input["working_directory"] = self.current_working_directory
+                                self.console.print(f"[yellow]Setting working_directory to current tracked directory: {self.current_working_directory}[/yellow]")
                         
                         result = self._execute_tool(tool_use)
+                        
+                        # After executing a terminal command, check if it was a cd command and update working directory
+                        if tool_name.lower() == "terminalcommandtool":
+                            command = tool_input.get("command", "")
+                            if command.strip().startswith("cd "):
+                                # The working directory has already been updated in _execute_tool
+                                # Add the new directory to the context manager's tracked directories
+                                self.context_manager.current_directories.add(self.current_working_directory)
+                                self.console.print(f"[green]Added {self.current_working_directory} to tracked directories[/green]")
+                                
+                                # Check if the directory exists and has subdirectories
+                                if os.path.isdir(self.current_working_directory):
+                                    subdirs = [d for d in os.listdir(self.current_working_directory) 
+                                              if os.path.isdir(os.path.join(self.current_working_directory, d))]
+                                    if subdirs:
+                                        self.console.print(f"[cyan]Found subdirectories in {self.current_working_directory}: {', '.join(subdirs)}[/cyan]")
+                                        # Add important subdirectories to tracked directories
+                                        for subdir in subdirs:
+                                            if subdir in ['src', 'public', 'components', 'pages', 'api', 'lib', 'utils']:
+                                                full_path = os.path.join(self.current_working_directory, subdir)
+                                                self.context_manager.current_directories.add(full_path)
+                                                self.console.print(f"[green]Added important subdirectory {full_path} to tracked directories[/green]")
                     self.console.print(f"[red]result: {result}[/red]")
                     self.console.print(f"[bold green]✓ Step {step_num} completed[/bold green]")
                     
@@ -1022,6 +1174,9 @@ class LLM_Agent(ConversableAgent):
         
         # Reset token count
         self.total_tokens_used = 0
+        
+        # Reset working directory
+        self.current_working_directory = os.getcwd()
         
         # Reset context manager
         self.context_manager = ContextManager()
