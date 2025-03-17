@@ -1,3 +1,4 @@
+#%%
 import os
 import sys
 import json
@@ -7,24 +8,21 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
 
-# Add the project root to the path so we can import modules
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Import the tools
-from Agents.tools.base import BaseTool
-from ..Agents.tools.filecontentreadertool import FileContentReaderTool
-from ..Agents.tools.filecreatortool import FileCreatorTool
-from ..Agents.tools.fileedittool import FileEditTool
-from ..Agents.tools.createfolderstool import CreateFoldersTool
-from ..Agents.tools.diffeditortool import DiffEditorTool
-from ..Agents.tools.lintingtool import LintingTool
-from ..Agents.tools.toolcreator import ToolCreatorTool
-from ..Agents.tools.uvpackagemanager import UVPackageManager
-from ..Agents.tools.duckduckgotool import DuckduckgoTool
-from ..Agents.tools.webscrapertool import WebScraperTool
-from ..Agents.tools.e2bcodetool import E2bCodeTool
-from ..Agents.tools.browsertool import BrowserTool
-from ..Agents.tools.screenshottool import ScreenshotTool
+# Import the tools using absolute imports
+from base import BaseTool
+from filecontentreadertool import FileContentReaderTool
+from filecreatortool import FileCreatorTool
+from fileedittool import FileEditTool
+from createfolderstool import CreateFoldersTool
+from diffeditortool import DiffEditorTool
+from lintingtool import LintingTool
+from toolcreator import ToolCreatorTool
+from uvpackagemanager import UVPackageManager
+from duckduckgotool import DuckduckgoTool
+from webscrapertool import WebScraperTool
+from e2bcodetool import E2bCodeTool
+from browsertool import BrowserTool
+from screenshottool import ScreenshotTool
 
 
 class ToolTestCase(unittest.TestCase):
@@ -374,6 +372,77 @@ class ScreenshotToolTest(unittest.TestCase):
         """Test taking a screenshot."""
         # Skip this test as it requires system access
         self.skipTest("Requires system access for screenshots")
+
+
+class AICodeReplacementTest(ToolTestCase):
+    """Test using DiffEditorTool for AI-generated code replacement."""
+    
+    def test_replace_code_segment(self):
+        """Test replacing a specific code segment with AI-generated code."""
+        # Create a test Python file with some code
+        original_code = """def calculate_sum(a, b):
+    # Add two numbers and return the result
+    result = a + b
+    print(f"The sum of {a} and {b} is {result}")
+    return result
+
+def calculate_product(a, b):
+    # Multiply two numbers and return the result
+    result = a * b
+    print(f"The product of {a} and {b} is {result}")
+    return result
+"""
+        file_path = self.create_temp_file("math_functions.py", original_code)
+        
+        # The specific code segment we want to replace (the calculate_sum function)
+        old_code_segment = """def calculate_sum(a, b):
+    # Add two numbers and return the result
+    result = a + b
+    print(f"The sum of {a} and {b} is {result}")
+    return result"""
+        
+        # The AI-generated improved version of the function
+        ai_generated_code = """def calculate_sum(a, b):
+    # Add two numbers and return the result
+    # Improved with input validation
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        raise TypeError("Both arguments must be numbers")
+    result = a + b
+    print(f"The sum of {a} and {b} is {result}")
+    return result"""
+        
+        # Initialize the DiffEditorTool
+        tool = DiffEditorTool()
+        
+        # Execute the tool to replace the specific code segment
+        result = tool.execute(path=file_path, old_text=old_code_segment, new_text=ai_generated_code)
+        
+        # Check if the file was modified correctly
+        with open(file_path, 'r') as f:
+            modified_code = f.read()
+        
+        # The expected code after replacement
+        expected_code = """def calculate_sum(a, b):
+    # Add two numbers and return the result
+    # Improved with input validation
+    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
+        raise TypeError("Both arguments must be numbers")
+    result = a + b
+    print(f"The sum of {a} and {b} is {result}")
+    return result
+
+def calculate_product(a, b):
+    # Multiply two numbers and return the result
+    result = a * b
+    print(f"The product of {a} and {b} is {result}")
+    return result
+"""
+        
+        # Verify the code was replaced correctly
+        self.assertEqual(modified_code, expected_code)
+        
+        # Check the result message
+        self.assertIn("Successfully replaced", result)
 
 
 if __name__ == '__main__':

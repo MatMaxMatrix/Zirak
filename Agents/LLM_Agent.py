@@ -92,13 +92,14 @@ class LLM_Agent(ConversableAgent):
         return self.tool_manager._execute_uv_install(package_name)
 
     @property
-    def tools(self):
+    def tools(self): #Returns the list of currently available tools (as provided by the ToolManager).
+
         """
         Get the list of available tools.
         """
         return self.tool_manager.get_tools()
 
-    def refresh_tools(self):
+    def refresh_tools(self): #reloads the tools (clearing any cached tool data) and then calls display_available_tools() to update the user.
         """
         Refresh the list of available tools by reloading them from the tools directory.
         This is useful when new tools are added or existing tools are modified.
@@ -109,14 +110,24 @@ class LLM_Agent(ConversableAgent):
         self._last_tools_hash = None
         self.display_available_tools()
 
-    def display_available_tools(self):
+    def display_available_tools(self): #Displays all available tools with their descriptions.
         """
         Display all available tools with their descriptions.
         """
         self.tool_manager.display_available_tools()
 
-    def _execute_tool(self, tool_use):
+    def _execute_tool(self, tool_use): 
         """
+            This is a core function that:
+
+            Receives a tool call (its name and parameters).
+            Dynamically imports the module containing the tool (using different import paths to be flexible).
+            Searches for the correct tool instance via _find_tool_instance_in_module.
+            Handles special cases (for example, terminal commands that may change the working directory or file creation tools that ensure directories exist).
+            Executes the tool's execute method and returns its result.
+            Displays the tool usage summary with _display_tool_usage.
+
+
         Execute a tool with the given parameters.
         
         Args:
@@ -163,105 +174,106 @@ class LLM_Agent(ConversableAgent):
                     self.current_working_directory = new_dir
                     self.console.print(f"[green]Updated working directory to: {new_dir}[/green]")
         
-        # Special handling for common tools
-        if tool_name.lower() == "createfolderstool":
-            self.console.print(f"[cyan]Special handling for createfolderstool[/cyan]")
-            # Ensure the tool_input has the correct parameter name
-            if "paths" in tool_input and "folder_paths" not in tool_input:
-                tool_input["folder_paths"] = tool_input["paths"]
-                self.console.print(f"[cyan]Converted 'paths' parameter to 'folder_paths' for compatibility[/cyan]")
-        elif tool_name.lower() == "filecreatortool":
-            self.console.print(f"[cyan]Special handling for filecreatortool[/cyan]")
-            # Ensure parent directories exist
-            if isinstance(tool_input.get('files'), dict):
-                path = Path(tool_input['files']['path'])
-                try:
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    self.console.print(f"[green]Created parent directory: {path.parent}[/green]")
-                except Exception as e:
-                    self.console.print(f"[red]Error creating parent directory: {str(e)}[/red]")
-            elif isinstance(tool_input.get('files'), list):
-                for file_spec in tool_input['files']:
-                    path = Path(file_spec['path'])
-                    try:
-                        path.parent.mkdir(parents=True, exist_ok=True)
-                        self.console.print(f"[green]Created parent directory: {path.parent}[/green]")
-                    except Exception as e:
-                        self.console.print(f"[red]Error creating parent directory: {str(e)}[/red]")
+        # Use the tool instance cache to directly get the tool instance
+        tool_instance = self.tool_manager.get_tool_instance(tool_name)
         
-        # Try both import paths for each module
-        import_paths = [
-            lambda name: f"Agents.tools.{name}",
-            lambda name: f"tools.{name}"
-        ]
-        
-        # Get tools directory path
-        tools_path = getattr(Config, 'TOOLS_DIR', None)
-        if tools_path is None:
-            tools_path = Path(__file__).parent / "tools"
-        
-        # Ensure tools_path is a Path object
-        if not isinstance(tools_path, Path):
-            tools_path = Path(tools_path)
-        
-        result = None
-        
-        # Search for the tool in all modules in the tools directory
-        for module_info in pkgutil.iter_modules([str(tools_path)]):
-            module_name = module_info.name
-            if module_name == 'base':
-                continue
-                
-            module = None
-            for import_path_func in import_paths:
-                try:
-                    full_module_name = import_path_func(module_name)
-                    self.console.print(f"[cyan]Trying to import module: {full_module_name}[/cyan]")
-                    module = importlib.import_module(full_module_name)
-                    #self.console.print(f"[green]Successfully imported module: {full_module_name}[/green]")
-                    break
-                except ImportError as e:
-                    self.console.print(f"[yellow]Failed to import {import_path_func(module_name)}: {str(e)}[/yellow]")
+        if tool_instance:
+            self.console.print(f"[green]Found tool '{tool_name}' in cache[/green]")
             
-            if not module:
-                self.console.print(f"[red]Could not import module {module_name} using any import path[/red]")
-                continue
-                
+            # Execute the tool
             try:
-                # Try to find a tool instance with the matching name
-                tool_instance = self._find_tool_instance_in_module(module, tool_name)
-                if tool_instance:
-                    #self.console.print(f"[green]Found tool '{tool_name}' in module '{module_name}'[/green]")
-                    
-                    # Execute the tool
-                    try:
-                        self.console.print(f"[cyan]Executing tool with parameters: {json.dumps(tool_input, indent=2)}[/cyan]")
-                        result = tool_instance.execute(**tool_input)
-                        self.console.print(f"[green]Tool execution successful[/green]")
-                        
-                        # For terminal commands, check if a directory was created
-                        if tool_name.lower() == "terminalcommandtool":
-                            command = tool_input.get("command", "")
-                            # Check for directory creation commands
-                            if "npx create-react-app" in command or "mkdir" in command or "npm init" in command or "yarn create" in command:
-                                self._check_for_created_directories(command, result, tool_input.get("working_directory", self.current_working_directory))
-                        
-                        break
-                    except Exception as exec_err:
-                        self.console.print(f"[red]Error executing tool: {str(exec_err)}[/red]")
-                        import traceback
-                        self.console.print(f"[red]{traceback.format_exc()}[/red]")
-                        result = f"Error executing tool '{tool_name}': {str(exec_err)}"
-                        break
-            except Exception as e:
-                self.console.print(f"[red]Error processing module {module_name}: {str(e)}[/red]")
+                self.console.print(f"[cyan]Executing tool with parameters: {json.dumps(tool_input, indent=2)}[/cyan]")
+                result = tool_instance.execute(**tool_input)
+                self.console.print(f"[green]Tool execution successful[/green]")
+                
+                # For terminal commands, check if a directory was created
+                if tool_name.lower() == "terminalcommandtool":
+                    command = tool_input.get("command", "")
+                    # Check for directory creation commands
+                    if "npx create-react-app" in command or "mkdir" in command or "npm init" in command or "yarn create" in command:
+                        self._check_for_created_directories(command, result, tool_input.get("working_directory", self.current_working_directory))
+            except Exception as exec_err:
+                self.console.print(f"[red]Error executing tool: {str(exec_err)}[/red]")
                 import traceback
                 self.console.print(f"[red]{traceback.format_exc()}[/red]")
+                result = f"Error executing tool '{tool_name}': {str(exec_err)}"
+        else:
+            # Fall back to the original method of searching through modules if the tool isn't in the cache
+            self.console.print(f"[yellow]Tool '{tool_name}' not found in cache, falling back to module search[/yellow]")
+            
+            # Try both import paths for each module
+            import_paths = [
+                lambda name: f"Agents.tools.{name}",
+                lambda name: f"tools.{name}"
+            ]
+            
+            # Get tools directory path
+            tools_path = getattr(Config, 'TOOLS_DIR', None)
+            if tools_path is None:
+                tools_path = Path(__file__).parent / "tools"
+            
+            # Ensure tools_path is a Path object
+            if not isinstance(tools_path, Path):
+                tools_path = Path(tools_path)
+            
+            result = None
+            
+            # Search for the tool in all modules in the tools directory
+            for module_info in pkgutil.iter_modules([str(tools_path)]):
+                module_name = module_info.name
+                if module_name == 'base':
+                    continue
+                    
+                module = None
+                for import_path_func in import_paths:
+                    try:
+                        full_module_name = import_path_func(module_name)
+                        self.console.print(f"[cyan]Trying to import module: {full_module_name}[/cyan]")
+                        module = importlib.import_module(full_module_name)
+                        break
+                    except ImportError as e:
+                        self.console.print(f"[yellow]Failed to import {import_path_func(module_name)}: {str(e)}[/yellow]")
+                
+                if not module:
+                    self.console.print(f"[red]Could not import module {module_name} using any import path[/red]")
+                    continue
+                    
+                try:
+                    # Try to find a tool instance with the matching name
+                    tool_instance = self._find_tool_instance_in_module(module, tool_name)
+                    if tool_instance:
+                        # Cache the tool instance for future use
+                        self.tool_manager._tool_instances[tool_name] = tool_instance
+                        self.tool_manager._tool_instances[tool_name.lower()] = tool_instance
+                        self.console.print(f"[green]Found tool '{tool_name}' in module '{module_name}' and added to cache[/green]")
+                        
+                        # Execute the tool
+                        try:
+                            self.console.print(f"[cyan]Executing tool with parameters: {json.dumps(tool_input, indent=2)}[/cyan]")
+                            result = tool_instance.execute(**tool_input)
+                            self.console.print(f"[green]Tool execution successful[/green]")
+                            
+                            # For terminal commands, check if a directory was created
+                            if tool_name.lower() == "terminalcommandtool":
+                                command = tool_input.get("command", "")
+                                # Check for directory creation commands
+                                if "npx create-react-app" in command or "mkdir" in command or "npm init" in command or "yarn create" in command:
+                                    self._check_for_created_directories(command, result, tool_input.get("working_directory", self.current_working_directory))
+                            
+                            break
+                        except Exception as exec_err:
+                            self.console.print(f"[red]Error executing tool: {str(exec_err)}[/red]")
+                            import traceback
+                            self.console.print(f"[red]{traceback.format_exc()}[/red]")
+                            result = f"Error executing tool '{tool_name}': {str(exec_err)}"
+                            break
+                except Exception as e:
+                    self.console.print(f"[red]Error processing module {module_name}: {str(e)}[/red]")
+                    import traceback
+                    self.console.print(f"[red]{traceback.format_exc()}[/red]")
         
         if result is None:
             result = f"Error: Tool '{tool_name}' not found or failed to execute"
-        
-        #self.console.print(f"[cyan]Result:[/cyan] {self._clean_parsed_data(result)}")
         
         # Display tool usage in a formatted way
         if getattr(Config, 'SHOW_TOOL_USAGE', True):
@@ -271,6 +283,12 @@ class LLM_Agent(ConversableAgent):
 
     def _check_for_created_directories(self, command, result, working_directory):
         """
+
+        After a tool executes (especially terminal commands like cd or mkdir), this function:
+
+            Checks the output to see if a new directory was created.
+            Updates the agent's context (e.g., the current working directory and a set of tracked directories) accordingly.
+        ------------------
         Check if a command created a new directory and update the working directory if needed.
         
         Args:
@@ -748,8 +766,7 @@ class LLM_Agent(ConversableAgent):
 
                 # Increment the auto tool call counter; if too many iterations, warn and break out
                 self.current_auto_tool_calls += 1
-                MAX_AUTO_TOOL_CALLS = getattr(Config, "MAX_AUTO_TOOL_CALLS", 10)
-                if self.current_auto_tool_calls > MAX_AUTO_TOOL_CALLS:
+                if self.current_auto_tool_calls > self.max_auto_tool_calls:
                     self.console.print("[red]Too many automatic tool call iterations. Aborting further tool executions.[/red]")
                     return "Aborted: maximum recursive tool calls reached."
 
@@ -1349,96 +1366,6 @@ This agent uses an optimized conversation history approach to reduce token usage
             self.console.print("\n[bold yellow]Operation interrupted by user[/bold yellow]")
             return True, {"role": "assistant", "content": "Operation interrupted by user"}
 
-    def _is_step_fully_processed(self):
-        """
-        Check if the current step has been fully processed by examining the conversation history.
-        A step is considered fully processed if:
-        1. The last message is from the assistant (not a tool call)
-        2. There are no unexplored directories in the context
-        3. There are no unread files mentioned in the conversation
-        
-        Returns:
-            bool: True if the step is fully processed, False otherwise
-        """
-        # Check if the last message is from the assistant
-        if not self.conversation_history:
-            return False
-            
-        last_message = self.conversation_history[-1]
-        if last_message.get("role") != "assistant" or not last_message.get("content"):
-            return False
-            
-        # Check if there are unexplored directories
-        for directory in self.context_manager.current_directories:
-            directory_explored = False
-            for file in self.context_manager.current_files:
-                if file.startswith(directory):
-                    directory_explored = True
-                    break
-            if not directory_explored:
-                return False
-                
-        # Check if there are unread files mentioned in the conversation
-        mentioned_files = set()
-        for message in self.conversation_history:
-            if message.get("role") == "assistant" and message.get("content"):
-                content = message.get("content", "")
-                if isinstance(content, str):
-                    # Simple regex to find potential file paths
-                    file_matches = re.findall(r'`[^`]*`|\b[\w\-\.\/]+\.(py|js|ts|jsx|tsx|html|css|json|md|txt)\b', content)
-                    for match in file_matches:
-                        # Clean up the match
-                        file_path = match.strip('`')
-                        if os.path.exists(file_path) and os.path.isfile(file_path):
-                            mentioned_files.add(file_path)
-        
-        unread_files = mentioned_files - self.context_manager.current_files
-        if unread_files:
-            return False
-            
-        return True
-
-    def _generate_tool_info(self) -> str:
-        """
-        Generate a formatted string with information about all available tools.
-        This is used to enhance the system prompt with dynamic tool information.
-        """
-        if not self.tools:
-            return "No tools are currently available."
-            
-        tool_info = "# Available Tools\n\n"
-        
-        # Sort tools by name for consistent display
-        sorted_tools = sorted(self.tools, key=lambda x: x['name'])
-        
-        for tool_info_dict in sorted_tools:
-            name = tool_info_dict['name']
-            description = tool_info_dict['description'].strip()
-            
-            # Add tool name and description
-            tool_info += f"## {name}\n{description}\n\n"
-            
-            # Add input schema if available
-            if 'input_schema' in tool_info_dict and tool_info_dict['input_schema']:
-                try:
-                    # Extract required parameters
-                    required_params = tool_info_dict['input_schema'].get('required', [])
-                    properties = tool_info_dict['input_schema'].get('properties', {})
-                    
-                    if properties:
-                        tool_info += "### Parameters:\n"
-                        for param_name, param_info in properties.items():
-                            param_type = param_info.get('type', 'any')
-                            param_desc = param_info.get('description', '')
-                            required_mark = "*" if param_name in required_params else ""
-                            tool_info += f"- {param_name}{required_mark} ({param_type}): {param_desc}\n"
-                except Exception:
-                    pass
-            
-            tool_info += "\n"
-            
-        return tool_info
-
     def _ensure_directories_explored(self):
         """
         Ensure that all directories in the current context are explored for file content.
@@ -1589,6 +1516,8 @@ class ToolManager:
         """
         self.console = console or Console()
         self._tools = []
+        # Add a tool instance cache dictionary mapping tool names to instances
+        self._tool_instances = {}
         self._load_tools()
     
     def _load_tools(self) -> List[Dict[str, Any]]:
@@ -1601,6 +1530,8 @@ class ToolManager:
         """
         self.console.print("\n[bold cyan]Loading tools...[/bold cyan]")
         tools_list = []
+        # Clear the tool instances cache when reloading
+        self._tool_instances = {}
         
         # Ensure TOOLS_DIR is set and exists
         tools_path = getattr(Config, 'TOOLS_DIR', None)
@@ -1741,7 +1672,7 @@ class ToolManager:
     def _extract_tools_from_module(self, module, tools: List[Dict[str, Any]]) -> None:
         """
         Given a tool module, find and instantiate all tool classes (subclasses of BaseTool).
-        Append them to the 'tools' list.
+        Append them to the 'tools' list and cache tool instances.
         """
         found_tools = False
         for name, obj in inspect.getmembers(module):
@@ -1781,6 +1712,10 @@ class ToolManager:
                             "description": tool_instance.description,
                             "input_schema": tool_instance.input_schema
                         })
+                        
+                        # Cache the tool instance using name as key (both normal and lowercase for case-insensitive lookup)
+                        self._tool_instances[tool_instance.name] = tool_instance
+                        self._tool_instances[tool_instance.name.lower()] = tool_instance
                         
                         self.console.print(f"[green]Added tool: {tool_instance.name}[/green]")
                         found_tools = True
@@ -1851,6 +1786,8 @@ class ToolManager:
         This is useful when new tools are added or existing tools are modified.
         """
         self.console.print("\n[bold cyan]Refreshing tools...[/bold cyan]")
+        # Clear the tool instances cache when refreshing
+        self._tool_instances = {}
         self._load_tools()
         self.console.print(f"[green]Successfully refreshed {len(self._tools)} tools[/green]")
     
@@ -1929,6 +1866,23 @@ class ToolManager:
         for tool in self._tools:
             if tool['name'].lower() == tool_name.lower():
                 return tool
+        return None
+        
+    def get_tool_instance(self, tool_name: str):
+        """
+        Get a tool instance by name from the cache.
+        
+        Args:
+            tool_name: The name of the tool to get
+            
+        Returns:
+            The tool instance if found, None otherwise
+        """
+        # First try exact match, then lowercase
+        if tool_name in self._tool_instances:
+            return self._tool_instances[tool_name]
+        elif tool_name.lower() in self._tool_instances:
+            return self._tool_instances[tool_name.lower()]
         return None
     
     def generate_tool_info(self) -> str:
@@ -2031,3 +1985,5 @@ class ContextManager:
             "workspace_root": self.workspace_root,
             "recent_topics": self.recent_topics
         }
+
+# %%

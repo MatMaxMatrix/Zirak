@@ -9,8 +9,17 @@ from rich.table import Table
 import time
 import os
 
+# Set up the path for imports
+project_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+tools_dir = os.path.join(project_dir, "Agents", "tools")
+
+# Add the project root and tools directory to sys.path
+sys.path.append(project_dir)
+sys.path.append(tools_dir)
+sys.path.append(os.path.dirname(__file__))  # Add the current directory
+
 # Import the test file
-import Tool_test.tool_tests as tool_tests
+import tool_tests
 
 console = Console()
 
