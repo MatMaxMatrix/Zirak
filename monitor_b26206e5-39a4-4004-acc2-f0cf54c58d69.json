@@ -1,0 +1,11 @@
+{
+  "conversation_id": "b26206e5-39a4-4004-acc2-f0cf54c58d69",
+  "query": "Tell me a simple joke",
+  "response": {
+    "conversation_id": "b26206e5-39a4-4004-acc2-f0cf54c58d69",
+    "response": "Processing..."
+  },
+  "workflow_steps": [],
+  "agent_communications": {},
+  "agent_messages": {}
+}

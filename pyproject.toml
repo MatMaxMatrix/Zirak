@@ -51,6 +51,7 @@ dependencies = [
     "pyautogen>=0.7.2",
     "duckduckgo-search>=7.5.1",
     "autogen>=0.8.1",
+    "flask-socketio>=5.5.1",
 ]
 
 [project.optional-dependencies]

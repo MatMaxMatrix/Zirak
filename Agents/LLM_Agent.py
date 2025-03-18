@@ -1809,40 +1809,6 @@ class ToolManager:
             return
             
         self.console.print(f"[green]Found {len(sorted_tools)} tools[/green]")
-        
-        for tool_info in sorted_tools:
-            name = tool_info['name']
-            description = tool_info.get('description', '').strip()
-            
-            # Display tool name and description
-            #self.console.print(f"🔧 [cyan]{name}[/cyan]:")
-            
-            if description:
-                description_lines = description.split('\n')
-                formatted_description = '\n    '.join(line.strip() for line in description_lines)
-                #self.console.print(f"    {formatted_description}")
-            else:
-                #self.console.print("    [yellow]No description available[/yellow]")
-                pass
-            
-            # Display input schema if available
-            if 'input_schema' in tool_info and tool_info['input_schema']:
-                try:
-                    # Extract required parameters
-                    required_params = tool_info['input_schema'].get('required', [])
-                    properties = tool_info['input_schema'].get('properties', {})
-                    
-                    if properties:
-                        self.console.print("    [bold]Parameters:[/bold]")
-                        for param_name, param_info in properties.items():
-                            param_type = param_info.get('type', 'any')
-                            param_desc = param_info.get('description', '')
-                            required_mark = "[red]*[/red]" if param_name in required_params else ""
-                            #self.console.print(f"      - {param_name}{required_mark} ({param_type}): {param_desc}")
-                except Exception as e:
-                    self.console.print(f"    [yellow]Error displaying schema: {str(e)}[/yellow]")
-            
-            self.console.print("")  # Add a blank line between tools
     
     def get_tools(self):
         """
