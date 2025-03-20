@@ -3,3 +3,5 @@ my-app/.next/
 my-app/next-env.d.ts
 my-app/node_modules/
 my-app/tsconfig.tsbuildinfo
+# GPG test
+.gpg-test
