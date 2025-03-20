@@ -29,6 +29,7 @@ class LLM_Agent(ConversableAgent):
         # Initialize OpenAI client
         self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
         self.conversation_history: list[dict[str, Any]] = []
+
         self.console = Console()
         self.console.print("[red]LLM_Agent start from here.[/red]")
 
@@ -58,10 +59,7 @@ class LLM_Agent(ConversableAgent):
 
         # Enhanced system prompt with agentic capabilities
         # system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
-        system_prompt = f"{SystemPrompts.REVISED_PROMPT}"
-        self.conversation_history.append({"role": "system", "content": system_prompt})
-
-        # Call super().__init__ after setting up our attributes
+        self.system_prompt = f"{SystemPrompts.REVISED_PROMPT}"  # Call super().__init__ after setting up our attributes
         super().__init__(
             name="LLM_Agent",
             system_message="",
@@ -281,9 +279,9 @@ class LLM_Agent(ConversableAgent):
                     if tool_instance:
                         # Cache the tool instance for future use
                         self.tool_manager._tool_instances[tool_name] = tool_instance
-                        self.tool_manager._tool_instances[
-                            tool_name.lower()
-                        ] = tool_instance
+                        self.tool_manager._tool_instances[tool_name.lower()] = (
+                            tool_instance
+                        )
                         self.console.print(
                             f"[green]Found tool '{tool_name}' in module '{module_name}' and added to cache[/green]"
                         )
@@ -726,63 +724,6 @@ class LLM_Agent(ConversableAgent):
 
         self.console.print("---")
 
-        # Display conversation optimization stats
-        self._get_conversation_stats()
-
-    def _get_conversation_stats(self):
-        """
-        Calculate and display statistics about the conversation history and token savings
-        from using the optimized approach of only sending recent messages to the API.
-        """
-        if not self.conversation_history:
-            return
-
-        # Count messages by role
-        system_messages = [
-            msg for msg in self.conversation_history if msg.get("role") == "system"
-        ]
-        other_messages = [
-            msg for msg in self.conversation_history if msg.get("role") != "system"
-        ]
-
-        # Get the number of recent messages included in API calls
-        recent_message_count = getattr(Config, "RECENT_MESSAGE_COUNT", 3)
-        recent_history = (
-            other_messages[-recent_message_count:] if other_messages else []
-        )
-
-        # Calculate approximate token counts (rough estimate)
-        def estimate_tokens(messages):
-            total = 0
-            for msg in messages:
-                content = msg.get("content", "")
-                if content:
-                    # Rough estimate: 1 token ≈ 4 characters for English text
-                    total += len(content) // 4
-            return total
-
-        full_history_tokens = estimate_tokens(self.conversation_history)
-        optimized_tokens = estimate_tokens(system_messages + recent_history)
-
-        if full_history_tokens > 0:
-            savings_percentage = (
-                (full_history_tokens - optimized_tokens) / full_history_tokens
-            ) * 100
-
-            # Only display if there are significant savings
-            if savings_percentage > 10 and len(other_messages) > recent_message_count:
-                self.console.print("[green]Conversation optimization:[/green]")
-                self.console.print(
-                    f"  Full history: {len(self.conversation_history)} messages (~{full_history_tokens:,} tokens)"
-                )
-                self.console.print(
-                    f"  Optimized: {len(system_messages) + len(recent_history)} messages (~{optimized_tokens:,} tokens)"
-                )
-                self.console.print(
-                    f"  [bold green]Estimated savings: {savings_percentage:.1f}% ({full_history_tokens - optimized_tokens:,} tokens)[/bold green]"
-                )
-                self.console.print("---")
-
     def _process_tools(self):
         """
         Process the tools to ensure they have the required properties and truncate long descriptions.
@@ -851,9 +792,13 @@ class LLM_Agent(ConversableAgent):
         tools_str = json.dumps(self.tools, sort_keys=True)
 
         # Generate a hash
-        return hashlib.md5(tools_str.encode()).hexdigest()
+        return hashlib.md5(
+            tools_str.encode()
+        ).hexdigest()  # The output is a string of 32 characters
 
-    def _get_processed_tools(self):
+    def _get_processed_tools(
+        self,
+    ):  # Return the processed tools, using cache if available and tools haven't changed. Otherwise, process the tools and update the cache.
         """
         Get the processed tools, using cache if available and tools haven't changed.
         """
@@ -976,7 +921,7 @@ class LLM_Agent(ConversableAgent):
                     )
                     self.console.print(step_panel)
                 self.console.print(f"[yellow]plan_summary: {plan_summary}[/yellow]")
-                self.conversation_history.append(
+                self.conversation_history.append(  # the summary is something like this: I'll execute the following workflow: Step 1: Create a new file called 'index.html' with the content 'Hello, world!'
                     {"role": "assistant", "content": plan_summary}
                 )
                 # self.console.print(f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]")
@@ -985,6 +930,7 @@ class LLM_Agent(ConversableAgent):
                 for i, tool_call in enumerate(tool_calls):
                     tool_name = tool_call.function.name
                     tool_input = json.loads(tool_call.function.arguments)
+                    self.console.print(f"[yellow]tool_name: {tool_name}[/yellow]")
                     step_num = i + 1
                     action_desc = self._get_action_description(tool_name, tool_input)
                     self.console.print("\n")
@@ -1058,9 +1004,9 @@ class LLM_Agent(ConversableAgent):
 
                             # If working_directory is not set, use the tracked current_working_directory
                             if "working_directory" not in tool_input:
-                                tool_input[
-                                    "working_directory"
-                                ] = self.current_working_directory
+                                tool_input["working_directory"] = (
+                                    self.current_working_directory
+                                )
                                 self.console.print(
                                     f"[yellow]Setting working_directory to current tracked directory: {self.current_working_directory}[/yellow]"
                                 )
@@ -1180,8 +1126,33 @@ class LLM_Agent(ConversableAgent):
                 self.console.print(
                     f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]"
                 )
+                is_final_response = False
+                # Check if this is a JSON report (signifying task completion)
+                if final_content.strip().startswith(
+                    "{"
+                ) and final_content.strip().endswith("}"):
+                    try:
+                        json_content = json.loads(final_content)
+                        if (
+                            isinstance(json_content, dict)
+                            and "directories" in json_content
+                        ):
+                            is_final_response = True
+                    except json.JSONDecodeError:
+                        pass
+                if not is_final_response:
+                    self.console.print(
+                        "\n[yellow]No tool calls detected and response is not a final JSON report. Requesting completion again...[/yellow]"
+                    )
+                    return self.get_completion()
                 # Reset the auto tool call counter (since we have a final answer)
                 self.current_auto_tool_calls = 0
+                self.context_manager.report_memory.append(
+                    {
+                        "role": "system",
+                        "content": f"report summary for step {self.current_step_index}: {final_content}",
+                    }
+                )
                 return final_content
             else:
                 return "No response generated."
@@ -1223,8 +1194,6 @@ class LLM_Agent(ConversableAgent):
                 if isinstance(tool_input.get("files"), dict):
                     path = tool_input["files"].get("path", "unknown")
                     content_preview = tool_input["files"].get("content", "")
-                    if len(content_preview) > 30:
-                        content_preview = content_preview[:30] + "..."
                     return f"Creating file '{path}' with content starting with '{content_preview}'"
                 elif (
                     isinstance(tool_input.get("files"), list)
@@ -1233,8 +1202,6 @@ class LLM_Agent(ConversableAgent):
                     if len(tool_input["files"]) == 1:
                         path = tool_input["files"][0].get("path", "unknown")
                         content_preview = tool_input["files"][0].get("content", "")
-                        if len(content_preview) > 30:
-                            content_preview = content_preview[:30] + "..."
                         return f"Creating file '{path}' with content starting with '{content_preview}'"
                     else:
                         file_names = [
@@ -1351,9 +1318,6 @@ class LLM_Agent(ConversableAgent):
             )
             self.current_auto_tool_calls = 0  # Reset counter for new input
 
-            if isinstance(user_input, str):
-                self.context_manager.analyze_user_input(user_input)
-
             if self.thinking_enabled:
                 self.console.print("[cyan]Thinking...[/cyan]")
 
@@ -1464,13 +1428,6 @@ class LLM_Agent(ConversableAgent):
         """
         self.console.print("\n[bold yellow]Resetting conversation...[/bold yellow]")
 
-        # Save the system prompt
-        system_prompt = None
-        for message in self.conversation_history:
-            if message["role"] == "system" and len(self.conversation_history) > 0:
-                system_prompt = message["content"]
-                break
-
         # Clear conversation history
         self.conversation_history = []
 
@@ -1485,18 +1442,10 @@ class LLM_Agent(ConversableAgent):
         self.current_auto_tool_calls = 0
 
         # Re-add the system prompt
-        if system_prompt:
-            self.conversation_history.append(
-                {"role": "system", "content": system_prompt}
-            )
-        else:
-            # Generate a new system prompt if the original one wasn't found
-            tool_info = self.tool_manager.generate_tool_info()
-            system_prompt = f"{SystemPrompts.DEFAULT}\n\n{SystemPrompts.TOOL_USAGE}\n\n{tool_info}\n\n{SystemPrompts.AGENTIC_BEHAVIOR}"
-            self.conversation_history.append(
-                {"role": "system", "content": system_prompt}
-            )
-
+        self.conversation_history.append(
+            {"role": "system", "content": self.system_prompt}
+        )
+        self.conversation_history.append(self.context_manager.report_memory)
         self.console.print("[bold green]Conversation reset successfully![/bold green]")
 
         # Display welcome message and available tools
@@ -1596,6 +1545,7 @@ This agent uses an optimized conversation history approach to reduce token usage
         and reply is the response message.
         """
         try:
+            self.reset()
             if args or kwargs:
                 messages = kwargs.get("messages", [])
                 if messages:
@@ -2359,45 +2309,7 @@ class ContextManager:
         self.current_directories = set()
         self.recent_topics = []
         self.workspace_root = os.getcwd()
-
-    def analyze_user_input(self, user_input: str) -> None:
-        """
-        Analyze user input to extract context like file paths, directories, etc.
-        """
-        import re
-
-        # Extract potential file paths
-        file_patterns = [
-            r'["\']?([\/\w\.-]+\.\w+)["\']?',  # Matches file paths with extensions
-            r'["\']?([\w\.-]+\.\w+)["\']?',  # Matches filenames with extensions
-        ]
-
-        # Extract potential directory paths
-        dir_patterns = [
-            r'["\']?([\/\w\.-]+\/)["\']?',  # Matches directory paths ending with /
-            r'directory\s+["\']?([\w\.-\/]+)["\']?',  # Matches "directory X"
-            r'folder\s+["\']?([\w\.-\/]+)["\']?',  # Matches "folder X"
-        ]
-
-        # Extract file paths
-        for pattern in file_patterns:
-            matches = re.findall(pattern, user_input)
-            for match in matches:
-                if os.path.isfile(match):
-                    self.current_files.add(match)
-                elif os.path.isfile(os.path.join(self.workspace_root, match)):
-                    self.current_files.add(os.path.join(self.workspace_root, match))
-
-        # Extract directory paths
-        for pattern in dir_patterns:
-            matches = re.findall(pattern, user_input)
-            for match in matches:
-                if os.path.isdir(match):
-                    self.current_directories.add(match)
-                elif os.path.isdir(os.path.join(self.workspace_root, match)):
-                    self.current_directories.add(
-                        os.path.join(self.workspace_root, match)
-                    )
+        self.report_memory = []
 
     def get_relevant_context(self) -> dict[str, Any]:
         """
