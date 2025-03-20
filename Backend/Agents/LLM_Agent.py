@@ -849,6 +849,14 @@ class LLM_Agent(ConversableAgent):
                 tools=updated_tools,  # Updated tools with truncated descriptions
             )
             # self.console.print(f"[purple]response: {response}[/purple]")
+            if type(response.choices[0].message.content) == str:
+                self.conversation_history.append(
+                    {
+                        "role": "assistant",
+                        "content": response.choices[0].message.content,
+                    }
+                )
+
             self.console.print(
                 f"[yellow]response: {response.choices[0].message.content}[/yellow]"
             )
@@ -856,9 +864,6 @@ class LLM_Agent(ConversableAgent):
                 f"[green]response.choices[0].message.tool_calls: {response.choices[0].message.tool_calls}[/green]"
             )
 
-            self.conversation_history.append(
-                {"role": "assistant", "content": response.choices[0].message.content}
-            )
             # Update token usage
             if hasattr(response, "usage") and response.usage:
                 message_tokens = (
@@ -1144,7 +1149,13 @@ class LLM_Agent(ConversableAgent):
                     self.console.print(
                         "\n[yellow]No tool calls detected and response is not a final JSON report. Requesting completion again...[/yellow]"
                     )
-                    return self.get_completion()
+                    self.conversation_history.append(
+                        {
+                            "role": "user",
+                            "content": f"Make sure to always response with calling the tools unless you are sure that the query: \n{self.user_input}\n is complete. In this case, return the json technical report. ",
+                        }
+                    )
+                    return self._get_completion()
                 # Reset the auto tool call counter (since we have a final answer)
                 self.current_auto_tool_calls = 0
                 self.context_manager.report_memory.append(
@@ -1320,7 +1331,7 @@ class LLM_Agent(ConversableAgent):
 
             if self.thinking_enabled:
                 self.console.print("[cyan]Thinking...[/cyan]")
-
+            self.user_input = user_input
             response = self._get_completion()
 
             # After receiving a response, verify the context for directories and files
