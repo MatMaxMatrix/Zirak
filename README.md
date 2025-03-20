@@ -81,3 +81,90 @@ The project uses UV for package management, a modern alternative to pip that pro
   1. direnv is properly installed and hooked into your shell
   2. You have run `direnv allow` in the project directory
   3. The `.envrc` file uses absolute paths for environment variables
+
+## Git and GPG Configuration
+
+### Setting Up GPG Signing for Commits
+
+This project uses GPG signing for Git commits to ensure commit authenticity and security. Follow these steps to set it up on your system:
+
+1. **Install GPG Tools**:
+   ```bash
+   # macOS
+   brew install gnupg pinentry-mac
+   ```
+
+2. **Generate a GPG Key** (if you don't already have one):
+   ```bash
+   gpg --full-generate-key
+   # Choose RSA and RSA, 4096 bits, and follow the prompts
+   ```
+
+3. **List Your GPG Keys**:
+   ```bash
+   gpg --list-secret-keys --keyid-format=long
+   ```
+   You'll see output like:
+   ```
+   sec   rsa4096/7C150AF1BE052ADF 2024-12-12 [SC] [expires: 2025-06-10]
+         105418BC99FF4F984357A6337C150AF1BE052ADF
+   uid                 [ultimate] Your Name <your.email@example.com>
+   ```
+   The key ID is the part after `rsa4096/` (e.g., `7C150AF1BE052ADF`).
+
+4. **Configure Git to Use Your GPG Key**:
+   ```bash
+   git config --global user.signingkey YOUR_KEY_ID
+   git config --global commit.gpgsign true
+   ```
+
+5. **Configure GPG Agent for Password Prompts**:
+   Create or edit `~/.gnupg/gpg-agent.conf`:
+   ```
+   default-cache-ttl 1
+   max-cache-ttl 1
+   pinentry-program /opt/homebrew/bin/pinentry-mac
+   ```
+
+6. **Restart the GPG Agent**:
+   ```bash
+   gpgconf --kill gpg-agent && gpg-agent --daemon
+   ```
+
+### Using GPG Signed Commits
+
+- Git will now automatically sign all commits
+- When you commit, the pinentry-mac program will prompt for your GPG key password
+- You can verify a signed commit with `git log --show-signature`
+
+### Troubleshooting
+
+- If you don't see the password prompt, check that pinentry-mac is correctly installed and configured
+- If signing fails, ensure your GPG key is not expired
+- For more detailed logs, set `export GPG_TTY=$(tty)` in your shell configuration
+
+## Pre-commit Hooks
+
+This project uses pre-commit hooks to ensure code quality and consistency. The configuration is in `.pre-commit-config.yaml` and includes:
+
+- Code formatting with Black
+- Linting with Ruff
+- Basic file hygiene (trailing whitespace, file endings)
+- YAML and JSON validation
+
+To use pre-commit:
+
+1. **Install pre-commit**:
+   ```bash
+   pip install pre-commit
+   ```
+
+2. **Install the hooks**:
+   ```bash
+   pre-commit install
+   ```
+
+3. **Run manually** (optional):
+   ```bash
+   pre-commit run --all-files
+   ```
