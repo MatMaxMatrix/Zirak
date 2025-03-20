@@ -30,9 +30,7 @@ class Config:
 
     openai_api_key = os.getenv("openai_api_key")
     # Update to a valid OpenAI model name
-    OpenAI_Model = (
-        "gpt-4o-mini"  # Changed from gpt-4o-mini to a more widely available model
-    )
+    OpenAI_Model = "gpt-4o"  # Changed from gpt-4o-mini to a more widely available model
     OpenAI_base_url = "https://api.openai.com/v1"  # Added /v1 to the base URL
 
     # Use the latest OpenAI client configuration
