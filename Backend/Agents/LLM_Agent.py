@@ -721,6 +721,7 @@ class LLM_Agent(ConversableAgent):
         to re-check whether all requirements have been fulfilled.
         """
         from openai import OpenAI
+        
         self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
 
         try:
