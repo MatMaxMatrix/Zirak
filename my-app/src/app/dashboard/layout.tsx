@@ -26,13 +26,13 @@ export default function DashboardLayout({
   useEffect(() => {
     // Check if user is authenticated
     const userEmail = getCookie("auth_user");
-    
+
     if (!userEmail) {
       notification.error("Please log in to access the dashboard");
       router.push("/login");
       return;
     }
-    
+
     setUser({ email: userEmail });
     setLoading(false);
   }, [router]);

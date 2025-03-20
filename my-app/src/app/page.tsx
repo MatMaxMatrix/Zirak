@@ -4,9 +4,9 @@ import { Navbar } from "@/components/landing/navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { 
-  SendIcon, Bot, User, Activity, Layers, Circle, CheckCircle2, 
-  FileText, Folder, FolderOpen, Terminal, Eye, Code, 
+import {
+  SendIcon, Bot, User, Activity, Layers, Circle, CheckCircle2,
+  FileText, Folder, FolderOpen, Terminal, Eye, Code,
   ArrowRight, ChevronRight, ChevronDown, LogIn, Mail, Lock
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -95,7 +95,7 @@ export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  
+
   // Reference to the message container for auto-scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const workflowEndRef = useRef<HTMLDivElement>(null);
@@ -105,14 +105,14 @@ export default function Home() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-  
+
   // Scroll workflow to bottom whenever steps change
   useEffect(() => {
     if (showWorkflow) {
       workflowEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [workflowSteps, showWorkflow]);
-  
+
   // Scroll terminal to bottom whenever commands change
   useEffect(() => {
     terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -123,7 +123,7 @@ export default function Home() {
     const hasClarification = workflowSteps.some(
       step => step.agent === 'ClarificationAgent' && step.status === 'in_progress'
     );
-    
+
     if (hasClarification && !needsClarification) {
       setNeedsClarification(true);
       // Switch to workflow tab to show the clarification request
@@ -143,7 +143,7 @@ export default function Home() {
 
   // Function to connect to the Zirak backend via our Flask API
   const sendMessageToZirak = async (userMessage: string): Promise<{
-    response: string, 
+    response: string,
     workflow_steps: WorkflowStep[],
     files_created?: FileSystemItem[],
     terminal_commands?: TerminalCommand[]
@@ -158,34 +158,34 @@ export default function Home() {
           message: userMessage
         })
       });
-      
+
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
-      
+
       const data = await response.json();
       console.log('API response:', data);
-      
+
       if (data.success) {
         // Extract file and terminal information from response
         const fileInfo = extractFileInfo(data.response);
         const terminalInfo = extractTerminalCommands(data.response);
-        
+
         // Process workflow steps from the API
         let steps = data.workflow_steps || [];
-        
-        // If no workflow steps are provided, but we have a raw_log, parse it 
+
+        // If no workflow steps are provided, but we have a raw_log, parse it
         if ((steps.length === 0 || !steps.some((step: WorkflowStep) => step.agent === 'ClarificationAgent')) && data.raw_log) {
           console.log("Parsing raw log for workflow steps");
           steps = parseRawLog(data.raw_log, userMessage);
-          
+
           // Extract terminal commands from raw log if present
           const extractedCommands = extractTerminalCommandsFromRawLog(data.raw_log);
           if (extractedCommands.length > 0) {
             terminalInfo.commands = [...terminalInfo.commands, ...extractedCommands];
           }
         }
-        
+
         // If still no steps after parsing, create mock steps
         if (steps.length === 0) {
           console.log("No workflow steps received, creating mock steps for testing");
@@ -213,7 +213,7 @@ export default function Home() {
             }
           ];
         }
-        
+
         return {
           response: data.response,
           workflow_steps: steps,
@@ -228,12 +228,12 @@ export default function Home() {
       throw error;
     }
   };
-  
+
   // Extract file information from response
   const extractFileInfo = (response: string): { files: FileSystemItem[] } => {
     // This is a simple mock implementation
     // In a real scenario, you would parse the response to extract actual file information
-    
+
     // Check if response mentions creating files
     if (response.toLowerCase().includes('create') && response.toLowerCase().includes('file')) {
       // Mock file creation based on response content
@@ -272,28 +272,28 @@ export default function Home() {
         };
       }
     }
-    
+
     // Default: no files created
     return { files: [] };
   };
-  
+
   // Extract terminal commands from response
   const extractTerminalCommands = (response: string): { commands: TerminalCommand[] } => {
     // This is a simple mock implementation
     // In a real scenario, you would parse the response to extract actual terminal commands
-    
+
     const commands: TerminalCommand[] = [];
-    
+
     // Check for code blocks that might contain terminal commands
     const codeBlockRegex = /```(?:bash|shell)?\s*([\s\S]*?)```/g;
     let match;
-    
+
     while ((match = codeBlockRegex.exec(response)) !== null) {
       const commandBlock = match[1].trim();
-      
+
       // Split by lines and process each line as a command
       const commandLines = commandBlock.split('\n');
-      
+
       for (const line of commandLines) {
         if (line.trim() && !line.startsWith('#')) {
           commands.push({
@@ -304,10 +304,10 @@ export default function Home() {
         }
       }
     }
-    
+
     return { commands };
   };
-  
+
   // Generate mock output for terminal commands
   const generateMockOutput = (command: string): string => {
     if (command.startsWith('ls') || command.startsWith('dir')) {
@@ -329,14 +329,14 @@ export default function Home() {
   const extractTerminalCommandsFromRawLog = (rawLog: string): TerminalCommand[] => {
     const commands: TerminalCommand[] = [];
     const lines = rawLog.split('\n');
-    
+
     let inCommandBlock = false;
     let currentCommand = '';
     let currentOutput = '';
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       // Look for terminal command patterns
       if (line.startsWith('$') && line.length > 1) {
         // If we were processing a previous command, save that
@@ -347,7 +347,7 @@ export default function Home() {
             timestamp: new Date()
           });
         }
-        
+
         // Start new command
         currentCommand = line.substring(1).trim();
         currentOutput = '';
@@ -360,7 +360,7 @@ export default function Home() {
         inCommandBlock = false;
       }
     }
-    
+
     // Add the last command if any
     if (currentCommand) {
       commands.push({
@@ -369,7 +369,7 @@ export default function Home() {
         timestamp: new Date()
       });
     }
-    
+
     return commands;
   };
 
@@ -381,9 +381,9 @@ export default function Home() {
   // Handle initial prompt submission from landing page
   const handleInitialPrompt = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!input.trim()) return;
-    
+
     // If user is logged in, go to workspace with the query
     if (isLoggedIn) {
       // Add user message
@@ -393,26 +393,26 @@ export default function Home() {
         role: 'user',
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
       setLandingPage(false);
       setShowWorkspace(true);
-      
+
       // Process the message (reuse code from handleSubmit without clearing input yet)
       const messageToSend = input;
       setIsLoading(true);
       setWorkflowSteps([]);
-      
+
       // Call Zirak API and process response (same as in handleSubmit)
       sendMessageToZirak(messageToSend)
         .then(({ response, workflow_steps, files_created, terminal_commands }) => {
           // Set workflow steps
           setWorkflowSteps(workflow_steps);
           setShowWorkflow(true);
-          
+
           // Set activeTab to workflow to show steps immediately
           setActiveTab('workflow');
-          
+
           // Add new files to file system if any
           if (files_created && files_created.length > 0) {
             updateFileSystem(files_created);
@@ -421,7 +421,7 @@ export default function Home() {
               setActiveTab('files');
             }, 3000);
           }
-          
+
           // Add terminal commands if any
           if (terminal_commands && terminal_commands.length > 0) {
             setTerminalCommands(prev => [...prev, ...terminal_commands]);
@@ -431,7 +431,7 @@ export default function Home() {
               }, 3000);
             }
           }
-          
+
           // Add assistant response
           const assistantMessage: Message = {
             id: generateUniqueId(),
@@ -439,14 +439,14 @@ export default function Home() {
             role: 'assistant',
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, assistantMessage]);
           setInput('');
           setIsLoading(false);
         })
         .catch(error => {
           console.error("Error communicating with Zirak:", error);
-          
+
           // Add error message
           const errorMessage: Message = {
             id: generateUniqueId(),
@@ -454,7 +454,7 @@ export default function Home() {
             role: 'assistant',
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, errorMessage]);
           setInput('');
           setIsLoading(false);
@@ -470,16 +470,16 @@ export default function Home() {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!input.trim() || isLoading) return;
-    
+
     // Check if user is logged in
     if (!isLoggedIn) {
       // Display login form instead of processing the request
       setShowLogin(true);
       return;
     }
-    
+
     // Add user message
     const userMessage: Message = {
       id: generateUniqueId(),
@@ -487,20 +487,20 @@ export default function Home() {
       role: 'user',
       timestamp: new Date()
     };
-    
+
     // Clear input and store message for sending
     const messageToSend = input;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
     setWorkflowSteps([]);
-    
+
     try {
       // Show workspace view after first user message
       if (!showWorkspace) {
         setShowWorkspace(true);
       }
-      
+
       // Clear previous workflow steps and set status to start new workflow
       setWorkflowSteps([{
         timestamp: new Date().toISOString(),
@@ -510,29 +510,29 @@ export default function Home() {
         status: "in_progress"
       }]);
       setShowWorkflow(true);
-      
+
       // Always switch to workflow tab for a new message
       setActiveTab('workflow');
-      
+
       // Get response from Zirak backend
       const { response, workflow_steps, files_created, terminal_commands } = await sendMessageToZirak(messageToSend);
-      
+
       console.log("Final workflow steps:", workflow_steps);
-      
+
       // Check if we have clarification questions and set the tab
-      const hasClarification = workflow_steps.some(step => 
+      const hasClarification = workflow_steps.some(step =>
         step.agent === 'ClarificationAgent' && step.status === 'in_progress'
       );
-      
+
       if (hasClarification) {
         console.log("Clarification needed - switching to workflow tab");
         setActiveTab('workflow');
       }
-      
+
       // Set workflow steps
       setWorkflowSteps(workflow_steps);
       setShowWorkflow(true);
-      
+
       // Add new files to file system if any
       if (files_created && files_created.length > 0) {
         updateFileSystem(files_created);
@@ -543,7 +543,7 @@ export default function Home() {
           }, 3000);
         }
       }
-      
+
       // Add terminal commands if any
       if (terminal_commands && terminal_commands.length > 0) {
         setTerminalCommands(prev => [...prev, ...terminal_commands]);
@@ -554,7 +554,7 @@ export default function Home() {
           }, 3000);
         }
       }
-      
+
       // Add assistant response
       const assistantMessage: Message = {
         id: generateUniqueId(),
@@ -562,16 +562,16 @@ export default function Home() {
         role: 'assistant',
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Error communicating with Zirak:", error);
-      
+
       // Show workspace even on error
       if (!showWorkspace) {
         setShowWorkspace(true);
       }
-      
+
       // Add error message with more details
       const errorMessage: Message = {
         id: generateUniqueId(),
@@ -579,27 +579,27 @@ export default function Home() {
         role: 'assistant',
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
-  
+
   // Handle login form submission
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // In a real application, you would validate credentials against a backend
     // For demo purposes, we're just checking if fields are not empty
     if (loginEmail.trim() && loginPassword.trim()) {
       setIsLoggedIn(true);
       setShowLogin(false);
-      
+
       // If there's a pending message, go straight to workspace
       if (input.trim()) {
         setShowWorkspace(true);
-        
+
         // Handle the pending message
         const userMessage: Message = {
           id: generateUniqueId(),
@@ -607,7 +607,7 @@ export default function Home() {
           role: 'user',
           timestamp: new Date()
         };
-        
+
         setMessages(prev => [...prev, userMessage]);
         handleSubmit(e);
       } else {
@@ -616,13 +616,13 @@ export default function Home() {
       }
     }
   };
-  
+
   // Update file system with new files
   const updateFileSystem = (newFiles: FileSystemItem[]) => {
     setFileSystem(prev => {
       // Create a deep copy of the current file system
       const newFileSystem = JSON.parse(JSON.stringify(prev));
-      
+
       // Add each new file to the root project directory
       for (const file of newFiles) {
         // Check if the file already exists
@@ -631,16 +631,16 @@ export default function Home() {
           projectDir.children.push(file);
         }
       }
-      
+
       return newFileSystem;
     });
   };
-  
+
   // Toggle directory expansion
   const toggleDirectory = (path: string) => {
     setFileSystem(prev => {
       const newFileSystem = JSON.parse(JSON.stringify(prev));
-      
+
       // Find and toggle the directory
       const toggleDir = (items: FileSystemItem[]) => {
         for (const item of items) {
@@ -648,20 +648,20 @@ export default function Home() {
             item.expanded = !item.expanded;
             return true;
           }
-          
+
           if (item.children && toggleDir(item.children)) {
             return true;
           }
         }
-        
+
         return false;
       };
-      
+
       toggleDir(newFileSystem);
       return newFileSystem;
     });
   };
-  
+
   // Select a file to view its content
   const selectFile = (file: FileSystemItem) => {
     if (file.type === 'file') {
@@ -678,7 +678,7 @@ export default function Home() {
       </div>
     );
   };
-  
+
   // Get agent icon based on name
   const getAgentIcon = (agentName: string) => {
     const name = agentName.toLowerCase();
@@ -692,7 +692,7 @@ export default function Home() {
     if (name.includes('userproxy')) return <User className="h-4 w-4" />;
     return <Bot className="h-4 w-4" />;
   };
-  
+
   // Get agent color based on name
   const getAgentColor = (agentName: string) => {
     const name = agentName.toLowerCase();
@@ -706,7 +706,7 @@ export default function Home() {
     if (name.includes('userproxy')) return 'bg-indigo-100 dark:bg-indigo-950/50';
     return 'bg-primary/10';
   };
-  
+
   // Render file system tree
   const renderFileSystem = (items: FileSystemItem[], level: number = 0) => {
     return (
@@ -715,7 +715,7 @@ export default function Home() {
           <div key={`${item.path}-${index}`}>
             {item.type === 'directory' ? (
               <div>
-                <div 
+                <div
                   className="flex items-center py-1 hover:bg-muted rounded cursor-pointer"
                   onClick={() => toggleDirectory(item.path)}
                 >
@@ -734,7 +734,7 @@ export default function Home() {
                 {item.expanded && item.children && renderFileSystem(item.children, level + 1)}
               </div>
             ) : (
-              <div 
+              <div
                 className="flex items-center py-1 pl-5 hover:bg-muted rounded cursor-pointer"
                 onClick={() => selectFile(item)}
               >
@@ -751,7 +751,7 @@ export default function Home() {
   // Update the parseRawLog function to better handle clarification boxes
   const parseRawLog = (rawLog: string, userMessage: string): WorkflowStep[] => {
     const steps: WorkflowStep[] = [];
-    
+
     // Split the log by agent messages
     const lines = rawLog.split('\n');
     let currentAgent = "";
@@ -762,7 +762,7 @@ export default function Home() {
     let clarificationContent = "";
     let questionCounter = 0;
     let inQuestionBox = false;
-    
+
     // Initialize with a system step for the user's message
     steps.push({
       timestamp: new Date().toISOString(),
@@ -773,15 +773,15 @@ export default function Home() {
     });
 
     console.log("Parsing raw log:", rawLog);
-    
+
     // Special case: Check for clarification boxes in the whole log at once
     if (rawLog.includes("Clarification Needed") || rawLog.includes("─── Clarification Needed ───")) {
       // Look for all question patterns
       const questionMatches = [...rawLog.matchAll(/Question\s+(\d+)\/(\d+)/g)];
-      
+
       if (questionMatches.length > 0) {
         console.log("Found question patterns:", questionMatches.length);
-        
+
         // Add a CriticalAnalysisAgent step
         steps.push({
           timestamp: new Date().toISOString(),
@@ -790,7 +790,7 @@ export default function Home() {
           message: "Determined clarification is needed",
           status: "completed"
         });
-        
+
         // Add a step for the clarification agent
         steps.push({
           timestamp: new Date().toISOString(),
@@ -800,23 +800,23 @@ export default function Home() {
           content: "Clarification Needed - Please answer the following questions:",
           status: "in_progress"
         });
-        
+
         // Extract and add each question
         for (const match of questionMatches) {
           const questionNum = match[1];
           const totalQuestions = match[2];
-          
+
           // Find the question content - look for box patterns
           const questionIndex = match.index;
           if (questionIndex !== undefined) {
             // Look for the question box after this question header
             const boxStartIndex = rawLog.indexOf("╭", questionIndex);
             const boxEndIndex = rawLog.indexOf("╰", boxStartIndex);
-            
+
             if (boxStartIndex > -1 && boxEndIndex > -1) {
               // Extract the box content
               const boxContent = rawLog.substring(boxStartIndex, boxEndIndex + 1);
-              
+
               // Clean up the box content (remove box characters)
               const cleanContent = boxContent
                 .split('\n')
@@ -827,7 +827,7 @@ export default function Home() {
                 })
                 .filter(line => line.length > 0)
                 .join('\n');
-              
+
               // Add a step for this question
               steps.push({
                 timestamp: new Date(Date.now() + parseInt(questionNum) * 1000).toISOString(),
@@ -840,27 +840,27 @@ export default function Home() {
             }
           }
         }
-        
+
         // Return the steps immediately for clarification questions
         console.log("Generated clarification steps:", steps);
         return steps;
       }
     }
-    
+
     // If no clarification questions found, proceed with the normal parsing
     // Look for patterns like "AgentName (to chat_manager):" or "Next speaker: AgentName"
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      
+
       // Skip empty lines
       if (!line) continue;
-      
+
       // Parse timestamp if it looks like a timestamp (e.g., 2025-03-17 19:51:36,056)
       if (line.match(/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/)) {
         timestamp = new Date(line.split(' - ')[0]).toISOString();
         continue;
       }
-      
+
       // Check for agent speaking pattern
       const agentPattern = /^(\w+)\s+\(to\s+chat_manager\):/;
       const agentMatch = line.match(agentPattern);
@@ -875,14 +875,14 @@ export default function Home() {
             status: "completed"
           });
         }
-        
+
         // Start new agent
         currentAgent = agentMatch[1];
         currentAction = "Speaking";
         messageBuffer = "";
         continue;
       }
-      
+
       // Check for state transition
       if (line.includes("State transition from:")) {
         const parts = line.split("State transition from:");
@@ -898,7 +898,7 @@ export default function Home() {
         }
         continue;
       }
-      
+
       // Check for next speaker
       const speakerMatch = line.match(/Next speaker: (\w+)/);
       if (speakerMatch) {
@@ -912,7 +912,7 @@ export default function Home() {
         });
         continue;
       }
-      
+
       // Check for "requires_clarification: True" pattern which indicates a clarification is needed
       if (line.includes("requires_clarification: True")) {
         steps.push({
@@ -924,13 +924,13 @@ export default function Home() {
         });
         continue;
       }
-      
+
       // Add line to current message buffer if we have an agent
       if (currentAgent) {
         messageBuffer += line + "\n";
       }
     }
-    
+
     // Add the last agent's message if any
     if (currentAgent && messageBuffer && !clarificationMode) {
       steps.push({
@@ -941,7 +941,7 @@ export default function Home() {
         status: "completed"
       });
     }
-    
+
     console.log("Parsed workflow steps:", steps);
     return steps;
   };
@@ -962,11 +962,11 @@ export default function Home() {
               <p className="text-xl text-muted-foreground mb-12 max-w-2xl">
                 Zirak AI helps you build anything you can imagine, from code and design to complex problem-solving. Just ask.
               </p>
-              
+
               <div className="w-full max-w-xl mb-8">
                 <form onSubmit={handleInitialPrompt} className="flex space-x-2">
-                  <Input 
-                    placeholder="Tell me what you'd like to build..." 
+                  <Input
+                    placeholder="Tell me what you'd like to build..."
                     className="flex-1 h-12 text-lg"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -977,7 +977,7 @@ export default function Home() {
                 </Button>
                 </form>
               </div>
-              
+
               <div className="flex flex-wrap gap-4 justify-center items-center">
                 <div className="text-sm text-muted-foreground">Try:</div>
                 <Button variant="outline" size="sm" onClick={() => setInput("Create a basic todo app with React")}>
@@ -991,7 +991,7 @@ export default function Home() {
                 </Button>
             </div>
           </div>
-            
+
             {/* Features section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 py-20 border-t">
               <div className="text-center">
@@ -1003,7 +1003,7 @@ export default function Home() {
                   Turn your ideas into working code in any programming language with detailed explanations.
                 </p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <Terminal className="h-7 w-7 text-primary" />
@@ -1013,7 +1013,7 @@ export default function Home() {
                   Execute commands and see real-time output without leaving your workspace.
                 </p>
               </div>
-              
+
               <div className="text-center">
                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
                   <Folder className="h-7 w-7 text-primary" />
@@ -1024,7 +1024,7 @@ export default function Home() {
                 </p>
           </div>
         </div>
-            
+
             <div className="border-t py-20">
               <div className="text-center mb-12">
                 <h2 className="text-3xl font-bold mb-4">How It Works</h2>
@@ -1032,7 +1032,7 @@ export default function Home() {
                   Zirak's transparent workflow process gives you full visibility into how your ideas become reality.
             </p>
           </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="p-6 border rounded-lg">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
@@ -1043,7 +1043,7 @@ export default function Home() {
                     Describe what you want to build in natural language
                   </p>
                 </div>
-                
+
                 <div className="p-6 border rounded-lg">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <div className="font-bold">2</div>
@@ -1053,7 +1053,7 @@ export default function Home() {
                     AI breaks down your request into actionable steps
                   </p>
                 </div>
-                
+
                 <div className="p-6 border rounded-lg">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <div className="font-bold">3</div>
@@ -1063,7 +1063,7 @@ export default function Home() {
                     Produces code, files, and commands to solve your problem
                   </p>
                 </div>
-                
+
                 <div className="p-6 border rounded-lg">
                   <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
                     <div className="font-bold">4</div>
@@ -1090,17 +1090,17 @@ export default function Home() {
                     Sign in to access the Zirak AI Assistant
                   </p>
                 </CardHeader>
-                
+
                 <CardContent>
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
                       <label htmlFor="email" className="text-sm font-medium">Email</label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
+                        <Input
                           id="email"
-                          type="email" 
-                          placeholder="your.email@example.com" 
+                          type="email"
+                          placeholder="your.email@example.com"
                           className="pl-10"
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
@@ -1112,10 +1112,10 @@ export default function Home() {
                       <label htmlFor="password" className="text-sm font-medium">Password</label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
+                        <Input
                           id="password"
-                          type="password" 
-                          placeholder="••••••••" 
+                          type="password"
+                          placeholder="••••••••"
                           className="pl-10"
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
@@ -1127,16 +1127,16 @@ export default function Home() {
                       <LogIn className="h-4 w-4 mr-2" />
                       Sign In
                     </Button>
-                    
+
                     {/* Demo mode shortcut */}
                     <div className="text-center pt-2">
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         className="text-sm text-primary hover:underline"
                         onClick={() => {
                           setIsLoggedIn(true);
                           setShowLogin(false);
-                          
+
                           // If there's a pending message, go straight to workspace
                           if (input.trim()) {
                             setShowWorkspace(true);
@@ -1151,9 +1151,9 @@ export default function Home() {
           </div>
                   </form>
                 </CardContent>
-                
+
                 <CardFooter className="flex justify-center border-t pt-4">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => {
                       setShowLogin(false);
@@ -1181,7 +1181,7 @@ export default function Home() {
                     Ask me anything to get started with your workspace
                   </p>
                 </CardHeader>
-                
+
                 <CardContent className="pb-6">
                   <div className="h-auto max-h-[250px] overflow-y-auto flex flex-col space-y-4 mb-4">
                     {messages.map((message) => (
@@ -1208,7 +1208,7 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
-                    
+
                     {isLoading && (
                       <div className="flex items-start gap-3">
                         <div className="bg-primary/10 rounded-lg p-3 flex-1 max-w-[90%]">
@@ -1224,16 +1224,16 @@ export default function Home() {
                         </div>
                       </div>
                     )}
-                    
+
                     <div ref={messagesEndRef} />
                   </div>
                 </CardContent>
-                
+
                 <CardFooter>
                   <form className="flex w-full gap-2" onSubmit={handleSubmit}>
-                    <Input 
+                    <Input
                       id="message-input"
-                      placeholder={needsClarification ? "Type your answer to the question..." : "Type your message here..."} 
+                      placeholder={needsClarification ? "Type your answer to the question..." : "Type your message here..."}
                       className={`flex-1 ${needsClarification ? 'border-amber-500 dark:border-amber-500' : ''}`}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
@@ -1252,7 +1252,7 @@ export default function Home() {
                   </form>
                 </CardFooter>
               </Card>
-              
+
               <div className="flex justify-center mt-8">
                 <div className="flex space-x-4">
                   <div className="text-center">
@@ -1288,8 +1288,8 @@ export default function Home() {
                   <span className="ml-2 text-amber-600 dark:text-amber-400 text-sm">Please check the workflow tab and answer the question</span>
                 </div>
                   <Button
-                  variant="outline" 
-                  size="sm" 
+                  variant="outline"
+                  size="sm"
                   className="border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
                   onClick={() => setActiveTab('workflow')}
                 >
@@ -1297,7 +1297,7 @@ export default function Home() {
                   </Button>
               </div>
             )}
-            
+
             {/* Chat conversation area - 30% */}
             <Card className="lg:col-span-3 shadow-lg border-0 bg-gradient-to-b from-background to-muted/30">
               <CardHeader className="border-b bg-muted/50 p-4">
@@ -1313,7 +1313,7 @@ export default function Home() {
                   )}
                 </CardTitle>
               </CardHeader>
-              
+
               <CardContent className="p-0">
                 <div className="p-4 h-[600px] overflow-y-auto flex flex-col space-y-4">
                   {messages.map((message) => (
@@ -1343,7 +1343,7 @@ export default function Home() {
                       </div>
                     </div>
                   ))}
-                  
+
                   {isLoading && (
                     <div className="flex items-start gap-3">
                       <div className="bg-primary/10 rounded-lg p-3 flex-1 max-w-[80%]">
@@ -1359,16 +1359,16 @@ export default function Home() {
                       </div>
                     </div>
                   )}
-                  
+
                   <div ref={messagesEndRef} />
                 </div>
               </CardContent>
-            
+
               <CardFooter className="border-t p-3">
                 <form className="flex w-full gap-2" onSubmit={handleSubmit}>
-                  <Input 
+                  <Input
                     id="message-input"
-                    placeholder={needsClarification ? "Type your answer to the question..." : "Type your message here..."} 
+                    placeholder={needsClarification ? "Type your answer to the question..." : "Type your message here..."}
                     className={`flex-1 ${needsClarification ? 'border-amber-500 dark:border-amber-500' : ''}`}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
@@ -1387,7 +1387,7 @@ export default function Home() {
                 </form>
                 </CardFooter>
               </Card>
-          
+
           {/* Workspace area - 70% */}
           <Card className="lg:col-span-7 shadow-lg border-0 bg-gradient-to-b from-background to-muted/30">
             <CardHeader className="border-b bg-muted/50 p-4">
@@ -1407,7 +1407,7 @@ export default function Home() {
                 )}
               </CardTitle>
             </CardHeader>
-            
+
             <CardContent className="p-0">
               <Tabs defaultValue="files" value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="w-full justify-start rounded-none border-b bg-muted/50">
@@ -1431,7 +1431,7 @@ export default function Home() {
                     )}
                   </TabsTrigger>
                 </TabsList>
-                
+
                 {/* Files Tab */}
                 <TabsContent value="files" className="p-0 m-0">
                   <div className="p-4 h-[600px] overflow-y-auto">
@@ -1453,7 +1453,7 @@ export default function Home() {
                     </div>
                   </div>
                 </TabsContent>
-                
+
                 {/* Terminal Tab */}
                 <TabsContent value="terminal" className="p-0 m-0">
                   <div className="p-0 h-[600px] overflow-y-auto bg-black text-green-400 font-mono text-sm">
@@ -1481,7 +1481,7 @@ export default function Home() {
         </div>
                   </div>
                 </TabsContent>
-                
+
                 {/* Preview Tab */}
                 <TabsContent value="preview" className="p-0 m-0">
                   <div className="p-4 h-[600px] overflow-y-auto">
@@ -1506,7 +1506,7 @@ export default function Home() {
                     )}
                   </div>
                 </TabsContent>
-                
+
                 {/* Workflow Tab */}
                 <TabsContent value="workflow" className="p-0 m-0">
                   <div className="p-4 h-[600px] overflow-y-auto">
@@ -1537,7 +1537,7 @@ export default function Home() {
                                 {step.message}
                               </div>
                               {step.content && (
-                                <div className={`text-xs mt-1 text-foreground ml-2 p-2 rounded-md overflow-auto max-h-60 
+                                <div className={`text-xs mt-1 text-foreground ml-2 p-2 rounded-md overflow-auto max-h-60
                                   ${step.agent === 'ClarificationAgent' ? 'bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800' : 'bg-muted/5'}`}>
                                   <pre className="whitespace-pre-wrap">{step.content}</pre>
                                   {step.agent === 'ClarificationAgent' && (
@@ -1584,12 +1584,12 @@ export default function Home() {
           </Card>
         </div>
         )}
-        
+
         <p className="text-center text-sm text-muted-foreground mt-4">
           Powered by Zirak - Your AI Assistant
         </p>
       </main>
-      
+
       <footer className="py-6 border-t">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center">
@@ -1598,7 +1598,7 @@ export default function Home() {
               <p className="text-muted-foreground mt-1">© 2024 Zirak. All rights reserved.</p>
             </div>
             {isLoggedIn && (
-              <button 
+              <button
                 onClick={() => {
                   setIsLoggedIn(false);
                   setLandingPage(true);

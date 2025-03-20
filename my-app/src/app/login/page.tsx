@@ -63,7 +63,7 @@ function LoginForm() {
 
     try {
       console.log("Attempting to sign in with:", values.email);
-      
+
       // For demo purposes, we'll manually check the credentials against our known users
       // In a real app, you would use a proper authentication system
       if (
@@ -72,12 +72,12 @@ function LoginForm() {
       ) {
         // Simulate loading for demo purposes
         await new Promise(resolve => setTimeout(resolve, 800));
-        
+
         // Set a simple cookie to simulate authentication
         document.cookie = `auth_user=${values.email}; path=/; max-age=86400`;
-        
+
         notification.success("Logged in successfully!");
-        
+
         // Navigate to dashboard
         router.push("/dashboard");
       } else {

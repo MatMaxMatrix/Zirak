@@ -39,10 +39,10 @@ The project uses a wide range of dependencies managed through `pyproject.toml`, 
    ```bash
    # Install direnv if not already installed
    brew install direnv
-   
+
    # Add to your shell configuration (~/.zshrc)
    eval "$(direnv hook zsh)"
-   
+
    # Allow the environment
    direnv allow
    ```

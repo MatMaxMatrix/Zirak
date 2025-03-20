@@ -86,7 +86,7 @@ Returns a list of all conversations.
       "title": "First user message (truncated)",
       "last_activity": "ISO timestamp",
       "message_count": 5,
-      "status": "completed" 
+      "status": "completed"
     }
   ]
 }
@@ -291,16 +291,16 @@ function ChatApp() {
       console.log('Workflow step:', step);
       setWorkflowSteps((prevSteps) => {
         // Check if this step already exists
-        const exists = prevSteps.some(s => 
-          s.timestamp === step.timestamp && 
+        const exists = prevSteps.some(s =>
+          s.timestamp === step.timestamp &&
           s.agent === step.agent &&
           s.message === step.message
         );
-        
+
         if (exists) {
           // Update the existing step
-          return prevSteps.map(s => 
-            (s.timestamp === step.timestamp && 
+          return prevSteps.map(s =>
+            (s.timestamp === step.timestamp &&
              s.agent === step.agent &&
              s.message === step.message) ? step : s
           );
@@ -315,10 +315,10 @@ function ChatApp() {
     socket.on('chat_response', (data) => {
       console.log('Chat response:', data);
       setIsProcessing(false);
-      
+
       // Add the response to the conversation
       setConversation((prev) => [
-        ...prev, 
+        ...prev,
         { role: 'assistant', content: data.response }
       ]);
     });
@@ -327,10 +327,10 @@ function ChatApp() {
     socket.on('chat_error', (data) => {
       console.error('Chat error:', data);
       setIsProcessing(false);
-      
+
       // Add the error to the conversation
       setConversation((prev) => [
-        ...prev, 
+        ...prev,
         { role: 'system', content: `Error: ${data.response}` }
       ]);
     });
@@ -346,18 +346,18 @@ function ChatApp() {
 
   const sendMessage = async () => {
     if (!message.trim()) return;
-    
+
     // Add user message to conversation
     setConversation((prev) => [...prev, { role: 'user', content: message }]);
-    
+
     // Reset workflow steps for new messages
     if (!conversationId) {
       setWorkflowSteps([]);
     }
-    
+
     // Show processing state
     setIsProcessing(true);
-    
+
     try {
       // Send message to backend
       const response = await fetch(`${BACKEND_URL}/api/chat`, {
@@ -370,26 +370,26 @@ function ChatApp() {
           conversation_id: conversationId || undefined,
         }),
       });
-      
+
       const data = await response.json();
-      
+
       // Set the conversation ID if it's a new conversation
       if (!conversationId) {
         setConversationId(data.conversation_id);
         // Join the socket room for this conversation
         socket.emit('join', { conversation_id: data.conversation_id });
       }
-      
+
       // Clear the input
       setMessage('');
-      
+
     } catch (error) {
       console.error('Error sending message:', error);
       setIsProcessing(false);
-      
+
       // Add error to conversation
       setConversation((prev) => [
-        ...prev, 
+        ...prev,
         { role: 'system', content: `Error: ${error.message}` }
       ]);
     }
@@ -405,7 +405,7 @@ function ChatApp() {
         ))}
         {isProcessing && <div className="processing-indicator">Processing...</div>}
       </div>
-      
+
       <div className="workflow-panel">
         <h3>Agent Workflow</h3>
         <div className="workflow-steps">
@@ -418,7 +418,7 @@ function ChatApp() {
           ))}
         </div>
       </div>
-      
+
       <div className="chat-input">
         <input
           type="text"
@@ -453,4 +453,4 @@ To enable test mode, set the environment variable `ZIRAK_TEST_MODE=true`.
 
 ## License
 
-[Your License Information] 
+[Your License Information]

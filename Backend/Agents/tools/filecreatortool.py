@@ -1,14 +1,14 @@
-from Agents.tools.base import BaseTool
-import os
 import json
-from typing import Union, List, Dict
 from pathlib import Path
+
+from Agents.tools.base import BaseTool
+
 
 class FileCreatorTool(BaseTool):
     name = "filecreatortool"
-    description = '''
+    description = """
     Creates new files with specified content.
-    
+
     IMPORTANT: The input must follow this exact structure:
     1. For a single file:
        {
@@ -17,7 +17,7 @@ class FileCreatorTool(BaseTool):
                "content": "file content here"
            }
        }
-    
+
     2. For multiple files:
        {
            "files": [
@@ -31,17 +31,17 @@ class FileCreatorTool(BaseTool):
                }
            ]
        }
-    
+
     Features:
     - Creates parent directories automatically if they don't exist
     - Supports both text and binary content
     - Can create multiple files in one call
     - Handles JSON content automatically
-    
+
     Optional parameters:
     - binary: boolean (default: false) - Set to true for binary files
     - encoding: string (default: "utf-8") - Specify file encoding
-    
+
     Example usage:
     1. Create a Python file:
        {
@@ -50,7 +50,7 @@ class FileCreatorTool(BaseTool):
                "content": "def hello():\\n    print('Hello, World!')"
            }
        }
-    
+
     2. Create multiple files:
        {
            "files": [
@@ -64,7 +64,7 @@ class FileCreatorTool(BaseTool):
                }
            ]
        }
-    '''
+    """
     input_schema = {
         "type": "object",
         "properties": {
@@ -74,11 +74,13 @@ class FileCreatorTool(BaseTool):
                         "type": "object",
                         "properties": {
                             "path": {"type": "string"},
-                            "content": {"oneOf": [{"type": "string"}, {"type": "object"}]},
+                            "content": {
+                                "oneOf": [{"type": "string"}, {"type": "object"}]
+                            },
                             "binary": {"type": "boolean", "default": False},
-                            "encoding": {"type": "string", "default": "utf-8"}
+                            "encoding": {"type": "string", "default": "utf-8"},
                         },
-                        "required": ["path", "content"]
+                        "required": ["path", "content"],
                     },
                     {
                         "type": "array",
@@ -86,58 +88,64 @@ class FileCreatorTool(BaseTool):
                             "type": "object",
                             "properties": {
                                 "path": {"type": "string"},
-                                "content": {"oneOf": [{"type": "string"}, {"type": "object"}]},
+                                "content": {
+                                    "oneOf": [{"type": "string"}, {"type": "object"}]
+                                },
                                 "binary": {"type": "boolean", "default": False},
-                                "encoding": {"type": "string", "default": "utf-8"}
+                                "encoding": {"type": "string", "default": "utf-8"},
                             },
-                            "required": ["path", "content"]
-                        }
-                    }
+                            "required": ["path", "content"],
+                        },
+                    },
                 ]
             }
         },
-        "required": ["files"]
+        "required": ["files"],
     }
 
     def execute(self, **kwargs) -> str:
         """
         Execute the file creation process.
-        
+
         Args:
             **kwargs: Must contain 'files' key with either a dict or list of dicts
                      Each dict must have 'path' and 'content' keys
-        
+
         Returns:
             str: JSON string containing results of file creation operations
         """
-        files = kwargs.get('files', [])
+        files = kwargs.get("files", [])
         if isinstance(files, dict):
             files = [files]
 
         results = []
         for file_spec in files:
             try:
-                path = Path(file_spec['path'])
-                content = file_spec['content']
-                binary = file_spec.get('binary', False)
-                encoding = file_spec.get('encoding', 'utf-8')
+                path = Path(file_spec["path"])
+                content = file_spec["content"]
+                binary = file_spec.get("binary", False)
+                encoding = file_spec.get("encoding", "utf-8")
 
                 # Create parent directories
                 try:
                     path.parent.mkdir(parents=True, exist_ok=True)
                     if not path.parent.exists():
-                        results.append({
-                            'path': str(path),
-                            'success': False,
-                            'error': f"Failed to create parent directory: {path.parent}"
-                        })
+                        results.append(
+                            {
+                                "path": str(path),
+                                "success": False,
+                                "error": f"Failed to create parent directory: {path.parent}",
+                            }
+                        )
                         continue
                 except Exception as e:
-                    results.append({
-                        'path': str(path),
-                        'success': False,
-                        'error': f"Error creating parent directory: {str(e)}"
-                    })
+                    results.append(
+                        {
+                            "path": str(path),
+                            "success": False,
+                            "error": f"Error creating parent directory: {str(e)}",
+                        }
+                    )
                     continue
 
                 # Handle content
@@ -145,39 +153,48 @@ class FileCreatorTool(BaseTool):
                     content = json.dumps(content, indent=2)
 
                 # Write file
-                mode = 'wb' if binary else 'w'
+                mode = "wb" if binary else "w"
                 if binary:
                     if isinstance(content, str):
                         content = content.encode(encoding)
                     with open(path, mode) as f:
                         f.write(content)
                 else:
-                    with open(path, mode, encoding=encoding, newline='') as f:
+                    with open(path, mode, encoding=encoding, newline="") as f:
                         f.write(content)
 
                 # Verify file was created
                 if path.exists() and path.is_file():
-                    results.append({
-                        'path': str(path),
-                        'success': True,
-                        'size': path.stat().st_size
-                    })
+                    results.append(
+                        {
+                            "path": str(path),
+                            "success": True,
+                            "size": path.stat().st_size,
+                        }
+                    )
                 else:
-                    results.append({
-                        'path': str(path),
-                        'success': False,
-                        'error': "File creation command completed but file does not exist"
-                    })
+                    results.append(
+                        {
+                            "path": str(path),
+                            "success": False,
+                            "error": "File creation command completed but file does not exist",
+                        }
+                    )
 
             except Exception as e:
-                results.append({
-                    'path': str(path) if 'path' in locals() else None,
-                    'success': False,
-                    'error': str(e)
-                })
+                results.append(
+                    {
+                        "path": str(path) if "path" in locals() else None,
+                        "success": False,
+                        "error": str(e),
+                    }
+                )
 
-        return json.dumps({
-            'created_files': len([r for r in results if r['success']]),
-            'failed_files': len([r for r in results if not r['success']]),
-            'results': results
-        }, indent=2)
+        return json.dumps(
+            {
+                "created_files": len([r for r in results if r["success"]]),
+                "failed_files": len([r for r in results if not r["success"]]),
+                "results": results,
+            },
+            indent=2,
+        )

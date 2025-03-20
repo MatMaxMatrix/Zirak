@@ -81,7 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           if (parsedCredentials.success) {
             const { email, password } = parsedCredentials.data;
             console.log(`Attempting to authenticate user: ${email}`);
-            
+
             const user = users.find(user => user.email === email && user.password === password);
 
             if (!user) {
@@ -107,7 +107,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  session: { 
+  session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
   },
