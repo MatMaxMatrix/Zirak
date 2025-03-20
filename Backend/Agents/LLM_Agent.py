@@ -34,7 +34,7 @@ class LLM_Agent(ConversableAgent):
         self.console.print("[red]LLM_Agent start from here.[/red]")
 
         self.thinking_enabled = getattr(Config, "ENABLE_THINKING", False)
-        self.temperature = getattr(Config, "DEFAULT_TEMPERATURE", 0.7)
+        self.temperature = getattr(Config, "DEFAULT_TEMPERATURE", 0)
         self.total_tokens_used = 0
         self.current_step_index = 0
 
@@ -1445,7 +1445,7 @@ class LLM_Agent(ConversableAgent):
         self.conversation_history.append(
             {"role": "system", "content": self.system_prompt}
         )
-        self.conversation_history.append(self.context_manager.report_memory)
+        self.conversation_history.extend(self.context_manager.report_memory)
         self.console.print("[bold green]Conversation reset successfully![/bold green]")
 
         # Display welcome message and available tools
@@ -1546,6 +1546,7 @@ This agent uses an optimized conversation history approach to reduce token usage
         """
         try:
             self.reset()
+            self.console.print(f"conversation history: {self.conversation_history}")
             if args or kwargs:
                 messages = kwargs.get("messages", [])
                 if messages:

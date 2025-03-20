@@ -23,7 +23,7 @@ class Config:
     # Assistant Configuration
     ENABLE_THINKING = True
     SHOW_TOOL_USAGE = True
-    DEFAULT_TEMPERATURE = 0.7
+    DEFAULT_TEMPERATURE = 0
     deepseek_api_key = os.getenv("deepseek_api_key")
     DeepSeek_Model = "deepseek-chat"
     DeepSeek_base_url = "https://api.deepseek.com"
