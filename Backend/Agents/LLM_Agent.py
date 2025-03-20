@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Any
+import json
+
 
 from autogen import ConversableAgent
 from openai import OpenAI
@@ -1121,16 +1123,30 @@ class LLM_Agent(ConversableAgent):
                 # After executing ALL tool calls, call _get_completion recursively.
                 # This ensures that the LLM checks that everything is complete.
                 return self._get_completion()
+            import re
 
             # If no tool calls were issued, finalize the assistant's response
             if response.choices and len(response.choices) > 0:
-                final_content = response.choices[0].message.content
+                final_content = response.choices[0].message.content.strip()
                 is_final_response = False
-                # Check if this is a JSON report (signifying task completion)
-                if final_content.strip().startswith(
-                    "{"
-                ) and final_content.strip().endswith("}"):
+
+                try:
+                    json.loads(final_content)
                     is_final_response = True
+                except json.JSONDecodeError:
+                    pattern = re.compile(r"({.*})", re.DOTALL)
+                    match = pattern.search(final_content)
+                    if match:
+                        candidate_json = match.group(1)
+                        try:
+                            json.loads(candidate_json)
+                            final_content = (
+                                candidate_json  # Use the extracted valid JSON.
+                            )
+                            is_final_response = True
+                        except json.JSONDecodeError:
+                            pass
+
                 if not is_final_response:
                     self.console.print(
                         "\n[yellow]No tool calls detected and response is not a final JSON report. Requesting completion again...[/yellow]"
