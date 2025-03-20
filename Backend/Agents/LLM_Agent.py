@@ -1125,26 +1125,12 @@ class LLM_Agent(ConversableAgent):
             # If no tool calls were issued, finalize the assistant's response
             if response.choices and len(response.choices) > 0:
                 final_content = response.choices[0].message.content
-                self.conversation_history.append(
-                    {"role": "assistant", "content": final_content}
-                )
-                self.console.print(
-                    f"\n[yellow]conversation (full log for internal use): {self.conversation_history}[/yellow]"
-                )
                 is_final_response = False
                 # Check if this is a JSON report (signifying task completion)
                 if final_content.strip().startswith(
                     "{"
                 ) and final_content.strip().endswith("}"):
-                    try:
-                        json_content = json.loads(final_content)
-                        if (
-                            isinstance(json_content, dict)
-                            and "directories" in json_content
-                        ):
-                            is_final_response = True
-                    except json.JSONDecodeError:
-                        pass
+                    is_final_response = True
                 if not is_final_response:
                     self.console.print(
                         "\n[yellow]No tool calls detected and response is not a final JSON report. Requesting completion again...[/yellow]"
@@ -1152,7 +1138,7 @@ class LLM_Agent(ConversableAgent):
                     self.conversation_history.append(
                         {
                             "role": "user",
-                            "content": f"Make sure to always response with calling the tools unless you are sure that the query: \n{self.user_input}\n is complete. In this case, return the json technical report. ",
+                            "content": f"Make sure to always response with calling the tools unless you are sure that the query is complete. Original query: \n{self.user_input}\n . If the query is complete, return the json technical report without any additional text.",
                         }
                     )
                     return self._get_completion()
