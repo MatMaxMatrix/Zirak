@@ -1,5 +1,5 @@
 from autogen import ConversableAgent
-import os
+
 from .config import Config
 
 
@@ -33,15 +33,16 @@ Input: "Build a todo app"
 Output: Create a todo list application with CRUD operations persistent storage user task categorization due dates priority levels task completion tracking responsive design and offline functionality
 
 Remember: Return ONLY the transformed query as a single line of text. Do not include any labels, explanations, formatting, or additional commentary.""",
-            
             llm_config={
                 "model": Config.Model,
                 "api_key": Config.api_key,
                 "base_url": Config.base_url,
             },
         )
-        
+
     # Override the _default_reply method to ensure it returns a tuple (final, reply)
     def _default_reply(self, messages=None, sender=None, config=None):
         """Default reply when no other reply is generated."""
-        return True, {"content": "I'll transform your query into a comprehensive specification."}
+        return True, {
+            "content": "I'll transform your query into a comprehensive specification."
+        }

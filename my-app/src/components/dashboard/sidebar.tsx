@@ -28,7 +28,7 @@ function getCookie(name: string): string | null {
 function handleLogout() {
   // Clear the auth cookie
   document.cookie = "auth_user=; path=/; max-age=0";
-  
+
   // Redirect to login page with success message
   window.location.href = "/login?success=logout";
 }
@@ -36,15 +36,15 @@ function handleLogout() {
 export function Sidebar() {
   const pathname = usePathname();
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  
+
   useEffect(() => {
     // Get user email from cookie
     setUserEmail(getCookie("auth_user"));
   }, []);
-  
+
   // Determine if user is admin
   const isAdmin = userEmail === "admin@example.com";
-  
+
   // Define navigation items
   const navItems = [
     {

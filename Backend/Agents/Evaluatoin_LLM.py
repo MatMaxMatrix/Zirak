@@ -1,23 +1,20 @@
 from autogen import ConversableAgent
-import os
-import json
-import logging
 from openai import OpenAI
+
 from .config import Config
-import autogen
 
 
 class Evaluatoin_LLM(ConversableAgent):
     def __init__(self):
-        self.client = OpenAI(api_key=Config.api_key, base_url = Config.base_url)
-        
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
+
         super().__init__(
             name="Query_Transformation",
             system_message="",
             llm_config={
                 "model": Config.Model,
                 "api_key": Config.api_key,
-                "base_url": Config.base_url ,
+                "base_url": Config.base_url,
             },
         )
         self.register_reply(

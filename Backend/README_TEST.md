@@ -114,4 +114,4 @@ If you encounter issues:
 2. Make sure all dependencies are installed with `pip install -r requirements-test.txt`
 3. Try running with `--no-socket` option if WebSocket connections fail
 4. Check the server logs for any errors
-5. Ensure your firewall allows connections to the API port (default: 5001) 
+5. Ensure your firewall allows connections to the API port (default: 5001)

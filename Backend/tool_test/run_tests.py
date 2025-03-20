@@ -22,4 +22,4 @@ import tool_tests
 
 if __name__ == "__main__":
     # Run the tests
-    unittest.main(module=tool_tests) 
+    unittest.main(module=tool_tests)

@@ -1,32 +1,33 @@
+import re
+from pathlib import Path
+
+from Agents.config import Config
 from Agents.tools.base import BaseTool
+from dotenv import load_dotenv
+from openai import OpenAI
 from rich.console import Console
 from rich.panel import Panel
-from pathlib import Path
-import os
-from dotenv import load_dotenv
-import re
-from openai import OpenAI
-from Agents.config import Config
 
 load_dotenv()
 
+
 class ToolCreatorTool(BaseTool):
     name = "toolcreator"
-    description = '''
+    description = """
     Creates a new tool based on a natural language description.
     Use this when you need a new capability that isn't available in current tools.
     The tool will be automatically generated and saved to the tools directory.
     Returns the generated tool code and creation status.
-    '''
+    """
     input_schema = {
         "type": "object",
         "properties": {
             "description": {
                 "type": "string",
-                "description": "Natural language description of what the tool should do"
+                "description": "Natural language description of what the tool should do",
             }
         },
-        "required": ["description"]
+        "required": ["description"],
     }
 
     def __init__(self):
@@ -37,11 +38,11 @@ class ToolCreatorTool(BaseTool):
 
     def _sanitize_filename(self, name: str) -> str:
         """Convert tool name to valid Python filename"""
-        return name + '.py'  # Keep exact name, just add .py
+        return name + ".py"  # Keep exact name, just add .py
 
     def _validate_tool_name(self, name: str) -> bool:
         """Validate tool name matches required pattern"""
-        return bool(re.match(r'^[a-zA-Z0-9_-]{1,64}$', name))
+        return bool(re.match(r"^[a-zA-Z0-9_-]{1,64}$", name))
 
     def execute(self, **kwargs) -> str:
         description = kwargs.get("description")
@@ -93,9 +94,12 @@ Return ONLY the Python code without any explanation or markdown formatting.
                 model=Config.Model,
                 temperature=Config.DEFAULT_TEMPERATURE,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant that generates Python code."},
-                    {"role": "user", "content": prompt}
-                ]
+                    {
+                        "role": "system",
+                        "content": "You are a helpful assistant that generates Python code.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
             )
 
             tool_code = response.choices[0].message.content.strip()
@@ -113,7 +117,7 @@ Return ONLY the Python code without any explanation or markdown formatting.
 
             # Save tool to file
             file_path = self.tools_dir / filename
-            with open(file_path, 'w') as f:
+            with open(file_path, "w") as f:
                 f.write(tool_code)
 
             # Format the response using Panel like the original
