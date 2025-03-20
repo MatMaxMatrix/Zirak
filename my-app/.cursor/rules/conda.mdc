@@ -1,0 +1,5 @@
+---
+description: make sure to use the new_env conda environment
+globs: ./
+alwaysApply: false
+---
