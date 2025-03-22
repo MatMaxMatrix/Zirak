@@ -13,11 +13,11 @@ from dotenv import load_dotenv
 from rich.console import Console
 
 from .config import Config
-from .Initiating_agent import EnhancedInitiatingAgent
+from .User_Proxy_Agent import UserProxyAgent
 
 load_dotenv()
 
-initiating_agent = EnhancedInitiatingAgent()
+initiating_agent = UserProxyAgent()
 manager_config = {
     "model": Config.Model,
     "api_key": Config.api_key,
@@ -206,9 +206,9 @@ async def conversation_workflow(group_chat):
         if "requires_clarification" not in group_chat.context:
             group_chat.context["requires_clarification"] = False
         if "clarifications" not in group_chat.context:
-            group_chat.context[
-                "clarifications"
-            ] = "Clarifications: Nothing to clarify yet."
+            group_chat.context["clarifications"] = (
+                "Clarifications: Nothing to clarify yet."
+            )
 
         # Use asyncio.wait_for to add a timeout to the chat process
         try:
