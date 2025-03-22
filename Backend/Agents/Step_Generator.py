@@ -1,4 +1,7 @@
 from autogen.agentchat.assistant_agent import ConversableAgent
+from openai import OpenAI
+import json
+from rich.console import Console
 
 from .config import Config
 
@@ -7,8 +10,38 @@ class Step_Generator(ConversableAgent):
     def __init__(self):
         super().__init__(
             name="Step_Generator",
-            system_message="""
+            system_message="",
+            llm_config={
+                "model": Config.Model,
+                "api_key": Config.api_key,
+                "base_url": Config.base_url,
+            },
+            description="""
+            You are an expert system architect who breaks down complex technical tasks into a series of clear, detailed steps. Each step should be formulated as a complete prompt that can be given to an LLM for implementation. The first step must always contain the overall workflow and core implementation of the query, while subsequent steps should focus on additional details, features, or validations.
+            """,
+        )
+        # Initialize OpenAI client with the correct API key and base URL
+        self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
+        self.register_reply(
+            trigger=self._always_true_trigger,  # Add a specific trigger string
+            reply_func=self.handle_message,
+            position=0,
+        )
+        self.console = Console()
 
+    def _always_true_trigger(self, sender):
+        # This trigger function always returns True
+        return True
+
+    def handle_message(self, message, sender, config):
+        try:
+            query = message.get("content", "")
+            self.console.print(
+                f"[bold green]Step Generator processing query[/bold green]"
+            )
+
+            # Define the system prompt
+            system_message = """
 You are an expert system architect who breaks down complex technical tasks into a series of clear, detailed steps. Each step should be formulated as a complete prompt that can be given to an LLM for implementation. The first step must always contain the overall workflow and core implementation of the query, while subsequent steps should focus on additional details, features, or validations.
 
 Your task is to analyze the given query and generate a JSON response where:
@@ -55,15 +88,78 @@ Each step's prompt should:
 - For step1, provide the overall workflow and core implementation; for subsequent steps, focus on additional features or validations
 
 Return ONLY the JSON output with no additional explanation or formatting.
-""",
-            llm_config={
-                "model": Config.Model,
-                "api_key": Config.api_key,
-                "base_url": Config.base_url,
-            },
-        )
+"""
 
-    # Override the _default_reply method to ensure it returns a tuple (final, reply)
-    def _default_reply(self, messages=None, sender=None, config=None):
-        """Default reply when no other reply is generated."""
-        return True, {"content": "I'll break down the task into clear, detailed steps."}
+            # Make API call to get the step breakdown
+            max_retries = 3
+            retry_count = 0
+
+            while retry_count < max_retries:
+                try:
+                    response = self.client.chat.completions.create(
+                        model=Config.Model,
+                        messages=[
+                            {"role": "system", "content": system_message},
+                            {"role": "user", "content": query},
+                        ],
+                        temperature=0.2,
+                        max_tokens=4000,
+                        response_format={"type": "json_object"},
+                    )
+
+                    # Extract the JSON content
+                    json_str = response.choices[0].message.content
+
+                    # Validate the JSON
+                    step_response = json.loads(json_str)
+
+                    # Make sure the response has the expected structure
+                    if "steps" not in step_response:
+                        self.console.print(
+                            "[bold red]Invalid response format, missing 'steps'. Retrying...[/bold red]"
+                        )
+                        retry_count += 1
+                        continue
+
+                    # Store steps in context
+                    self.context["steps"] = step_response.get("steps", {})
+                    self.console.print(
+                        f"[bold cyan]Step Generator finished - found {len(self.context['steps'])} steps[/bold cyan]"
+                    )
+
+                    # Return the response
+                    return True, {"role": "assistant", "content": json_str}
+
+                except json.JSONDecodeError:
+                    self.console.print(
+                        "[bold red]Failed to parse JSON response. Retrying...[/bold red]"
+                    )
+                    retry_count += 1
+
+                except Exception as e:
+                    self.console.print(
+                        f"[bold red]Error: {str(e)}. Retrying...[/bold red]"
+                    )
+                    retry_count += 1
+
+            # If we've exhausted retries, return an error
+            self.console.print(
+                "[bold red]Failed to generate valid steps after maximum retries[/bold red]"
+            )
+            return True, {
+                "role": "assistant",
+                "content": json.dumps(
+                    {"error": "Failed to generate valid steps", "goal": query}
+                ),
+            }
+
+        except Exception as e:
+            self.console.print(
+                f"[bold red]Unexpected error in Step Generator: {str(e)}[/bold red]"
+            )
+            return True, {
+                "role": "assistant",
+                "content": json.dumps(
+                    {"error": str(e), "goal": "Error processing request"}
+                ),
+            }

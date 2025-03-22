@@ -19,6 +19,9 @@ class CriticalAnalysisAgent(ConversableAgent):
                 "api_key": Config.api_key,
                 "base_url": Config.base_url,
             },
+            description="""
+            You are an expert at analyzing user queries and generating a JSON summary of assumptions and clarifications question needed to be asked to the user to make sure the query is complete and clear.
+            """,
         )
         # Initialize OpenAI client with the correct API key and base URL
         self.client = OpenAI(api_key=Config.api_key, base_url=Config.base_url)
