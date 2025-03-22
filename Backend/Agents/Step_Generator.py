@@ -4,10 +4,6 @@ import json
 from rich.console import Console
 
 from .config import Config
-from .Query_Transformation import Query_Transformation
-
-
-Query_Transformation = Query_Transformation()
 
 
 class Step_Generator(ConversableAgent):
@@ -39,7 +35,9 @@ class Step_Generator(ConversableAgent):
 
     def handle_message(self, *args, **kwargs):
         try:
-            query = Query_Transformation.last_message().get("content", "{}")
+            from .agent_manager import Query_Agent
+
+            query = Query_Agent.last_message().get("content", "{}")
             self.console.print(
                 f"[bold green]Step Generator processing query[/bold green]"
             )
