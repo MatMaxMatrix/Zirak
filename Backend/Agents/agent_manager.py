@@ -43,6 +43,8 @@ group_chat = GroupChat(
     agents=agents,
     messages=[],
     max_round=getattr(Config, "MAX_CONVERSATION_ROUNDS", 30),
-    speaker_selection_method=allowed_speaker_transitions_dict,
-    allow_repeat_speaker=True,
+    speaker_selection_method="auto",  # Changed to a string
+    allowed_or_disallowed_speaker_transitions=allowed_speaker_transitions_dict,
+    speaker_transitions_type="allowed",
+    allow_repeat_speaker=None,
 )
