@@ -29,10 +29,11 @@ logger = logging.getLogger(__name__)
 
 # Create a custom console implementation that logs messages for WebSocket streaming
 class StreamingConsole(Console):
-    def __init__(self, workflow_id=None, *args, **kwargs):
+    def __init__(self, workflow_id=None, socketio=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.workflow_id = workflow_id or str(uuid.uuid4())
         self.log_messages = []
+        self.socketio = socketio
 
     def print(self, *args, **kwargs):
         # Call the original print method
@@ -42,17 +43,33 @@ class StreamingConsole(Console):
         message = " ".join(str(arg) for arg in args)
 
         # Add to log messages
-        self.log_messages.append(
-            {
-                "timestamp": time.time(),
-                "message": message,
-                "workflow_id": self.workflow_id,
-            }
-        )
+        timestamp = datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "message": message,
+            "workflow_id": self.workflow_id,
+        }
+        self.log_messages.append(log_entry)
 
         # Log to the logger so it gets captured by WebSocketHandler
         if message:
             logger.info(f"[Workflow {self.workflow_id}] {message}")
+
+            # If socketio is available, emit the message in real-time
+            if self.socketio:
+                try:
+                    self.socketio.emit(
+                        "workflow_update",
+                        {
+                            "workflow_id": self.workflow_id,
+                            "agent": "System",
+                            "message": message,
+                            "timestamp": timestamp,
+                            "status": "in_progress",
+                        },
+                    )
+                except Exception as e:
+                    logger.error(f"Error emitting workflow update: {str(e)}")
 
 
 async def ensure_awaited(maybe_coro):
@@ -157,8 +174,12 @@ async def conversation_workflow(group_chat):
         # Get the workflow ID from the context or generate a new one
         workflow_id = group_chat.context.get("workflow_id", str(uuid.uuid4()))
 
+        # Get socketio instance from context if available
+        socketio = group_chat.context.get("socketio")
+        websocket_handler = group_chat.context.get("websocket_handler")
+
         # Set up a streaming console for this workflow
-        streaming_console = StreamingConsole(workflow_id=workflow_id)
+        streaming_console = StreamingConsole(workflow_id=workflow_id, socketio=socketio)
 
         # Initialize the group chat manager with improved configuration
         group_chat_manager = GroupChatManager(
@@ -173,6 +194,7 @@ async def conversation_workflow(group_chat):
         # Add streaming information to context
         group_chat.context["streaming_enabled"] = True
         group_chat.context["workflow_id"] = workflow_id
+        group_chat.context["streaming_console"] = streaming_console
 
         # Reset the group chat manager
         group_chat_manager.reset()
@@ -191,16 +213,176 @@ async def conversation_workflow(group_chat):
             f"[bold cyan]Setting up context with user input: {user_input}[/bold cyan]"
         )
 
+        # Collect workflow steps
+        workflow_steps = []
+
+        # Add initial workflow step for user input
+        workflow_steps.append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "agent": "System",
+                "action": "User Input",
+                "message": f"Processing user request: {user_input}",
+                "status": "completed",
+            }
+        )
+
+        # Store workflow steps in context
+        group_chat.context["workflow_steps"] = workflow_steps
+
+        # Emit initial workflow step if socketio available
+        if socketio:
+            socketio.emit(
+                "workflow_update",
+                {
+                    "workflow_id": workflow_id,
+                    "agent": "System",
+                    "message": f"Processing user request: {user_input}",
+                    "timestamp": datetime.now().isoformat(),
+                    "status": "completed",
+                },
+            )
+
+        # Monkey patch message methods to capture the workflow
+        if socketio:
+            # Patch the receive method to capture messages
+            original_receive = group_chat_manager.receive
+
+            async def patched_receive(
+                message, sender, request_reply=True, silent=False
+            ):
+                # Call the original receive method
+                response = await original_receive(
+                    message, sender, request_reply, silent
+                )
+
+                # Monitor this message for WebSocket streaming
+                if not silent:
+                    try:
+                        # Extract message content
+                        content = (
+                            message.get("content", "")
+                            if isinstance(message, dict)
+                            else str(message)
+                        )
+                        sender_name = getattr(sender, "name", type(sender).__name__)
+
+                        # Create a new workflow step
+                        step = {
+                            "timestamp": datetime.now().isoformat(),
+                            "agent": sender_name,
+                            "action": "Message",
+                            "message": content[:100]
+                            + ("..." if len(content) > 100 else ""),
+                            "status": "completed",
+                        }
+
+                        # Add to workflow steps
+                        workflow_steps.append(step)
+                        group_chat.context["workflow_steps"] = workflow_steps
+
+                        # Emit through socketio
+                        socketio.emit(
+                            "agent_message",
+                            {
+                                "workflow_id": workflow_id,
+                                "agent": sender_name,
+                                "message": content,
+                                "timestamp": datetime.now().isoformat(),
+                            },
+                        )
+
+                        # Also emit as workflow update
+                        socketio.emit(
+                            "workflow_update",
+                            {
+                                "workflow_id": workflow_id,
+                                "agent": sender_name,
+                                "message": content[:100]
+                                + ("..." if len(content) > 100 else ""),
+                                "timestamp": datetime.now().isoformat(),
+                                "status": "completed",
+                            },
+                        )
+                    except Exception as e:
+                        logger.error(f"Error in patched receive: {str(e)}")
+
+                return response
+
+            # Apply the patch
+            group_chat_manager.receive = patched_receive
+
+            # Also patch each agent's reply function to track workflow steps
+            for agent in group_chat.agents:
+                agent_name = getattr(agent, "name", type(agent).__name__)
+
+                if hasattr(agent, "generate_reply"):
+                    original_reply = agent.generate_reply
+
+                    async def make_patched_reply(original_fn, agent_name):
+                        async def patched_reply(
+                            messages=None, sender=None, config=None
+                        ):
+                            # Emit starting workflow step
+                            step = {
+                                "timestamp": datetime.now().isoformat(),
+                                "agent": agent_name,
+                                "action": "Processing",
+                                "message": "Working on the task",
+                                "status": "in_progress",
+                            }
+
+                            # Add to workflow steps
+                            workflow_steps.append(step)
+                            group_chat.context["workflow_steps"] = workflow_steps
+
+                            # Emit through socketio
+                            socketio.emit(
+                                "workflow_update",
+                                {
+                                    "workflow_id": workflow_id,
+                                    "agent": agent_name,
+                                    "message": "Working on the task",
+                                    "timestamp": datetime.now().isoformat(),
+                                    "status": "in_progress",
+                                },
+                            )
+
+                            # Call the original function
+                            response = await original_fn(messages, sender, config)
+
+                            # Update workflow step to completed
+                            step["status"] = "completed"
+                            step["message"] = "Completed task"
+                            group_chat.context["workflow_steps"] = workflow_steps
+
+                            # Emit completion
+                            socketio.emit(
+                                "workflow_update",
+                                {
+                                    "workflow_id": workflow_id,
+                                    "agent": agent_name,
+                                    "message": "Completed task",
+                                    "timestamp": datetime.now().isoformat(),
+                                    "status": "completed",
+                                },
+                            )
+
+                            return response
+
+                        return patched_reply
+
+                    # Apply the patch
+                    agent.generate_reply = await make_patched_reply(
+                        original_reply, agent_name
+                    )
+
         # Add instrumentation to all agents to capture their interactions
         for agent in group_chat.agents:
             agent.context = group_chat.context
             streaming_console.print(
                 f"[bold cyan]Context set for agent: {agent.name}[/bold cyan]"
             )
-
-            # Add a reference to the streaming console if the agent supports it
-            if hasattr(agent, "set_console"):
-                agent.set_console(streaming_console)
 
         # Initialize clarification context if not present
         if "requires_clarification" not in group_chat.context:

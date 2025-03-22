@@ -4,6 +4,7 @@ import logging
 import threading
 import time
 import traceback
+from datetime import datetime
 
 from autogen import UserProxyAgent
 from rich.console import Console
@@ -312,85 +313,134 @@ class UserProxyAgent(UserProxyAgent):
         }
 
     def get_human_input(self, question: str = ""):
-        """Enhanced method to get human input with validation and timeout handling"""
+        """
+        Get human input with enhanced WebSocket support.
+
+        Args:
+            question: The question to ask the human
+
+        Returns:
+            The human's response
+        """
         try:
-            # Check if we're in automated mode
-            if (
-                self.automated_mode
-                or "automated_mode" in self.context
-                and self.context["automated_mode"]
-            ):
+            # Check if we have a WebSocket handler in context
+            context = getattr(self, "context", {})
+            websocket_handler = context.get("websocket_handler")
+            socketio = context.get("socketio")
+            workflow_id = context.get("workflow_id")
+
+            # If we have a websocket handler, use it to get input
+            if websocket_handler and hasattr(websocket_handler, "request_user_input"):
                 self.console.print(
-                    f"[yellow]Automated response for: {question}[/yellow]"
+                    f"[bold cyan]Requesting user input through WebSocket: {question}[/bold cyan]"
                 )
-                return "Default automated response"
 
-            # Format the question in a nice panel
-            formatted_question = Text(question)
-            self.console.print(
-                Panel(formatted_question, title="Please Answer", border_style="green")
-            )
+                # Clear the input event if it exists
+                if hasattr(websocket_handler, "user_input_event"):
+                    websocket_handler.user_input_event.clear()
 
-            # Set up a timeout for input
-            timeout_reached = threading.Event()
-            user_input = [None]  # Using a list to store the input from the thread
+                # Request input through the WebSocket
+                websocket_handler.request_user_input(question)
 
-            # Create a simple message for the countdown
-            self.console.print(
-                f"[blue]You have {self.input_timeout} seconds to answer.[/blue]"
-            )
-
-            # Use a completely separate approach for input and countdown
-            def input_thread():
-                try:
-                    # Use the most basic input method to avoid any interference
-                    user_input[0] = input("Your answer: ")
-                except Exception as e:
-                    logging.error(f"Error in input thread: {str(e)}")
-                finally:
-                    timeout_reached.set()  # Signal that we're done
-
-            # Start the input thread
-            input_thread_handle = threading.Thread(target=input_thread)
-            input_thread_handle.daemon = True
-            input_thread_handle.start()
-
-            # Instead of a separate countdown thread, just wait with periodic status updates
-            remaining = self.input_timeout
-            while remaining > 0 and input_thread_handle.is_alive():
-                # Sleep for a short interval
-                time.sleep(1)
-                remaining -= 1
-
-                # Only show countdown at specific intervals
-                if remaining <= 10 or remaining % 15 == 0:
-                    self.console.print(
-                        f"[dim blue]Time remaining: {remaining} seconds[/dim blue]"
+                # Emit a workflow update to notify user that input is needed
+                if socketio and workflow_id:
+                    timestamp = datetime.now().isoformat()
+                    socketio.emit(
+                        "request_input",
+                        {
+                            "workflow_id": workflow_id,
+                            "prompt": question,
+                            "timestamp": timestamp,
+                        },
                     )
 
-            # Signal that we're done with the countdown
-            timeout_reached.set()
+                    # Also emit as workflow update
+                    socketio.emit(
+                        "workflow_update",
+                        {
+                            "workflow_id": workflow_id,
+                            "agent": "UserProxyAgent",
+                            "message": f"Waiting for user input: {question}",
+                            "timestamp": timestamp,
+                            "status": "in_progress",
+                        },
+                    )
 
-            # Check if we got input
-            if input_thread_handle.is_alive():
-                # Thread is still running, which means timeout occurred
-                self.console.print(
-                    "[bold yellow]Input timed out. Using default response.[/bold yellow]"
+                # Wait for the user to provide input or timeout
+                timeout = getattr(
+                    self, "input_timeout", 300
+                )  # 5 minutes default timeout
+
+                # Create a future to wait for the input event
+                loop = asyncio.get_event_loop()
+                future = asyncio.run_coroutine_threadsafe(
+                    websocket_handler.wait_for_user_input(question), loop
                 )
-                return "Default response due to timeout"
 
-            # We got input, validate it
-            if user_input[0] and user_input[0].strip():
-                return user_input[0].strip()
+                try:
+                    # Wait for the user input with a timeout
+                    user_response = future.result(timeout=timeout)
 
-            self.console.print(
-                "[yellow]Empty response provided. Using default.[/yellow]"
-            )
-            return "Default response for empty input"
+                    # Emit a workflow update to indicate input received
+                    if socketio and workflow_id:
+                        socketio.emit(
+                            "workflow_update",
+                            {
+                                "workflow_id": workflow_id,
+                                "agent": "UserProxyAgent",
+                                "message": "User input received",
+                                "timestamp": datetime.now().isoformat(),
+                                "status": "completed",
+                            },
+                        )
 
+                    self.console.print(
+                        f"[bold green]Received user input through WebSocket: {user_response}[/bold green]"
+                    )
+                    return user_response
+                except asyncio.TimeoutError:
+                    self.console.print(
+                        "[bold red]Timeout waiting for user input through WebSocket[/bold red]"
+                    )
+                    return "Timeout waiting for input. Please try again."
+                except Exception as e:
+                    self.console.print(
+                        f"[bold red]Error waiting for user input through WebSocket: {str(e)}[/bold red]"
+                    )
+                    return f"Error getting input: {str(e)}"
+
+            # If automated mode is enabled and requires_clarification is False,
+            # skip human input and return the automated response
+            if self.automated_mode and not self.context.get(
+                "requires_clarification", False
+            ):
+                self.console.print(
+                    "[bold yellow]Automated mode enabled, using automated response[/bold yellow]"
+                )
+                return "Continue with the task."
+
+            # Fall back to console input
+            if question:
+                self.console.print(f"[bold cyan]{question}[/bold cyan]")
+
+            # Default console input method
+            line = ""
+            while not line:
+                try:
+                    line = input("> ")
+                except EOFError:
+                    # Handle the case where input() is interrupted
+                    self.console.print(
+                        "[bold red]Input interrupted. Please try again.[/bold red]"
+                    )
+                    pass
+
+            return line
         except Exception as e:
-            logging.error(f"Error getting human input: {str(e)}")
+            # Log the error and return a default response
             self.console.print(
-                "[bold red]An error occurred while processing your input.[/bold red]"
+                f"[bold red]Error in get_human_input: {str(e)}[/bold red]"
             )
-            return "Default response due to error"
+            logging.error(f"Error in get_human_input: {str(e)}")
+            logging.error(traceback.format_exc())
+            return "Error getting input, please try again."

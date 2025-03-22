@@ -1,0 +1,11 @@
+flask==2.3.3
+flask-cors==4.0.0
+flask-socketio==5.3.6
+python-socketio==5.10.0
+python-dotenv==1.0.1
+eventlet==0.35.2
+autogen==0.2.21
+openai==1.13.3
+anthropic==0.21.2
+rich==13.7.0
+python-engineio==4.8.1 
