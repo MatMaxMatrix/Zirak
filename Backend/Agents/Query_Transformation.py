@@ -38,6 +38,9 @@ Remember: Return ONLY the transformed query as a single line of text. Do not inc
                 "api_key": Config.api_key,
                 "base_url": Config.base_url,
             },
+            description="""
+            You are an expert at transforming queries into comprehensive specifications, with special attention to creation and development requests. Your task is to transform input queries into complete, actionable specifications while maintaining strict focus on the user's creation goal.
+            """,
         )
 
     # Override the _default_reply method to ensure it returns a tuple (final, reply)

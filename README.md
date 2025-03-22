@@ -168,3 +168,28 @@ To use pre-commit:
    ```bash
    pre-commit run --all-files
    ```
+
+# Demo Script Debug Setup
+
+## Prerequisites
+- VS Code with Python extension installed
+- Virtual environment with autogen installed
+- OpenAI API key
+
+## Steps to Run in Debug Mode
+
+1. Replace `your_api_key_here` in the `.env` file with your actual OpenAI API key
+
+2. Open VS Code and navigate to the Run and Debug tab (Ctrl+Shift+D or Cmd+Shift+D)
+
+3. Select "Python: demo.py" from the dropdown menu
+
+4. Click the green play button or press F5 to start debugging
+
+5. The script will run with a breakpoint at the `pdb.set_trace()` line, allowing you to inspect variables and step through the code
+
+## Debugging Features
+- You can add additional breakpoints by clicking in the left margin
+- Use F10 to step over, F11 to step into, and Shift+F11 to step out
+- Use F5 to continue execution
+- The debug console allows you to evaluate expressions

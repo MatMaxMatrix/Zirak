@@ -2,15 +2,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: test.py with direnv",
-            "type": "debugpy",
+            "name": "Python: demo.py",
+            "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/Backend/test.py",
+            "program": "${workspaceFolder}/demo.py",
             "console": "integratedTerminal",
+            "justMyCode": true,
             "python": "${workspaceFolder}/.venv/bin/python",
+            "args": [
+                "--input", "${workspaceFolder}/input.json",
+                "--output", "${workspaceFolder}/output.json",
+                "--conversation_id", "debug-session",
+                "--api_key", "${env:OPENAI_API_KEY}"
+            ],
             "env": {
-                "VIRTUAL_ENV": "${workspaceFolder}/.venv",
-                "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+                "PYTHONPATH": "${workspaceFolder}",
+                "AUTOGEN_USE_DOCKER": "False"
             }
         }
     ]
