@@ -67,3 +67,63 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Terminal custom styling */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: #0d0d0d;
+  border-radius: 0;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 4px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #444;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-corner {
+  background: #0d0d0d;
+}
+
+/* Terminal text blinking cursor effect */
+@keyframes blink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+.terminal-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background-color: #aeafad;
+  margin-left: 2px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}
+
+/* macOS terminal font styles */
+.mac-terminal {
+  font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+  line-height: 1.3;
+  font-size: 12px;
+  -webkit-font-smoothing: antialiased;
+  background-color: #000;
+  color: #f8f8f8;
+}
+
+/* Terminal selection color */
+.mac-terminal ::selection {
+  background-color: rgba(83, 157, 247, 0.5);
+  color: #fff;
+}

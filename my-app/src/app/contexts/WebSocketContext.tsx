@@ -34,6 +34,8 @@ export interface TerminalCommand {
   command: string;
   output: string;
   timestamp: string;
+  error?: string;
+  exitCode?: number;
 }
 
 export interface WebSocketContextType {
@@ -45,12 +47,17 @@ export interface WebSocketContextType {
   fileSystem: FileSystem[];
   terminal: TerminalCommand[];
   inputRequired: boolean;
-  inputPrompt: string;
+  inputPrompt: string | null;
   waitingForUserInput: boolean;
   sendMessage: (message: string) => void;
   sendUserInputResponse: (response: string) => void;
   updateFileSystem: (fileSystem: FileSystem[]) => void;
-  addTerminalCommand: (command: string, output: string) => void;
+  addTerminalCommand: (command: TerminalCommand) => void;
+  updateTerminalCommand: (command: TerminalCommand) => void;
+  updateLastTerminalCommand: (partialCommand: Partial<TerminalCommand>) => void;
+  clearTerminal: () => void;
+  workingDirectory: string;
+  setWorkingDirectory: (path: string) => void;
 }
 
 // Create the context with default values
@@ -63,12 +70,17 @@ const WebSocketContext = createContext<WebSocketContextType>({
   fileSystem: [],
   terminal: [],
   inputRequired: false,
-  inputPrompt: '',
+  inputPrompt: null,
   waitingForUserInput: false,
   sendMessage: () => {},
   sendUserInputResponse: () => {},
   updateFileSystem: () => {},
   addTerminalCommand: () => {},
+  updateTerminalCommand: () => {},
+  updateLastTerminalCommand: () => {},
+  clearTerminal: () => {},
+  workingDirectory: '/project',
+  setWorkingDirectory: () => {},
 });
 
 // Custom hook to use the WebSocket context
@@ -87,13 +99,25 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [fileSystem, setFileSystem] = useState<FileSystem[]>([]);
   const [terminal, setTerminal] = useState<TerminalCommand[]>([]);
   const [inputRequired, setInputRequired] = useState<boolean>(false);
-  const [inputPrompt, setInputPrompt] = useState<string>('');
+  const [inputPrompt, setInputPrompt] = useState<string | null>(null);
   const [waitingForUserInput, setWaitingForUserInput] = useState<boolean>(false);
   const [socketInitialized, setSocketInitialized] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [workingDirectory, setWorkingDirectory] = useState<string>('/project');
+
+  // Handle client-side only initialization
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Initialize socket connection lazily - this will only run when needed
   const initializeSocket = () => {
-    if (socketInitialized) return;
+    if (socketInitialized || !mounted) return;
+    
+    // Ensure we're on the client side before trying to connect
+    if (typeof window === 'undefined') return;
+    
+    setSocketInitialized(true);
     
     // @ts-ignore - ignore socket.io-client import issue in TypeScript
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
@@ -318,7 +342,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     });
 
     setSocket(socketInstance);
-    setSocketInitialized(true);
   };
 
   // Send message function - initialize socket if not already done
@@ -380,18 +403,38 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   };
 
   // Function to add a terminal command
-  const addTerminalCommand = (command: string, output: string) => {
-    setTerminal((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        command,
-        output,
-        timestamp: new Date().toISOString(),
-      },
-    ]);
+  const addTerminalCommand = (command: TerminalCommand) => {
+    setTerminal(prev => [...prev, command]);
   };
 
+  // Update a terminal command by ID
+  const updateTerminalCommand = (updatedCommand: TerminalCommand) => {
+    setTerminal(prev => prev.map(cmd => 
+      cmd.id === updatedCommand.id ? updatedCommand : cmd
+    ));
+  };
+  
+  // Update the last terminal command with partial data
+  const updateLastTerminalCommand = (partialCommand: Partial<TerminalCommand>) => {
+    setTerminal(prev => {
+      if (prev.length === 0) return prev;
+      
+      const lastIndex = prev.length - 1;
+      const updatedLast = { ...prev[lastIndex], ...partialCommand };
+      
+      return [
+        ...prev.slice(0, lastIndex),
+        updatedLast
+      ];
+    });
+  };
+  
+  // Clear the terminal history
+  const clearTerminal = () => {
+    setTerminal([]);
+  };
+
+  // Return the provider with all the context values
   return (
     <WebSocketContext.Provider
       value={{
@@ -409,6 +452,11 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         sendUserInputResponse,
         updateFileSystem,
         addTerminalCommand,
+        updateTerminalCommand,
+        updateLastTerminalCommand,
+        clearTerminal,
+        workingDirectory,
+        setWorkingDirectory
       }}
     >
       {children}
