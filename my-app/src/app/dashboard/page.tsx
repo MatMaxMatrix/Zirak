@@ -1,7 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart3, Users, CreditCard, ActivityIcon } from "lucide-react";
-import { ToastDemo } from "@/components/notifications/toast-demo";
 
 export default function DashboardPage() {
   return (
@@ -53,11 +52,6 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">+2.1% from last week</p>
           </CardContent>
         </Card>
-      </div>
-
-      {/* Toast Demo Section */}
-      <div className="mt-8">
-        <ToastDemo />
       </div>
 
       <h2 className="text-xl font-semibold mt-6">Recent Activity</h2>
