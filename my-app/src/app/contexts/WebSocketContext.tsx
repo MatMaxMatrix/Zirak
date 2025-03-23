@@ -89,9 +89,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   const [inputRequired, setInputRequired] = useState<boolean>(false);
   const [inputPrompt, setInputPrompt] = useState<string>('');
   const [waitingForUserInput, setWaitingForUserInput] = useState<boolean>(false);
+  const [socketInitialized, setSocketInitialized] = useState<boolean>(false);
 
-  // Initialize socket connection
-  useEffect(() => {
+  // Initialize socket connection lazily - this will only run when needed
+  const initializeSocket = () => {
+    if (socketInitialized) return;
+    
     // @ts-ignore - ignore socket.io-client import issue in TypeScript
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
     console.log('Connecting to backend at:', backendUrl);
@@ -198,6 +201,48 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       }
     });
 
+    socketInstance.on('conversation_update', (data: {
+      workflow_id: string;
+      message: {
+        id: string;
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+        timestamp: string;
+        agent: string;
+      }
+    }) => {
+      console.log('Conversation update received:', data);
+      
+      // Only process if this update is for the active workflow
+      if (activeWorkflowId === null || data.workflow_id === activeWorkflowId) {
+        const messageData = data.message;
+        
+        // Add to messages array
+        setMessages((prev) => {
+          // Check if message already exists by ID to prevent duplicates
+          const messageExists = prev.some((m) => m.id === messageData.id);
+          if (messageExists) return prev;
+          
+          return [...prev, messageData];
+        });
+        
+        // Also add as workflow step if it's not a user message
+        if (messageData.role !== 'user') {
+          setWorkflowSteps((prev) => {
+            const newStep = {
+              id: messageData.id,
+              agent: messageData.agent,
+              message: messageData.content,
+              timestamp: messageData.timestamp,
+              status: 'complete' as const,
+            };
+            
+            return [...prev, newStep];
+          });
+        }
+      }
+    });
+
     socketInstance.on('user_input_required', (data: { workflow_id: string; prompt: string }) => {
       console.log('User input required:', data);
       setInputRequired(true);
@@ -212,7 +257,17 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       setWaitingForUserInput(false);
     });
 
-    socketInstance.on('workflow_completed', (data: { workflow_id: string; result: string }) => {
+    socketInstance.on('workflow_completed', (data: { 
+      workflow_id: string; 
+      result: string;
+      conversation_history?: Array<{
+        id: string;
+        role: 'user' | 'assistant' | 'system';
+        content: string;
+        timestamp: string;
+        agent: string;
+      }>;
+    }) => {
       console.log('Workflow completed:', data);
       setWaitingForUserInput(false);
       setInputRequired(false);
@@ -228,6 +283,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
           status: 'complete',
         },
       ]);
+      
+      // If conversation history is provided, synchronize our messages with it
+      if (data.conversation_history && data.conversation_history.length > 0) {
+        setMessages((prev) => {
+          // Create a map of existing message IDs for faster lookup
+          const existingIds = new Set(prev.map(msg => msg.id));
+          
+          // Filter out messages that already exist in our state
+          const newMessages = data.conversation_history!.filter(msg => !existingIds.has(msg.id));
+          
+          // Add the new messages to our state
+          return [...prev, ...newMessages];
+        });
+      }
     });
 
     socketInstance.on('workflow_error', (data: { workflow_id: string; error: string }) => {
@@ -249,32 +318,39 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     });
 
     setSocket(socketInstance);
+    setSocketInitialized(true);
+  };
 
-    // Cleanup on component unmount
-    return () => {
-      socketInstance.disconnect();
-    };
-  }, []);
-
-  // Function to send a message to the server
+  // Send message function - initialize socket if not already done
   const sendMessage = (message: string) => {
-    if (socket && connected) {
-      // Add message to local state immediately
-      const newMessage: Message = {
-        id: crypto.randomUUID(),
-        role: 'user',
-        content: message,
-        timestamp: new Date().toISOString(),
-      };
-      
-      setMessages((prev) => [...prev, newMessage]);
-      
-      // Send to server
-      socket.emit('message', {
-        message,
-        workflow_id: activeWorkflowId || undefined,
-      });
+    if (!socketInitialized) {
+      initializeSocket();
     }
+    
+    if (!socket || !socket.connected) {
+      console.warn('Socket not connected, attempting to reconnect...');
+      // Force a reconnection attempt
+      if (socket) socket.connect();
+      // Add message to queue to be sent when connection is established
+      setTimeout(() => sendMessage(message), 500);
+      return;
+    }
+
+    // Add user message to chat
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+    
+    setMessages((prev) => [...prev, userMessage]);
+    
+    // Send message to server
+    socket.emit('message', {
+      message,
+      workflow_id: activeWorkflowId,
+    });
   };
 
   // Function to send a response to a user input request
