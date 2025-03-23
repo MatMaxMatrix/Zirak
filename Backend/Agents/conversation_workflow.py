@@ -157,12 +157,62 @@ async def monitor_group_chat_messages(
         )
 
 
-async def conversation_workflow(group_chat):
+async def create_group_chat(user_input, context):
+    """
+    Creates the group chat with all necessary agents based on user input.
+
+    Args:
+        user_input: The user's input message
+        context: Context containing configuration information
+
+    Returns:
+        A configured group chat object
+    """
+    # Import necessary agent types
+    from .AgentFactory import create_agents_for_task
+
+    # Create a console for logging
+    console = Console()
+    console.print(f"[bold cyan]Creating group chat for input: {user_input}[/bold cyan]")
+
+    # Generate a workflow ID if not provided
+    workflow_id = context.get("workflow_id", str(uuid.uuid4()))
+
+    # Create agents specific to this task based on user input
+    agents = await create_agents_for_task(user_input)
+
+    # Set up the group chat
+    from .GroupChat import GroupChat
+
+    group_chat = GroupChat(
+        agents=agents,
+        messages=[],
+        max_round=getattr(Config, "MAX_CONVERSATION_ROUNDS", 10),
+    )
+
+    # Initialize the context for the group chat
+    group_chat.context = {
+        "workflow_id": workflow_id,
+        "user_input": user_input,
+        "socketio": context.get("socketio"),
+        "get_user_input": context.get("get_user_input"),
+    }
+
+    # Add any additional context attributes
+    for key, value in context.items():
+        if key not in group_chat.context:
+            group_chat.context[key] = value
+
+    return group_chat
+
+
+async def conversation_workflow(user_input, context):
     """
     Manages the conversation workflow between agents.
 
     Args:
-        group_chat: The group chat object containing the agents
+        user_input: The user input to process
+        context: A context object containing workflow information and callback functions
 
     Returns:
         A tuple (success, message) indicating whether the conversation completed successfully
@@ -172,14 +222,18 @@ async def conversation_workflow(group_chat):
         start_time = time.time()
 
         # Get the workflow ID from the context or generate a new one
-        workflow_id = group_chat.context.get("workflow_id", str(uuid.uuid4()))
+        workflow_id = context.get("workflow_id", str(uuid.uuid4()))
 
         # Get socketio instance from context if available
-        socketio = group_chat.context.get("socketio")
-        websocket_handler = group_chat.context.get("websocket_handler")
+        socketio = context.get("socketio")
+        log_agent_message = context.get("log_agent_message")
+        add_to_conversation_history = context.get("add_to_conversation_history")
 
         # Set up a streaming console for this workflow
         streaming_console = StreamingConsole(workflow_id=workflow_id, socketio=socketio)
+
+        # Initialize the group chat object
+        group_chat = await create_group_chat(user_input, context)
 
         # Initialize the group chat manager with improved configuration
         group_chat_manager = GroupChatManager(
@@ -203,15 +257,19 @@ async def conversation_workflow(group_chat):
         )
 
         # Set up the context for all agents
-        welcome_message = group_chat.context.get(
+        welcome_message = context.get(
             "welcome_message", "Welcome to the Claude Engine!"
         )
-        user_input = group_chat.context.get("user_input", "")
 
         # Log the context setup
         streaming_console.print(
             f"[bold cyan]Setting up context with user input: {user_input}[/bold cyan]"
         )
+
+        if add_to_conversation_history:
+            add_to_conversation_history(
+                workflow_id, "system", "Starting conversation workflow"
+            )
 
         # Collect workflow steps
         workflow_steps = []
@@ -229,19 +287,6 @@ async def conversation_workflow(group_chat):
 
         # Store workflow steps in context
         group_chat.context["workflow_steps"] = workflow_steps
-
-        # Emit initial workflow step if socketio available
-        if socketio:
-            socketio.emit(
-                "workflow_update",
-                {
-                    "workflow_id": workflow_id,
-                    "agent": "System",
-                    "message": f"Processing user request: {user_input}",
-                    "timestamp": datetime.now().isoformat(),
-                    "status": "completed",
-                },
-            )
 
         # Monkey patch message methods to capture the workflow
         if socketio:
@@ -281,29 +326,20 @@ async def conversation_workflow(group_chat):
                         workflow_steps.append(step)
                         group_chat.context["workflow_steps"] = workflow_steps
 
-                        # Emit through socketio
-                        socketio.emit(
-                            "agent_message",
-                            {
-                                "workflow_id": workflow_id,
-                                "agent": sender_name,
-                                "message": content,
-                                "timestamp": datetime.now().isoformat(),
-                            },
-                        )
-
-                        # Also emit as workflow update
-                        socketio.emit(
-                            "workflow_update",
-                            {
-                                "workflow_id": workflow_id,
-                                "agent": sender_name,
-                                "message": content[:100]
-                                + ("..." if len(content) > 100 else ""),
-                                "timestamp": datetime.now().isoformat(),
-                                "status": "completed",
-                            },
-                        )
+                        # Log message using the log_agent_message function if available
+                        if log_agent_message:
+                            log_agent_message(workflow_id, sender_name, content)
+                        else:
+                            # Fallback to direct socketio emit if log_agent_message not available
+                            socketio.emit(
+                                "agent_message",
+                                {
+                                    "workflow_id": workflow_id,
+                                    "agent": sender_name,
+                                    "message": content,
+                                    "timestamp": datetime.now().isoformat(),
+                                },
+                            )
                     except Exception as e:
                         logger.error(f"Error in patched receive: {str(e)}")
 
@@ -336,17 +372,26 @@ async def conversation_workflow(group_chat):
                             workflow_steps.append(step)
                             group_chat.context["workflow_steps"] = workflow_steps
 
-                            # Emit through socketio
-                            socketio.emit(
-                                "workflow_update",
-                                {
-                                    "workflow_id": workflow_id,
-                                    "agent": agent_name,
-                                    "message": "Working on the task",
-                                    "timestamp": datetime.now().isoformat(),
-                                    "status": "in_progress",
-                                },
-                            )
+                            # Log system message using the add_to_conversation_history function if available
+                            if add_to_conversation_history:
+                                add_to_conversation_history(
+                                    workflow_id,
+                                    "system",
+                                    f"Agent {agent_name} is processing...",
+                                    agent_name,
+                                )
+                            else:
+                                # Fallback to socketio emit
+                                socketio.emit(
+                                    "workflow_update",
+                                    {
+                                        "workflow_id": workflow_id,
+                                        "agent": agent_name,
+                                        "message": "Working on the task",
+                                        "timestamp": datetime.now().isoformat(),
+                                        "status": "in_progress",
+                                    },
+                                )
 
                             # Call the original function
                             response = await original_fn(messages, sender, config)
@@ -356,17 +401,32 @@ async def conversation_workflow(group_chat):
                             step["message"] = "Completed task"
                             group_chat.context["workflow_steps"] = workflow_steps
 
-                            # Emit completion
-                            socketio.emit(
-                                "workflow_update",
-                                {
-                                    "workflow_id": workflow_id,
-                                    "agent": agent_name,
-                                    "message": "Completed task",
-                                    "timestamp": datetime.now().isoformat(),
-                                    "status": "completed",
-                                },
-                            )
+                            # Log the completion message
+                            if add_to_conversation_history:
+                                add_to_conversation_history(
+                                    workflow_id,
+                                    "system",
+                                    f"Agent {agent_name} completed its task",
+                                    agent_name,
+                                )
+                            else:
+                                # Fallback to socketio emit
+                                socketio.emit(
+                                    "workflow_update",
+                                    {
+                                        "workflow_id": workflow_id,
+                                        "agent": agent_name,
+                                        "message": "Completed task",
+                                        "timestamp": datetime.now().isoformat(),
+                                        "status": "completed",
+                                    },
+                                )
+
+                            # Log the response content if it exists
+                            if isinstance(response, dict) and "content" in response:
+                                content = response["content"]
+                                if log_agent_message:
+                                    log_agent_message(workflow_id, agent_name, content)
 
                             return response
 
