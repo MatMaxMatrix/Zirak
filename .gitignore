@@ -3,9 +3,6 @@ my-app/.next/
 my-app/next-env.d.ts
 my-app/node_modules/
 my-app/tsconfig.tsbuildinfo
+my-app/virtual_projects
 # GPG test
 .gpg-test
-# macOS system files
-.DS_Store
-# Python virtual environment
-.venv/
