@@ -1,54 +1,188 @@
-import { FileExplorerProps } from "@/types/chat";
-import { FileText, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
+import { FileSystem } from "@/types/chat";
+import { FolderOpen, FolderClosed, File, ChevronRight, ChevronDown, Plus, FilePlus, FolderPlus } from "lucide-react";
+import { useState } from "react";
 
-export function FileExplorer({ fileSystem, selectedFile, toggleDirectory, selectFile }: FileExplorerProps) {
-  // Render file system tree
-  const renderFileSystemItems = (items: any[], level: number = 0) => {
-    return items.map(item => (
-      <div key={item.path} className="file-system-item">
+interface FileExplorerProps {
+  fileSystem: FileSystem[];
+  selectedFile: FileSystem | null;
+  onToggleDirectory: (path: string) => void;
+  onSelectFile: (file: FileSystem) => Promise<void>;
+  onRefresh: () => Promise<void>;
+  workingDirectory?: string;
+}
+
+export function FileExplorer({ 
+  fileSystem, 
+  selectedFile, 
+  onToggleDirectory, 
+  onSelectFile, 
+  onRefresh,
+  workingDirectory 
+}: FileExplorerProps) {
+  const [isCreating, setIsCreating] = useState<'file' | 'directory' | null>(null);
+  const [newName, setNewName] = useState('');
+  const [currentPath, setCurrentPath] = useState('');
+
+  const handleCreate = async (type: 'file' | 'directory') => {
+    setIsCreating(type);
+    setNewName('');
+    // Get the current directory path from the selected file or root
+    const path = selectedFile?.type === 'directory' ? selectedFile.path : '';
+    setCurrentPath(path);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim()) return;
+
+    console.log('Starting file/directory creation:', {
+      type: isCreating,
+      name: newName.trim(),
+      currentPath
+    });
+
+    try {
+      const command = isCreating === 'directory' ? 'mkdir -p' : 'touch';
+      // Ensure we're in the correct directory first
+      const cdCommand = currentPath ? `cd "${currentPath}" && ` : '';
+      const fullCommand = `${cdCommand}${command} "${newName.trim()}"`;
+      
+      console.log('Executing command:', fullCommand);
+
+      const response = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          command: fullCommand,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create item');
+      }
+
+      console.log('Command executed successfully, waiting for file system update...');
+
+      // Wait a bit for the file system to update
+      setTimeout(async () => {
+        try {
+          console.log('Attempting to refresh file system...');
+          // Refresh the file system to show the new item
+          await onRefresh();
+          console.log('File system refreshed successfully');
+          
+          // If we created a directory, expand it
+          if (isCreating === 'directory' && currentPath) {
+            console.log('Expanding directory:', currentPath);
+            onToggleDirectory(currentPath);
+          }
+        } catch (error) {
+          console.error('Error refreshing file system:', error);
+        } finally {
+          console.log('Resetting form state');
+          // Reset the form
+          setIsCreating(null);
+          setNewName('');
+          setCurrentPath('');
+        }
+      }, 1000); // Increased delay to 1 second for more reliable refresh
+    } catch (error) {
+      console.error('Error creating item:', error);
+    }
+  };
+
+  const renderItem = (item: FileSystem, level: number = 0) => {
+    const isDirectory = item.type === 'directory';
+    const isSelected = selectedFile?.path === item.path;
+    const isExpanded = item.expanded;
+    const paddingLeft = `${level * 16}px`;
+
+    return (
+      <div key={item.path}>
         <div
-          className={`flex items-center py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer ${
-            selectedFile?.path === item.path ? 'bg-gray-100 dark:bg-gray-800' : ''
+          className={`flex items-center py-1 px-2 hover:bg-[#1D1D1D] cursor-pointer ${
+            isSelected ? 'bg-[#1D1D1D]' : ''
           }`}
-          style={{ paddingLeft: `${level * 12 + 8}px` }}
-          onClick={() => item.type === 'directory' ? toggleDirectory(item.path) : selectFile(item)}
+          style={{ paddingLeft }}
+          onClick={() => {
+            if (isDirectory) {
+              onToggleDirectory(item.path);
+            } else {
+              onSelectFile(item);
+            }
+          }}
         >
-          {item.type === 'directory' ? (
+          {isDirectory ? (
             <>
-              {item.expanded ? (
-                <ChevronDown size={16} className="mr-1" />
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4 text-gray-400 mr-1" />
               ) : (
-                <ChevronRight size={16} className="mr-1" />
+                <ChevronRight className="h-4 w-4 text-gray-400 mr-1" />
               )}
-              {item.expanded ? (
-                <FolderOpen size={16} className="mr-2 text-amber-500" />
+              {isExpanded ? (
+                <FolderOpen className="h-4 w-4 text-blue-500 mr-2" />
               ) : (
-                <Folder size={16} className="mr-2 text-amber-500" />
+                <FolderClosed className="h-4 w-4 text-blue-500 mr-2" />
               )}
             </>
           ) : (
-            <FileText size={16} className="ml-5 mr-2 text-blue-500" />
+            <File className="h-4 w-4 text-gray-400 mr-2" />
           )}
-          <span className="text-sm truncate">{item.name}</span>
+          <span className="text-sm text-gray-300">{item.name}</span>
         </div>
-        
-        {item.type === 'directory' && item.expanded && item.children && (
-          <div className="file-children">
-            {renderFileSystemItems(item.children, level + 1)}
+        {isDirectory && isExpanded && item.children && (
+          <div>
+            {item.children.map((child: FileSystem) => renderItem(child, level + 1))}
           </div>
         )}
       </div>
-    ));
+    );
   };
 
+  // Get the project name from the root directory
+  const projectName = fileSystem[0]?.name || 'Project';
+
   return (
-    <div className="h-full overflow-auto">
-      <div className="p-2 bg-muted/30 border-b flex items-center">
-        <Folder className="h-4 w-4 mr-2 text-amber-500" />
-        <span className="text-xs font-medium">Project Files</span>
+    <div className="h-full flex flex-col">
+      <div className="flex items-center justify-between p-2 border-b border-[#1D1D1D]">
+        <div className="flex items-center gap-2">
+          <FolderOpen className="h-4 w-4 text-blue-500" />
+          <span className="text-sm font-medium text-gray-300">{projectName}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => handleCreate('file')}
+            className="h-6 w-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-200 hover:bg-[#1D1D1D]"
+            title="New File"
+          >
+            <FilePlus className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleCreate('directory')}
+            className="h-6 w-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-200 hover:bg-[#1D1D1D]"
+            title="New Folder"
+          >
+            <FolderPlus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-      <div className="p-2">
-        {renderFileSystemItems(fileSystem)}
+
+      <div className="flex-1 overflow-auto">
+        {isCreating && (
+          <form onSubmit={handleSubmit} className="p-2">
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder={`New ${isCreating}...`}
+              className="w-full bg-[#1D1D1D] text-gray-300 text-sm px-2 py-1 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+              autoFocus
+            />
+          </form>
+        )}
+        {fileSystem.map((item) => renderItem(item))}
       </div>
     </div>
   );

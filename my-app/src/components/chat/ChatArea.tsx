@@ -1,8 +1,8 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SendIcon, Bot, User, Circle } from "lucide-react";
+import { SendIcon, Bot, User, Circle, WifiOff, RefreshCw, AlertTriangle, Server, Terminal, Mic } from "lucide-react";
 import { ChatAreaProps } from "@/types/chat";
-import { renderMessageContent } from "@/lib/chat-utils";
+import { renderMessageContent, diagnoseWebSocketIssues } from "@/lib/chat-utils";
+import { useWebSocket } from "@/app/contexts/WebSocketContext";
+import { useEffect, useState } from "react";
 
 export function ChatArea({
   messages,
@@ -15,95 +15,271 @@ export function ChatArea({
   inputRequired,
   messagesEndRef
 }: ChatAreaProps) {
-  return (
-    <div className="flex flex-col border-r transition-all duration-75">
-      <div className="flex items-center justify-between p-3 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-900">
-        <div className="flex items-center">
-          <Bot className="h-5 w-5 mr-2 text-blue-500" />
-          <h2 className="font-semibold">Zirak AI Chat</h2>
-        </div>
-      </div>
+  const { connected, refreshConnection, socket, backendMissing, connectionAttempted } = useWebSocket();
+  const [showReconnectMsg, setShowReconnectMsg] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [transportType, setTransportType] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<any>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+
+  // Show reconnect message after connection loss
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (!connected && connectionAttempted && !backendMissing) {
+      timer = setTimeout(() => {
+        setShowReconnectMsg(true);
+        setConnectionAttempts(prev => prev + 1);
+      }, 5000);
+    } else {
+      setShowReconnectMsg(false);
+      setReconnecting(false);
+      setConnectionAttempts(0);
+      setShowDiagnostics(false);
+      setRetryCount(0);
       
-      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-950">
-        <div className="space-y-6 max-w-3xl mx-auto">
-          {messages.length === 0 ? (
-            <div className="text-center py-10">
-              <Bot className="mx-auto h-12 w-12 text-blue-500 mb-3 opacity-50" />
-              <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Start a conversation</h3>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Ask Zirak a question to begin</p>
+      // Check transport type when connected
+      if (socket?.io?.engine?.transport?.name) {
+        // @ts-ignore - internal Socket.IO property
+        setTransportType(socket.io.engine.transport.name);
+      }
+    }
+    
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [connected, socket, connectionAttempted, backendMissing]);
+
+  // Progressive reconnection strategy
+  const handleReconnect = () => {
+    // If backend is missing, show message instead
+    if (backendMissing) {
+      window.alert('The backend server is not running. Please start the server and then refresh this page.');
+      return;
+    }
+    
+    setReconnecting(true);
+    setRetryCount(prev => prev + 1);
+    
+    // Simple refresh if multiple retries have failed
+    if (retryCount > 1) {
+      window.location.reload();
+      return;
+    }
+    
+    // Call the underlying reconnection function
+    refreshConnection();
+    
+    // Set a timeout to reset the reconnecting state if it takes too long
+    setTimeout(() => {
+      if (!connected) {
+        setReconnecting(false);
+      }
+    }, 5000);
+  };
+
+  // Get appropriate connection error message
+  const getConnectionErrorMessage = () => {
+    if (backendMissing) {
+      return "Backend server is not running";
+    }
+    if (connectionAttempts > 2) {
+      return "Connection issues persist. Try refreshing the page.";
+    }
+    return "Connection to server lost";
+  };
+
+  // Get button text
+  const getButtonText = () => {
+    if (backendMissing) return 'Start Server';
+    if (reconnecting) return 'Reconnecting...';
+    if (retryCount > 0) return 'Refresh Page';
+    return 'Reconnect';
+  };
+
+  // Show development instructions for starting the server
+  const getBackendInstructions = () => {
+    return (
+      <div className="p-3 text-xs">
+        <p className="font-medium mb-1">To start the backend server:</p>
+        <div className="bg-gray-800 p-2 rounded mb-2 font-mono">
+          <p>cd backend</p>
+          <p>python app.py</p>
+        </div>
+        <p>Then refresh this page.</p>
+      </div>
+    );
+  };
+
+  // Check if messages array is empty
+  const hasMessages = messages && messages.length > 0;
+
+  return (
+    <div className="flex flex-col h-full w-full bg-[#131314]">
+      {/* Backend missing alert */}
+      {backendMissing && (
+        <div className="bg-red-900/80 border-b border-red-700 text-white px-4 py-3 flex flex-col">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Server size={18} className="text-red-300" />
+              <span className="font-medium">Backend server is not running</span>
             </div>
-          ) : (
-            messages.map((message) => (
-              <div 
-                key={message.id} 
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {message.role !== 'user' && (
-                  <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center mr-2 mt-1 flex-shrink-0">
-                    <Bot className="h-5 w-5 text-blue-600 dark:text-blue-300" />
-                  </div>
-                )}
-                <div 
-                  className={`max-w-[85%] rounded-2xl p-4 shadow-sm ${
-                    message.role === 'user' 
-                      ? 'bg-primary text-primary-foreground rounded-tr-none' 
-                      : 'bg-white dark:bg-gray-800 rounded-tl-none border border-gray-100 dark:border-gray-700'
-                  }`}
-                >
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    {renderMessageContent(message.content)}
-                  </div>
-                  <div className={`text-xs mt-2 ${message.role === 'user' ? 'text-blue-100' : 'text-gray-400'}`}>
-                    {new Date(message.timestamp || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            <button 
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1 text-xs bg-red-800 hover:bg-red-700 px-2 py-1 rounded"
+            >
+              <RefreshCw size={14} />
+              Refresh Page
+            </button>
+          </div>
+          {showDiagnostics && getBackendInstructions()}
+          <button 
+            onClick={() => setShowDiagnostics(!showDiagnostics)} 
+            className="text-xs text-red-300 underline self-start mt-1"
+          >
+            {showDiagnostics ? 'Hide instructions' : 'Show instructions'}
+          </button>
+        </div>
+      )}
+
+      {/* Connection lost alert (only show if backend is running but connection lost) */}
+      {!connected && !backendMissing && connectionAttempted && (
+        <div className="bg-yellow-900/50 border-b border-yellow-600 text-white px-4 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <WifiOff size={18} className="text-yellow-400" />
+            <span>{getConnectionErrorMessage()}</span>
+          </div>
+          {showReconnectMsg && (
+            <button 
+              onClick={handleReconnect}
+              disabled={reconnecting}
+              className="flex items-center gap-1 text-xs bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={reconnecting ? "animate-spin" : ""} />
+              {getButtonText()}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Transport type information - only show when debugging */}
+      {transportType && process.env.NODE_ENV !== 'production' && (
+        <div className="bg-gray-800/50 border-b border-gray-700 text-gray-300 text-xs px-4 py-1">
+          Using transport: {transportType}
+        </div>
+      )}
+
+      {/* Main content container with proper layout */}
+      <div className="flex flex-col flex-grow relative">
+        {/* Messages area with ChatGPT style */}
+        <div className="flex-1 overflow-y-auto w-full">
+          {!hasMessages && (
+            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+              <h1 className="text-2xl font-semibold mb-4 text-white">What can I help with?</h1>
+              
+              {backendMissing ? (
+                <div className="text-center max-w-md">
+                  <Server size={40} className="mx-auto mb-3 text-gray-400" />
+                  <h3 className="text-lg font-medium mb-2 text-gray-200">Backend Server Not Running</h3>
+                  <p className="text-sm text-gray-400 mb-3">
+                    The chat functionality requires a backend server to be running. Please start the server and refresh this page.
+                  </p>
+                  <div className="bg-gray-800/80 p-3 rounded-md text-xs font-mono text-gray-300 mb-3">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Terminal size={12} />
+                      <span className="font-medium">Start the backend server:</span>
+                    </div>
+                    <div className="bg-gray-900 p-2 rounded mb-1">
+                      <p>cd backend</p>
+                      <p>python app.py</p>
+                    </div>
                   </div>
                 </div>
-                {message.role === 'user' && (
-                  <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center ml-2 mt-1 flex-shrink-0">
-                    <User className="h-5 w-5 text-primary-foreground" />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-md">
+                  <div className="bg-[#202123] p-3 rounded-lg hover:bg-[#2a2b32] cursor-pointer transition">
+                    <p className="font-medium text-sm text-gray-200 mb-1">Create a simple todo app</p>
+                    <p className="text-xs text-gray-400">with React and TypeScript</p>
                   </div>
-                )}
-              </div>
-            ))
+                  <div className="bg-[#202123] p-3 rounded-lg hover:bg-[#2a2b32] cursor-pointer transition">
+                    <p className="font-medium text-sm text-gray-200 mb-1">Explain quantum computing</p>
+                    <p className="text-xs text-gray-400">in simple terms</p>
+                  </div>
+                  <div className="bg-[#202123] p-3 rounded-lg hover:bg-[#2a2b32] cursor-pointer transition">
+                    <p className="font-medium text-sm text-gray-200 mb-1">Write a Python script</p>
+                    <p className="text-xs text-gray-400">to analyze CSV data</p>
+                  </div>
+                  <div className="bg-[#202123] p-3 rounded-lg hover:bg-[#2a2b32] cursor-pointer transition">
+                    <p className="font-medium text-sm text-gray-200 mb-1">How do I make an API</p>
+                    <p className="text-xs text-gray-400">with FastAPI and PostgreSQL</p>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-          <div ref={messagesEndRef} />
+        
+          {hasMessages && (
+            <div className="pt-3 md:pt-6 w-full pb-16">
+              {messages.map((message, index) => (
+                <div key={index} className={`px-3 md:px-6 lg:px-10 py-2 ${message.role === 'assistant' ? 'bg-[#1E1E1E]' : ''}`}>
+                  <div className="max-w-3xl mx-auto flex gap-3 md:gap-4">
+                    <div className="flex-shrink-0 pt-1">
+                      {message.role === 'user' ? (
+                        <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center text-white">
+                          <User size={14} />
+                        </div>
+                      ) : message.role === 'assistant' ? (
+                        <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white">
+                          <Bot size={14} />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-white">
+                          <AlertTriangle size={14} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 prose prose-invert prose-sm max-w-none text-gray-200 text-sm">
+                      {message.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div ref={messagesEndRef} className="h-16" />
+            </div>
+          )}
         </div>
-      </div>
-      
-      <div className="border-t p-4 bg-white dark:bg-gray-900">
-        {needsClarification && (
-          <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-900/30 border-l-4 border-amber-500 text-sm text-amber-800 dark:text-amber-200 rounded">
-            <p className="font-medium">{inputPrompt || "More information needed"}</p>
+
+        {/* Input area */}
+        <div className="sticky bottom-0 w-full bg-[#131314] border-t border-[#2A2A2A] p-3 md:p-4 mt-auto">
+          <div className="max-w-3xl mx-auto">
+            <form onSubmit={handleSubmit} className="relative">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={backendMissing ? "Start the backend server first..." : connected ? (inputPrompt || "Ask anything...") : "Reconnect to send messages..."}
+                className="w-full bg-[#202123] border border-[#424242] text-white text-sm rounded-lg pl-3 pr-10 py-2 focus:outline-none"
+                disabled={isLoading || (inputRequired && !input) || !connected || backendMissing}
+              />
+              <button
+                type="submit"
+                disabled={!input.trim() || isLoading || !connected || backendMissing}
+                className={`absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-md ${input.trim() ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-600'} disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+              >
+                {isLoading ? (
+                  <RefreshCw size={16} className="text-white animate-spin" />
+                ) : (
+                  <SendIcon size={16} className="text-white" />
+                )}
+              </button>
+            </form>
+            <p className="text-xs text-center text-gray-500 mt-1">
+              Messages are processed on your organization's server.
+            </p>
           </div>
-        )}
-        <form onSubmit={handleSubmit} className="flex w-full space-x-2">
-          <div className="relative flex-1">
-            <Input
-              id="message-input"
-              className={`flex-1 pr-10 py-6 rounded-full pl-4 ${
-                needsClarification ? 'border-amber-500 focus-visible:ring-amber-500' : 'focus-visible:ring-blue-500'
-              }`}
-              placeholder={inputRequired 
-                ? "Type your response..." 
-                : "Type a message..."
-              }
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={isLoading}
-            />
-          </div>
-          <Button 
-            type="submit" 
-            size="icon" 
-            className="rounded-full h-12 w-12 bg-blue-600 hover:bg-blue-700"
-            disabled={isLoading || !input.trim()}
-          >
-            {isLoading ? (
-              <Circle className="animate-spin" size={20} />
-            ) : (
-              <SendIcon size={20} />
-            )}
-          </Button>
-        </form>
+        </div>
       </div>
     </div>
   );

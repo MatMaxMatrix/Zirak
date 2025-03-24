@@ -63,9 +63,34 @@ export function useFileSystem() {
   const refreshFileSystem = async () => {
     try {
       const result = await fetchFileSystem();
-      setFileSystem(result.fileSystem);
+      if (result.fileSystem) {
+        // Ensure we're getting a valid file system structure
+        const validFileSystem = result.fileSystem.map((item: FileSystem) => ({
+          ...item,
+          expanded: item.type === 'directory' ? true : undefined,
+          children: item.children || []
+        }));
+        setFileSystem(validFileSystem);
+      }
     } catch (error) {
       console.error('Failed to refresh file system:', error);
+      // If the first attempt fails, try again after a short delay
+      setTimeout(async () => {
+        try {
+          const result = await fetchFileSystem();
+          if (result.fileSystem) {
+            // Ensure we're getting a valid file system structure
+            const validFileSystem = result.fileSystem.map((item: FileSystem) => ({
+              ...item,
+              expanded: item.type === 'directory' ? true : undefined,
+              children: item.children || []
+            }));
+            setFileSystem(validFileSystem);
+          }
+        } catch (error) {
+          console.error('Failed to refresh file system after retry:', error);
+        }
+      }, 100);
     }
   };
 

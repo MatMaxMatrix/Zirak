@@ -3,7 +3,7 @@ import { getAgentColor, renderMessageContent } from "@/lib/chat-utils";
 import { WorkflowDisplayProps } from "@/types/chat";
 
 export function WorkflowDisplay({ workflowSteps, workflowEndRef }: WorkflowDisplayProps) {
-  if (workflowSteps.length === 0) {
+  if (!workflowSteps || workflowSteps.length === 0) {
     return (
       <div className="text-center p-4 text-gray-500 h-full flex flex-col items-center justify-center">
         <Circle className="h-12 w-12 mb-2 text-gray-400" />
@@ -16,7 +16,7 @@ export function WorkflowDisplay({ workflowSteps, workflowEndRef }: WorkflowDispl
     <div className="space-y-3">
       {workflowSteps.map((step, index) => (
         <div
-          key={step.id}
+          key={step.id || index}
           className={`rounded-lg border p-3 ${
             step.status === 'active' ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30' :
             step.status === 'complete' ? 'border-green-500 bg-green-50 dark:bg-green-950/30' :
@@ -34,14 +34,14 @@ export function WorkflowDisplay({ workflowSteps, workflowEndRef }: WorkflowDispl
             <div className="flex-1">
               <div className="mb-1 flex items-center">
                 <span className="font-medium" style={{ color: getAgentColor(step.agent) }}>
-                  {step.agent}
+                  {step.agent || 'System'}
                 </span>
                 <span className="ml-auto text-xs text-gray-500">
-                  {new Date(step.timestamp).toLocaleTimeString()}
+                  {step.timestamp ? new Date(step.timestamp).toLocaleTimeString() : ''}
                 </span>
               </div>
               <div className="text-sm">
-                {renderMessageContent(step.message)}
+                {renderMessageContent(step.message || '')}
               </div>
             </div>
           </div>

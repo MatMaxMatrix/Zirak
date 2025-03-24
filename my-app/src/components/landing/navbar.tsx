@@ -40,24 +40,24 @@ export function Navbar() {
       className={cn(
         "fixed top-0 z-50 w-full transition-all duration-200",
         isScrolled
-          ? "bg-background/80 backdrop-blur-md border-b"
-          : "bg-transparent"
+          ? "bg-[#1A1A1A]/95 backdrop-blur-md border-b border-[#2A2A2A]"
+          : "bg-[#1A1A1A]"
       )}
     >
-      <div className="container mx-auto flex h-16 items-center justify-between px-4">
+      <div className="container mx-auto flex h-12 items-center justify-between px-4">
         <Link href="/" className="flex items-center space-x-2">
-          <span className="text-xl font-bold">My App</span>
+          <span className="text-lg font-bold">My App</span>
         </Link>
 
         {/* Desktop navigation */}
-        <nav className="hidden md:flex items-center space-x-6">
-          <div className="flex items-center space-x-6">
+        <nav className="hidden md:flex items-center space-x-4">
+          <div className="flex items-center space-x-4">
             {links.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
                 className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary",
+                  "text-xs font-medium transition-colors hover:text-primary",
                   isScrolled ? "text-foreground" : "text-foreground/90"
                 )}
               >
@@ -69,14 +69,14 @@ export function Navbar() {
             <ThemeToggle />
             {pathname !== "/login" && (
               <Link href="/login">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" className="text-xs h-7 px-2">
                   Sign In
                 </Button>
               </Link>
             )}
             {pathname !== "/dashboard" && (
               <Link href="/dashboard">
-                <Button size="sm">Dashboard</Button>
+                <Button className="text-xs h-7 px-2">Dashboard</Button>
               </Link>
             )}
           </div>
@@ -88,13 +88,14 @@ export function Navbar() {
           <Button
             variant="ghost"
             size="icon"
+            className="h-7 w-7"
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
             aria-label="Toggle menu"
           >
             {mobileNavOpen ? (
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             ) : (
-              <Menu className="h-5 w-5" />
+              <Menu className="h-4 w-4" />
             )}
           </Button>
         </div>
@@ -102,13 +103,13 @@ export function Navbar() {
 
       {/* Mobile navigation menu */}
       {mobileNavOpen && (
-        <div className="md:hidden border-b bg-background">
-          <div className="container mx-auto py-4 px-4 space-y-3">
+        <div className="md:hidden border-b bg-[#1A1A1A]">
+          <div className="container mx-auto py-2 px-4 space-y-2">
             {links.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
-                className="block py-2 text-foreground"
+                className="block py-1.5 text-foreground text-sm"
                 onClick={() => setMobileNavOpen(false)}
               >
                 {link.name}
@@ -119,7 +120,7 @@ export function Navbar() {
                 href="/login"
                 onClick={() => setMobileNavOpen(false)}
               >
-                <Button variant="outline" className="w-full">
+                <Button variant="outline" className="w-full h-8 text-xs">
                   Sign In
                 </Button>
               </Link>
@@ -127,7 +128,7 @@ export function Navbar() {
                 href="/dashboard"
                 onClick={() => setMobileNavOpen(false)}
               >
-                <Button className="w-full">Dashboard</Button>
+                <Button className="w-full h-8 text-xs">Dashboard</Button>
               </Link>
             </div>
           </div>
