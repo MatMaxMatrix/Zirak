@@ -5,3 +5,7 @@ my-app/node_modules/
 my-app/tsconfig.tsbuildinfo
 # GPG test
 .gpg-test
+# macOS system files
+.DS_Store
+# Python virtual environment
+.venv/
