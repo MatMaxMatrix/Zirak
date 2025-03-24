@@ -1,6 +1,6 @@
 "use client";
 
-import { Navbar } from "@/components/landing/navbar";
+import { Navbar, NavbarWithProject } from "@/components/landing/navbar";
 import { useEffect, useRef, useState } from "react";
 import { useWebSocket } from "@/app/contexts/WebSocketContext";
 import { useRouter } from 'next/navigation';
@@ -27,6 +27,8 @@ export default function ChatPage() {
   const [showWorkspace, setShowWorkspace] = useState(true);
   const [needsClarification, setNeedsClarification] = useState(false);
   const [debugVisible, setDebugVisible] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   
   // References for scrolling
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -140,6 +142,88 @@ export default function ChatPage() {
     terminal.setShowTerminal(!terminal.showTerminal);
   };
 
+  // Add a function to set the preview URL
+  const handleSetPreviewUrl = (url: string) => {
+    if (!url.trim()) return;
+    
+    setIsPreviewLoading(true);
+    
+    try {
+      // Process the URL
+      let processedUrl = url.trim();
+      
+      // If URL doesn't have a protocol
+      if (!/^https?:\/\//i.test(processedUrl)) {
+        // If it has spaces or no dots, treat as a search query
+        if (processedUrl.includes(' ') || !processedUrl.includes('.')) {
+          processedUrl = `https://www.bing.com/search?q=${encodeURIComponent(processedUrl)}`;
+        } else {
+          // Otherwise treat as a domain
+          processedUrl = `https://${processedUrl}`;
+        }
+      }
+      
+      // Double-check it's a valid URL
+      try {
+        new URL(processedUrl);
+      } catch (e) {
+        // If not a valid URL, try searching
+        processedUrl = `https://www.bing.com/search?q=${encodeURIComponent(url)}`;
+      }
+      
+      console.log('Setting preview URL to:', processedUrl);
+      setPreviewUrl(processedUrl);
+      setActiveTab('preview');
+      
+      // Simulate loading for a better UX
+      setTimeout(() => {
+        setIsPreviewLoading(false);
+      }, 500);
+    } catch (error) {
+      console.error('Error setting preview URL:', error);
+      setIsPreviewLoading(false);
+    }
+  };
+
+  // Override terminal command execution to handle preview command
+  const handleTerminalCommand = async (command: string) => {
+    const lowerCommand = command.toLowerCase().trim();
+    
+    // Check if it's a preview or open command
+    if (lowerCommand.startsWith('preview ') || lowerCommand.startsWith('open ')) {
+      const isPreviewCommand = lowerCommand.startsWith('preview ');
+      const url = command.substring(isPreviewCommand ? 8 : 5).trim();
+      
+      if (!url) {
+        // Add error message to terminal
+        webSocket.addTerminalCommand({
+          id: uuidv4(),
+          command: command,
+          output: `Error: Please provide a URL to ${isPreviewCommand ? 'preview' : 'open'}.`,
+          error: 'Missing URL parameter',
+          timestamp: new Date().toISOString(),
+          exitCode: 1
+        });
+        return;
+      }
+      
+      handleSetPreviewUrl(url);
+      
+      // Add to terminal history
+      webSocket.addTerminalCommand({
+        id: uuidv4(),
+        command: command,
+        output: `Opening ${url} in preview tab.`,
+        timestamp: new Date().toISOString()
+      });
+      
+      return;
+    }
+    
+    // Handle other commands normally
+    await terminal.executeTerminalCommand(command);
+  };
+
   // Return the debug component to show connection status
   if (debugVisible) {
     return (
@@ -170,7 +254,12 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-screen bg-[#0C0C0C] text-white">
       <div className="flex-none z-10">
-        <Navbar />
+        <NavbarWithProject 
+          currentProject={fileSystem.currentProject} 
+          onSelectProject={fileSystem.handleProjectSelect}
+          onCreateProject={fileSystem.handleCreateProject}
+          onConfigureProject={() => {}}
+        />
       </div>
       
       <div className="flex-1 overflow-hidden pt-12">
@@ -219,7 +308,7 @@ export default function ChatPage() {
                   selectCompletion={terminal.selectCompletion}
                   setShowCompletions={terminal.setShowCompletions}
                   setSelectedCompletion={terminal.setSelectedCompletion}
-                  executeTerminalCommand={terminal.executeTerminalCommand}
+                  executeTerminalCommand={handleTerminalCommand}
                   copiedText={terminal.copiedText}
                   copyTerminalContent={terminal.copyTerminalContent}
                   clearTerminal={terminal.clearTerminal}
@@ -231,6 +320,9 @@ export default function ChatPage() {
                   workflowEndRef={workflowEndRef}
                   fileExplorerWidth={resizing.fileExplorerWidth}
                   handleFileExplorerResize={resizing.handleFileExplorerResize}
+                  openFile={terminal.openFile}
+                  previewUrl={previewUrl}
+                  isPreviewLoading={isPreviewLoading}
                 />
                 
                 {/* Terminal Button - Only show when terminal is closed */}
@@ -254,10 +346,10 @@ export default function ChatPage() {
           {!showWorkspace && (
             <button
               onClick={() => setShowWorkspace(true)}
-              className="h-full flex items-center justify-center bg-[#1A1A1A] border-r border-[#2A2A2A] px-1 hover:bg-[#2A2A2A] transition-colors"
+              className="h-12 flex items-center justify-center bg-[#1A1A1A] border-r border-[#2A2A2A] border-b hover:bg-[#2A2A2A] transition-colors px-1 w-6"
               title="Show Workspace"
             >
-              <ChevronRight className="h-3 w-3 text-gray-400" />
+              <ChevronRight className="h-4 w-4 text-gray-400" />
             </button>
           )}
           

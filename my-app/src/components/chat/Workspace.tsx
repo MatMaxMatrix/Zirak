@@ -55,7 +55,8 @@ export function Workspace({
   fileEditorRef,
   workflowEndRef,
   previewUrl,
-  isPreviewLoading
+  isPreviewLoading,
+  openFile
 }: WorkspaceProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentFilePath, setCurrentFilePath] = useState('');
@@ -90,8 +91,22 @@ export function Workspace({
   // Function to select a file to view its contents
   const selectFile = async (file: any) => {
     if (file.type === 'file') {
+      console.log('Selecting file:', file);
       setSelectedFile(file);
       setActiveTab('editor');
+      
+      // If we have an external openFile function, use it
+      if (typeof openFile === 'function') {
+        const filePath = file.path.startsWith('/project/') ? file.path : `/project/${file.path}`;
+        console.log('Opening file using openFile function:', filePath);
+        const success = await openFile(filePath);
+        
+        if (!success) {
+          console.error('Failed to open file using openFile function');
+        }
+        
+        return;
+      }
       
       try {
         // Ensure the file path is properly formatted
@@ -113,12 +128,27 @@ export function Workspace({
         const data = await response.json();
         if (data.file) {
           console.log('File content loaded:', { path: data.file.path, contentLength: data.file.content.length });
-          setCurrentFileContent(data.file.content);
-          setCurrentFilePath(data.file.path);
-          setIsEditing(true);
           
-          // Update the selected file's content
-          file.content = data.file.content;
+          // When using external editing (editingFile prop), pass content to parent components
+          if (typeof setFileContent === 'function') {
+            console.log("Using external file content state");
+            setFileContent(data.file.content);
+            // If we have a function to start editing mode externally
+            if (typeof saveFileContent === 'function') {
+              // This might trigger the parent component's editing state
+              file.content = data.file.content;
+            }
+          } else {
+            // Use internal state management
+            setCurrentFileContent(data.file.content);
+            setCurrentFilePath(data.file.path);
+            setIsEditing(true);
+            
+            // Update the selected file's content
+            file.content = data.file.content;
+          }
+          
+          console.log('State updated with file content');
         } else {
           throw new Error('Invalid file data received');
         }
@@ -391,82 +421,65 @@ export function Workspace({
     setShowProjectConfig(false);
   };
 
+  // Debug logging
+  useEffect(() => {
+    console.log('Workspace state updated - isEditing:', isEditing, 'editingFile:', editingFile, 'selectedFile:', selectedFile?.path);
+  }, [isEditing, editingFile, selectedFile]);
+
   return (
     <div className="flex flex-col h-full">
-      {/* Workspace Header */}
-      <div className="flex justify-between items-center py-1 px-2 border-b border-[#2A2A2A] bg-[#1A1A1A]">
-        <div className="flex items-center gap-1">
-          <ProjectSelector 
-            currentProject={currentProject} 
-            onSelect={handleProjectSelect}
-            onCreateProject={handleCreateProject}
-            onConfigureProject={handleOpenProjectConfig}
-          />
-          
-          {showProjectConfig && (
-            <ProjectConfigModal
-              project={currentProject}
-              onClose={() => setShowProjectConfig(false)}
-              onSave={handleSaveProjectConfig}
-            />
-          )}
+      {/* Tabs + Workspace Toggle */}
+      <div className="flex bg-[#1A1A1A] border-b border-[#2A2A2A] justify-between items-center h-8">
+        <div className="flex h-full">
+          <button
+            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'workflow' 
+                ? 'border-blue-500 text-white'
+                : 'border-transparent text-gray-400 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('workflow')}
+          >
+            Workflow
+          </button>
+          <button
+            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'editor' 
+                ? 'border-blue-500 text-white'
+                : 'border-transparent text-gray-400 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('editor')}
+          >
+            Editor
+          </button>
+          <button
+            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
+              activeTab === 'preview' 
+                ? 'border-blue-500 text-white'
+                : 'border-transparent text-gray-400 hover:text-gray-300'
+            }`}
+            onClick={() => setActiveTab('preview')}
+          >
+            Preview
+          </button>
         </div>
         
-        <div className="flex items-center gap-1">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={handleTerminalToggle}
-            className={`h-6 w-6 ${showTerminal ? 'bg-blue-800/30 text-white' : 'text-gray-400 hover:text-gray-200'}`}
-            title={showTerminal ? "Hide Terminal" : "Show Terminal"}
-          >
-            <TerminalIcon size={12} />
-          </Button>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setShowWorkspace(false)}
-            className="h-6 w-6"
-            title="Hide Workspace"
-          >
-            <ChevronLeft size={12} />
-          </Button>
-        </div>
-      </div>
-      
-      {/* Tabs */}
-      <div className="flex bg-[#1A1A1A] border-b border-[#2A2A2A]">
-        <button
-          className={`px-2 py-1 text-xs font-medium border-b-2 transition-colors ${
-            activeTab === 'workflow' 
-              ? 'border-blue-500 text-white'
-              : 'border-transparent text-gray-400 hover:text-gray-300'
-          }`}
-          onClick={() => setActiveTab('workflow')}
+        {showProjectConfig && (
+          <ProjectConfigModal
+            project={currentProject}
+            onClose={() => setShowProjectConfig(false)}
+            onSave={handleSaveProjectConfig}
+          />
+        )}
+        
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          onClick={() => setShowWorkspace(false)}
+          className="h-6 w-6 mr-1"
+          title="Hide Workspace"
         >
-          Workflow
-        </button>
-        <button
-          className={`px-2 py-1 text-xs font-medium border-b-2 transition-colors ${
-            activeTab === 'editor' 
-              ? 'border-blue-500 text-white'
-              : 'border-transparent text-gray-400 hover:text-gray-300'
-          }`}
-          onClick={() => setActiveTab('editor')}
-        >
-          Editor
-        </button>
-        <button
-          className={`px-2 py-1 text-xs font-medium border-b-2 transition-colors ${
-            activeTab === 'preview' 
-              ? 'border-blue-500 text-white'
-              : 'border-transparent text-gray-400 hover:text-gray-300'
-          }`}
-          onClick={() => setActiveTab('preview')}
-        >
-          Preview
-        </button>
+          <ChevronLeft size={14} />
+        </Button>
       </div>
       
       {/* Main content area */}
@@ -512,13 +525,13 @@ export function Workspace({
               className="flex-1 flex flex-col overflow-hidden bg-[#121212]"
               style={{ width: `${100 - fileExplorerWidth}%` }}
             >
-              {editingFile ? (
+              {editingFile || isEditing ? (
                 <FileEditor 
-                  content={fileContent}
-                  setContent={setFileContent}
-                  onSave={handleSaveFile}
-                  onCancel={handleCancelEditing}
-                  filePath={filePath}
+                  fileContent={editingFile ? fileContent : currentFileContent}
+                  setFileContent={editingFile ? setFileContent : setCurrentFileContent}
+                  saveFileContent={editingFile ? saveFileContent : handleSaveFile}
+                  cancelFileEditing={editingFile ? cancelFileEditing : handleCancelEditing}
+                  filePath={editingFile ? filePath : currentFilePath}
                   fileEditorRef={fileEditorRef}
                 />
               ) : selectedFile ? (
@@ -604,6 +617,10 @@ export function Workspace({
                 terminalInputRef={terminalInputRef}
                 terminalEndRef={terminalEndRef}
                 copiedText={copiedText}
+                copyTerminalContent={copyTerminalContent}
+                clearTerminal={clearTerminal}
+                refreshFileSystem={refreshFileSystem}
+                closeTerminal={closeTerminal}
               />
             </div>
           </>

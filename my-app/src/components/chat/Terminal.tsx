@@ -88,50 +88,7 @@ export function Terminal({
   
   return (
     <div className="h-full flex flex-col overflow-hidden" onClick={focusTerminalInput}>
-      {/* Terminal Header */}
-      <div className="bg-black border-b border-gray-800 py-1 px-2 flex justify-between items-center">
-        <span className="text-gray-400 text-xs font-semibold">Terminal</span>
-        <div className="flex items-center space-x-2">
-          <button 
-            onClick={copyTerminalContent}
-            className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-            title="Copy terminal content"
-          >
-            {copiedText ? <CheckCheck size={14} /> : <Copy size={14} />}
-          </button>
-          
-          <button 
-            onClick={() => {
-              clearTerminal?.();
-              terminalInputRef.current?.focus();
-            }}
-            className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-            title="Clear terminal"
-          >
-            <Trash2 size={14} />
-          </button>
-          
-          <button 
-            onClick={() => {
-              refreshFileSystem?.();
-              terminalInputRef.current?.focus();
-            }}
-            className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-            title="Refresh file system"
-          >
-            <RefreshCw size={14} />
-          </button>
-          
-          <button 
-            onClick={closeTerminal}
-            className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
-            title="Close terminal"
-          >
-            <XCircle size={14} />
-          </button>
-        </div>
-      </div>
-      
+      {/* Terminal Content */}
       <div 
         className="flex-1 overflow-auto p-0 font-mono bg-black text-gray-200 rounded-none terminal-scrollbar mac-terminal"
         style={{ tabSize: 4 }}

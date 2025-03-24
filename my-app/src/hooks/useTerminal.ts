@@ -437,6 +437,54 @@ export function useTerminal() {
     setShowWelcomeMessage(false);
   };
 
+  // Function to open a file for editing
+  const openFile = async (filePath: string) => {
+    try {
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      if (data.file) {
+        setFileContent(data.file.content);
+        setFilePath(data.file.path);
+        setEditingFile(true);
+        
+        // Add to terminal command history
+        webSocket.addTerminalCommand({
+          id: uuidv4(),
+          command: `open ${path.basename(filePath)}`,
+          output: `Opened file: ${path.basename(filePath)}`,
+          timestamp: new Date().toISOString()
+        });
+        
+        return true;
+      } else {
+        throw new Error('File not found');
+      }
+    } catch (error) {
+      console.error('Failed to open file:', error);
+      
+      webSocket.addTerminalCommand({
+        id: uuidv4(),
+        command: `open ${path.basename(filePath)}`,
+        output: `Error opening file: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: new Date().toISOString(),
+        error: String(error),
+        exitCode: 1
+      });
+      
+      return false;
+    }
+  };
+
   return {
     terminalInput,
     setTerminalInput,
@@ -471,6 +519,7 @@ export function useTerminal() {
     executeTerminalCommand,
     refreshFileSystem,
     copyTerminalContent,
-    clearTerminal
+    clearTerminal,
+    openFile
   };
 } 

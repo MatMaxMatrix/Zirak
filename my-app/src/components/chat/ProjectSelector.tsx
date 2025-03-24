@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, Plus } from 'lucide-react';
+import { FolderOpen, Plus, ChevronDown } from 'lucide-react';
 import { ProjectConfigModal } from './ProjectConfigModal';
 
 interface Project {
@@ -20,13 +20,15 @@ interface ProjectSelectorProps {
   onSelect: (project: Project) => Promise<void>;
   onCreateProject: (project: Project) => Promise<void>;
   onConfigureProject: () => void;
+  navbarMode?: boolean;
 }
 
 export function ProjectSelector({ 
   currentProject, 
   onSelect, 
   onCreateProject, 
-  onConfigureProject 
+  onConfigureProject,
+  navbarMode = false
 }: ProjectSelectorProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -109,14 +111,19 @@ export function ProjectSelector({
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 text-sm bg-[#1D1D1D] rounded-md text-gray-200 hover:bg-[#2D2D2D]"
+        className={
+          navbarMode 
+            ? "flex items-center gap-1 text-sm font-medium text-gray-300 hover:text-white ml-1 pl-1" 
+            : "flex items-center gap-2 px-3 py-2 text-sm bg-[#1D1D1D] rounded-md text-gray-200 hover:bg-[#2D2D2D]"
+        }
       >
-        <FolderOpen className="h-4 w-4" />
-        <span>{currentProject?.name || 'Select Project'}</span>
+        {!navbarMode && <FolderOpen className="h-4 w-4" />}
+        <span className={navbarMode ? "truncate max-w-[150px]" : ""}>{currentProject?.name || 'Select Project'}</span>
+        <ChevronDown className="h-3 w-3 ml-1 opacity-80" />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-[#1D1D1D] rounded-md shadow-lg z-50">
+        <div className={`absolute top-full left-0 mt-1 w-64 bg-[#1D1D1D] rounded-md shadow-lg z-50`}>
           <div className="p-2 border-b border-[#2D2D2D]">
             <button
               onClick={handleCreateNew}
