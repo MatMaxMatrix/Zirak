@@ -1,90 +1,225 @@
 "use client";
 
-import { Navbar } from "@/components/landing/navbar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SendIcon, Circle } from "lucide-react";
-import { useState } from "react";
+import { Camera, Figma, Layout, UserPlus, Calculator, Github, Paperclip, ArrowUp, Menu, User } from "lucide-react";
+import { useState, useCallback } from "react";
 import { useRouter } from 'next/navigation';
+import { useDropzone } from 'react-dropzone';
+import Link from 'next/link';
 
 export default function Home() {
   const router = useRouter();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [githubUrl, setGithubUrl] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // Handle the initial prompt submission
-  const handleInitialPrompt = (e: React.FormEvent) => {
+  const onDrop = useCallback((acceptedFiles: File[]) => {
+    setUploadedFiles(prev => [...prev, ...acceptedFiles]);
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: true,
+    noClick: true,
+  });
+
+  const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!input.trim() || isLoading) return;
+    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isLoading) return;
     
     setIsLoading(true);
-    
     try {
-      // Store the initial message to be used in chat page
       localStorage.setItem('initial_prompt', input);
-      
-      // Navigate to chat page
+      if (uploadedFiles.length > 0) {
+        const formData = new FormData();
+        uploadedFiles.forEach(file => {
+          formData.append('files', file);
+        });
+        for (const file of uploadedFiles) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            localStorage.setItem(`file_${file.name}`, reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+      if (githubUrl) {
+        localStorage.setItem('github_url', githubUrl);
+      }
       router.push('/chat');
     } catch (error) {
-      console.error('Error sending initial message:', error);
+      console.error('Error processing request:', error);
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navbar />
+  const quickActions = [
+    { icon: Camera, label: 'Clone a Screenshot', action: () => {} },
+    { icon: Figma, label: 'Import from Figma', action: () => {} },
+    { icon: Layout, label: 'Landing Page', action: () => {} },
+    { icon: UserPlus, label: 'Sign Up Form', action: () => {} },
+    { icon: Calculator, label: 'Calculate Factorial', action: () => {} },
+  ];
 
-      <div className="container mx-auto px-4 py-12">
-        <div className="text-center max-w-3xl mx-auto">
-          <h1 className="text-5xl font-bold mt-10 mb-6 dark:text-white">Zirak AI Assistant</h1>
-          <p className="text-xl mb-10 text-gray-600 dark:text-gray-300">
-            Your intelligent agent for software development and problem-solving
-          </p>
+  return (
+    <div className="min-h-screen bg-black text-white">
+      {/* Navigation Bar */}
+      <nav className="border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center flex-1">
+              {/* Logo/Brand */}
+              <div className="flex-shrink-0">
+                <Link href="/" className="text-xl font-bold">
+                  Zirak
+                </Link>
+              </div>
+
+              {/* Desktop Navigation - Moved to the left */}
+              <div className="hidden md:flex md:items-center md:ml-8 space-x-4">
+                <Link href="/dashboard" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Dashboard
+                </Link>
+                <Link href="/features" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Features
+                </Link>
+                <Link href="/docs" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Documentation
+                </Link>
+                <Link href="/pricing" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Pricing
+                </Link>
+              </div>
+            </div>
+
+            {/* User Actions - Kept on the right */}
+            <div className="hidden md:flex md:items-center md:space-x-4">
+              <Button variant="ghost" className="text-gray-300 hover:text-white">
+                Sign in
+              </Button>
+              <Button className="bg-white text-black hover:bg-gray-200">
+                Get Started
+              </Button>
+            </div>
+
+            {/* Mobile menu button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="text-gray-300 hover:text-white"
+              >
+                <Menu className="h-6 w-6" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile Navigation - Updated with Features */}
+          {showMobileMenu && (
+            <div className="md:hidden py-2 space-y-1">
+              <Link href="/dashboard" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Dashboard
+              </Link>
+              <Link href="/features" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Features
+              </Link>
+              <Link href="/docs" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Documentation
+              </Link>
+              <Link href="/pricing" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Pricing
+              </Link>
+              <div className="pt-4 pb-3 border-t border-white/10">
+                <Button variant="ghost" className="w-full text-left text-gray-300 hover:text-white">
+                  Sign in
+                </Button>
+                <Button className="w-full mt-2 bg-white text-black hover:bg-gray-200">
+                  Get Started
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="flex items-center justify-center flex-1 min-h-[calc(100vh-4rem)]">
+        <div className="w-full max-w-3xl px-4">
+          <h1 className="text-5xl font-bold mb-12 text-center">
+            What can I help you ship?
+          </h1>
           
-          <Card className="bg-white dark:bg-gray-800 shadow-md">
-            <CardHeader>
-              <CardTitle className="text-2xl">What can I help you with today?</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleInitialPrompt} className="flex flex-col space-y-4">
-                <Input 
+          <div className="relative">
+            <form onSubmit={handleInitialPrompt} className="relative">
+              <div className="relative flex items-center">
+                <Input
                   id="initial-prompt"
-                  className="flex-1 p-4 h-24 text-lg" 
-                  placeholder="E.g., Create a React component for a task list..."
+                  className="w-full bg-[#111111] border-none text-lg py-6 pl-4 pr-20 rounded-xl placeholder:text-gray-500 focus:ring-0 focus:border-none"
+                  placeholder="Ask v0 to build..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                 />
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  size="lg"
-                  disabled={isLoading || !input.trim()}
+                <div className="absolute right-4 flex items-center space-x-2">
+                  <button
+                    type="button"
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    {...getRootProps()}
+                  >
+                    <input {...getInputProps()} />
+                    <Paperclip className="h-5 w-5 text-gray-400" />
+                  </button>
+                  <button
+                    type="submit"
+                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                    disabled={isLoading || (!input.trim() && uploadedFiles.length === 0 && !githubUrl)}
+                  >
+                    <ArrowUp className="h-5 w-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Quick Actions */}
+            <div className="flex flex-wrap gap-2 mt-6">
+              {quickActions.map((action, index) => (
+                <Button
+                  key={index}
+                  variant="outline"
+                  className="bg-[#111111] border-none hover:bg-white/10 text-white flex items-center space-x-2 rounded-full px-4 py-2"
+                  onClick={action.action}
                 >
-                  {isLoading ? (
-                    <div className="flex items-center">
-                      <span className="animate-spin mr-2">
-                        <Circle size={16} />
-                      </span>
-                      Processing...
-                    </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <SendIcon className="mr-2" size={16} />
-                      Send
-                    </div>
-                  )}
+                  <action.icon className="h-4 w-4" />
+                  <span>{action.label}</span>
                 </Button>
-              </form>
-            </CardContent>
-            <CardFooter className="flex justify-center text-sm text-gray-500 dark:text-gray-400">
-              Your data is processed securely and never shared with third parties.
-            </CardFooter>
-          </Card>
+              ))}
+            </div>
+
+            {/* Uploaded Files List */}
+            {uploadedFiles.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {uploadedFiles.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-2 bg-[#111111] rounded-lg">
+                    <span className="text-sm text-gray-400 truncate">{file.name}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setUploadedFiles(prev => prev.filter((_, i) => i !== index))}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
