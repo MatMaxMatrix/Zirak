@@ -61,7 +61,13 @@ export function FileEditor({
       // Set savingFromEditor flag in the WebSocketContext
       webSocket.savingFromEditor = true;
       
-      await saveFileContent();
+      // Check if saveFileContent is a function before calling it
+      if (typeof saveFileContent === 'function') {
+        await saveFileContent();
+      } else {
+        console.error('saveFileContent is not a function');
+        throw new Error('Save function is not available');
+      }
       
       // Reset the flag after save
       webSocket.savingFromEditor = false;

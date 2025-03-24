@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, RotateCw, Globe } from 'lucide-react';
 
 interface PreviewProps {
@@ -11,13 +11,41 @@ export function Preview({ url, isLoading = false }: PreviewProps) {
   const [urlInput, setUrlInput] = useState(url);
   const [history, setHistory] = useState<string[]>([url]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+
+  // Update state when url prop changes
+  useEffect(() => {
+    if (url && url !== currentUrl) {
+      setCurrentUrl(url);
+      setUrlInput(url);
+      setHistory(prev => [...prev, url]);
+      setHistoryIndex(prev => prev + 1);
+    }
+  }, [url]);
 
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (urlInput.trim() && urlInput !== currentUrl) {
-      setCurrentUrl(urlInput);
-      setHistory(prev => [...prev.slice(0, historyIndex + 1), urlInput]);
+      setLoading(true);
+      
+      // Ensure URL has protocol
+      let processedUrl = urlInput.trim();
+      if (!/^https?:\/\//i.test(processedUrl)) {
+        // If it looks like a search query instead of a URL, convert it to a search
+        if (processedUrl.includes(' ') || !processedUrl.includes('.')) {
+          processedUrl = `https://www.bing.com/search?q=${encodeURIComponent(processedUrl)}`;
+        } else {
+          processedUrl = `https://${processedUrl}`;
+        }
+        setUrlInput(processedUrl);
+      }
+      
+      setCurrentUrl(processedUrl);
+      setHistory(prev => [...prev.slice(0, historyIndex + 1), processedUrl]);
       setHistoryIndex(prev => prev + 1);
+      
+      // Reset loading state after a delay
+      setTimeout(() => setLoading(false), 1000);
     }
   };
 
@@ -38,10 +66,19 @@ export function Preview({ url, isLoading = false }: PreviewProps) {
   };
 
   const handleRefresh = () => {
+    // Set loading state
+    setLoading(true);
+    
     // Simulate refresh by triggering a re-render of the iframe
     setCurrentUrl('');
-    setTimeout(() => setCurrentUrl(urlInput), 100);
+    setTimeout(() => {
+      setCurrentUrl(history[historyIndex]);
+      setLoading(false);
+    }, 500);
   };
+
+  // Determine if we should show loading state
+  const showLoading = isLoading || loading;
 
   return (
     <div className="flex flex-col h-full bg-white rounded-lg overflow-hidden">
@@ -86,7 +123,7 @@ export function Preview({ url, isLoading = false }: PreviewProps) {
 
       {/* Browser Content */}
       <div className="flex-1 bg-white">
-        {isLoading ? (
+        {showLoading ? (
           <div className="h-full flex items-center justify-center bg-white">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
           </div>
@@ -94,13 +131,20 @@ export function Preview({ url, isLoading = false }: PreviewProps) {
           <iframe
             src={currentUrl}
             className="w-full h-full border-0"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
+            referrerPolicy="no-referrer"
+            allow="encrypted-media; midi; payment; camera=(), microphone=(), geolocation=(), gyroscope=(), accelerometer=(), xr-spatial-tracking=()"
+            onLoad={() => setLoading(false)}
           />
         ) : (
           <div className="h-full flex items-center justify-center bg-white text-gray-400">
             No URL specified
           </div>
         )}
+      </div>
+      
+      <div className="bg-[#1D1D1D] border-t border-[#2D2D2D] p-2 text-xs text-gray-400 text-center">
+        Some websites may not load due to iframe security restrictions
       </div>
     </div>
   );

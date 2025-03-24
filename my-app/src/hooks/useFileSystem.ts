@@ -2,6 +2,20 @@ import { useState } from 'react';
 import { FileSystem } from '@/app/contexts/WebSocketContext';
 import { fetchFileSystem } from '@/lib/chat-utils';
 
+// Define Project interface
+interface Project {
+  id: string;
+  name: string;
+  path: string;
+  lastAccessed: string;
+  config?: {
+    description: string;
+    type: string;
+    language: string;
+    framework?: string;
+  };
+}
+
 export function useFileSystem() {
   const [fileSystem, setFileSystem] = useState<FileSystem[]>([
     {
@@ -20,6 +34,7 @@ export function useFileSystem() {
     }
   ]);
   const [selectedFile, setSelectedFile] = useState<FileSystem | null>(null);
+  const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
   // Toggle directory expansion
   const toggleDirectory = (path: string) => {
@@ -94,6 +109,80 @@ export function useFileSystem() {
     }
   };
 
+  // Handle project selection
+  const handleProjectSelect = async (project: Project) => {
+    console.log('Selecting project:', project);
+    setCurrentProject(project);
+    
+    try {
+      // Update working directory in terminal via API
+      const response = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          command: `cd ${project.name}`,
+          userId: 'default_user'
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      // Refresh file system for the new project
+      await refreshFileSystem();
+    } catch (error) {
+      console.error('Error switching project:', error);
+    }
+  };
+
+  // Handle project creation
+  const handleCreateProject = async (project: Project) => {
+    console.log('Creating new project:', project);
+    
+    try {
+      // Create project via API
+      const response = await fetch('/api/projects', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: project.name,
+          config: project.config
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create project');
+      }
+
+      const { project: newProject } = await response.json();
+      
+      // Set as current project
+      setCurrentProject(newProject);
+      
+      // Change to the new project directory
+      await fetch('/api/terminal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          command: `cd ${newProject.name}`,
+          userId: 'default_user'
+        }),
+      });
+      
+      // Refresh file system for the new project
+      await refreshFileSystem();
+    } catch (error) {
+      console.error('Error creating project:', error);
+    }
+  };
+
   return {
     fileSystem,
     setFileSystem,
@@ -101,6 +190,9 @@ export function useFileSystem() {
     setSelectedFile,
     toggleDirectory,
     selectFile,
-    refreshFileSystem
+    refreshFileSystem,
+    currentProject,
+    handleProjectSelect,
+    handleCreateProject
   };
 } 

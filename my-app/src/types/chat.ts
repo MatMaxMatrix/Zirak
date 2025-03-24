@@ -74,12 +74,14 @@ export interface TerminalProps {
 }
 
 export interface FileEditorProps {
-  content: string;
-  setContent: (content: string) => void;
-  onSave: () => Promise<void>;
-  onCancel: () => void;
   filePath: string;
+  fileContent: string;
+  setFileContent: (content: string) => void;
+  saveFileContent: () => Promise<void>;
+  cancelFileEditing: () => void;
+  handleEditorMouseDown?: (e: React.MouseEvent) => void;
   fileEditorRef: React.RefObject<HTMLDivElement>;
+  editorHeight?: number;
 }
 
 // File system item interface
@@ -173,6 +175,7 @@ export interface WorkspaceProps {
   handleFileExplorerResize: (e: React.MouseEvent) => void;
   previewUrl?: string;
   isPreviewLoading?: boolean;
+  openFile?: (filePath: string) => Promise<boolean>;
 }
 
 export interface ChatAreaProps {
