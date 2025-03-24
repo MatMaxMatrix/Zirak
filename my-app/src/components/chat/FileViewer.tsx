@@ -13,12 +13,12 @@ export function FileViewer({ selectedFile }: FileViewerProps) {
 
   return (
     <>
-      <div className="p-2 bg-muted/30 border-b flex items-center">
+      <div className="p-2 bg-[#1D1D1D] border-b border-[#2D2D2D] flex items-center">
         <FileText className="h-4 w-4 mr-2 text-blue-500" />
-        <span className="text-xs font-medium truncate">{selectedFile.path}</span>
+        <span className="text-xs font-medium truncate text-gray-200">{selectedFile.path}</span>
       </div>
       <div className="flex-1 overflow-auto">
-        <pre className="p-4 bg-gray-100 dark:bg-gray-900 w-full h-full text-sm font-mono overflow-auto border-0 rounded-none">
+        <pre className="p-4 bg-[#0C0C0C] w-full h-full text-sm font-mono overflow-auto border-0 rounded-none text-gray-200">
           {selectedFile.content || 'No content'}
         </pre>
       </div>

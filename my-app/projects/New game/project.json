@@ -1,0 +1,6 @@
+{
+  "name": "New game",
+  "description": "I am creating a new game here",
+  "type": "web",
+  "language": "typescript"
+}

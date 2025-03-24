@@ -142,8 +142,12 @@ export async function GET(request: NextRequest) {
     
     // Resolve the requested path within the user's project directory
     let targetDir = userProjectDir;
+    let targetFile = null;
+    
     if (requestedPath && requestedPath !== '/') {
-      const resolvedPath = path.resolve(userProjectDir, requestedPath.startsWith('/') ? requestedPath.substring(1) : requestedPath);
+      // Remove leading /project/ from the path if it exists
+      const cleanPath = requestedPath.replace(/^\/project\//, '');
+      const resolvedPath = path.resolve(userProjectDir, cleanPath);
       
       // Security check - make sure the path is within the user's project directory
       if (resolvedPath.startsWith(userProjectDir)) {
@@ -151,6 +155,15 @@ export async function GET(request: NextRequest) {
           const stats = await fs.stat(resolvedPath);
           if (stats.isDirectory()) {
             targetDir = resolvedPath;
+          } else if (stats.isFile()) {
+            // If it's a file, read its content
+            const content = await fs.readFile(resolvedPath, 'utf-8');
+            targetFile = {
+              name: path.basename(resolvedPath),
+              type: 'file',
+              path: requestedPath,
+              content
+            };
           }
         } catch (error) {
           // If path doesn't exist, fall back to user project root
@@ -162,7 +175,12 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // Get file system structure
+    // If we're looking for a specific file, return just that file
+    if (targetFile) {
+      return NextResponse.json({ file: targetFile });
+    }
+    
+    // Otherwise, get file system structure
     const fileSystem = await getFileSystemItems(targetDir, '', 2, 0, userProjectDir);
     
     return NextResponse.json({ 
@@ -175,5 +193,37 @@ export async function GET(request: NextRequest) {
       error: 'Failed to fetch file system',
       fileSystem: []
     }, { status: 500 });
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    // Get user ID and requested path from query params
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId') || 'default_user';
+    const requestedPath = searchParams.get('path') || '/';
+    
+    // Get user's project directory
+    const userProjectDir = await getUserProjectDir(userId);
+    
+    // Remove leading /project/ from the path if it exists
+    const cleanPath = requestedPath.replace(/^\/project\//, '');
+    const resolvedPath = path.resolve(userProjectDir, cleanPath);
+    
+    // Security check - make sure the path is within the user's project directory
+    if (!resolvedPath.startsWith(userProjectDir)) {
+      return NextResponse.json({ error: 'Invalid file path' }, { status: 403 });
+    }
+    
+    // Get the file content from the request body
+    const { content } = await request.json();
+    
+    // Write the content to the file
+    await fs.writeFile(resolvedPath, content, 'utf-8');
+    
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error saving file:', error);
+    return NextResponse.json({ error: 'Failed to save file' }, { status: 500 });
   }
 } 

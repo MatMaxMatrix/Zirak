@@ -3,10 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Figma, Layout, UserPlus, Calculator, Github, Paperclip, ArrowUp, Menu, User } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import Link from 'next/link';
+import { ApiKeyInput } from '@/components/chat/ApiKeyInput';
+import { getStoredApiKey, storeApiKey } from '@/utils/apiKey';
+import { Chat } from '@/components/chat/Chat';
 
 export default function Home() {
   const router = useRouter();
@@ -15,6 +18,13 @@ export default function Home() {
   const [githubUrl, setGithubUrl] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+
+  useEffect(() => {
+    const apiKey = getStoredApiKey();
+    setHasApiKey(!!apiKey);
+  }, []);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setUploadedFiles(prev => [...prev, ...acceptedFiles]);
@@ -29,6 +39,12 @@ export default function Home() {
   const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isLoading) return;
+    
+    const apiKey = getStoredApiKey();
+    if (!apiKey) {
+      setShowApiKeyInput(true);
+      return;
+    }
     
     setIsLoading(true);
     try {
@@ -56,6 +72,12 @@ export default function Home() {
     }
   };
 
+  const handleApiKeySubmit = (apiKey: string) => {
+    storeApiKey(apiKey);
+    setShowApiKeyInput(false);
+    handleInitialPrompt(new Event('submit') as any);
+  };
+
   const quickActions = [
     { icon: Camera, label: 'Clone a Screenshot', action: () => {} },
     { icon: Figma, label: 'Import from Figma', action: () => {} },
@@ -63,6 +85,16 @@ export default function Home() {
     { icon: UserPlus, label: 'Sign Up Form', action: () => {} },
     { icon: Calculator, label: 'Calculate Factorial', action: () => {} },
   ];
+
+  if (showApiKeyInput) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="w-full max-w-[600px] m-4">
+          <ApiKeyInput onSubmit={handleApiKeySubmit} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black text-white">

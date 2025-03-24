@@ -1,4 +1,4 @@
-import { FileSystem, Message, TerminalCommand } from "@/app/contexts/WebSocketContext";
+import { Message, TerminalCommand } from "@/app/contexts/WebSocketContext";
 
 export interface TabCompletionResult {
   completions: string[];
@@ -53,56 +53,95 @@ export interface TerminalCommandExecutionResult {
 export interface TerminalProps {
   terminal: TerminalCommand[];
   showWelcomeMessage: boolean;
-  terminalInput: string;
-  setTerminalInput: (input: string) => void;
-  terminalProcessing: boolean;
+  input: string;
+  setInput: (input: string) => void;
+  isProcessing: boolean;
   workingDirectory?: string;
   completions: string[];
   showCompletions: boolean;
   selectedCompletion: number;
-  selectCompletion: (completion: string) => void;
+  onSelectCompletion: (completion: string) => void;
   setShowCompletions: (show: boolean) => void;
   setSelectedCompletion: (index: number) => void;
-  executeTerminalCommand: (command: string) => Promise<void>;
+  onSendCommand: (command: string) => Promise<void>;
   copiedText: boolean;
-  copyTerminalContent: () => void;
-  clearTerminal: () => void;
-  refreshFileSystem: () => void;
-  closeTerminal: () => void;
+  copyTerminalContent?: () => void;
+  clearTerminal?: () => void;
+  refreshFileSystem?: () => Promise<void>;
+  closeTerminal?: () => void;
   terminalInputRef: React.RefObject<HTMLInputElement>;
   terminalEndRef: React.RefObject<HTMLDivElement>;
 }
 
 export interface FileEditorProps {
+  content: string;
+  setContent: (content: string) => void;
+  onSave: () => Promise<void>;
+  onCancel: () => void;
   filePath: string;
-  fileContent: string;
-  setFileContent: (content: string) => void;
-  saveFileContent: () => Promise<void>;
-  cancelFileEditing: () => void;
-  editorHeight: number;
-  handleEditorMouseDown: (e: React.MouseEvent) => void;
-  fileEditorRef: React.RefObject<HTMLTextAreaElement>;
+  fileEditorRef: React.RefObject<HTMLDivElement>;
+}
+
+// File system item interface
+export interface FileSystemItem {
+  name: string;
+  type: 'file' | 'directory';
+  path: string;
+  expanded?: boolean;
+  children?: FileSystemItem[];
+  content?: string;
+}
+
+// Workflow step interface
+export interface WorkflowStep {
+  id: string;
+  title: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'error';
+  timestamp?: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  path: string;
+  lastAccessed: string;
+  config?: {
+    description: string;
+    type: string;
+    language: string;
+    framework?: string;
+  };
+}
+
+export interface FileSystem {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  content?: string;
+  expanded?: boolean;
+  children?: FileSystem[];
 }
 
 export interface WorkspaceProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+  width?: number;
   showWorkspace: boolean;
   setShowWorkspace: (show: boolean) => void;
-  width: number;
-  handleHorizontalMouseDown: (e: React.MouseEvent) => void;
+  activeTab: 'workflow' | 'editor' | 'preview';
+  setActiveTab: (tab: 'workflow' | 'editor' | 'preview') => void;
   fileSystem: FileSystem[];
   selectedFile: FileSystem | null;
   workflowSteps: any[];
   setSelectedFile: (file: FileSystem | null) => void;
   toggleDirectory: (path: string) => void;
-  terminal: TerminalCommand[];
+  terminal: any[];
   showWelcomeMessage: boolean;
-  workingDirectory?: string;
+  workingDirectory: string;
   showTerminal: boolean;
   setShowTerminal: (show: boolean) => void;
   terminalHeight: number;
   handleTerminalMouseDown: (e: React.MouseEvent) => void;
+  handleHorizontalMouseDown: (e: React.MouseEvent) => void;
   editingFile: boolean;
   fileContent: string;
   filePath: string;
@@ -124,11 +163,16 @@ export interface WorkspaceProps {
   copiedText: boolean;
   copyTerminalContent: () => void;
   clearTerminal: () => void;
-  refreshFileSystem: () => void;
+  refreshFileSystem: () => Promise<void>;
   terminalInputRef: React.RefObject<HTMLInputElement>;
   terminalEndRef: React.RefObject<HTMLDivElement>;
-  fileEditorRef: React.RefObject<HTMLTextAreaElement>;
+  fileEditorRef: React.RefObject<HTMLDivElement>;
+  terminalRef?: React.RefObject<HTMLDivElement>;
   workflowEndRef: React.RefObject<HTMLDivElement>;
+  fileExplorerWidth: number;
+  handleFileExplorerResize: (e: React.MouseEvent) => void;
+  previewUrl?: string;
+  isPreviewLoading?: boolean;
 }
 
 export interface ChatAreaProps {
@@ -151,10 +195,14 @@ export interface WorkflowDisplayProps {
 export interface FileExplorerProps {
   fileSystem: FileSystem[];
   selectedFile: FileSystem | null;
-  toggleDirectory: (path: string) => void;
-  selectFile: (file: FileSystem) => void;
+  onSelectFile: (file: FileSystem) => Promise<void>;
+  onToggleDirectory: (path: string) => void;
+  workingDirectory?: string;
+  onRefresh: () => Promise<void>;
 }
 
 export interface FileViewerProps {
-  selectedFile: FileSystem | null;
+  content: string;
+  filePath: string;
+  onEdit: () => Promise<void>;
 } 

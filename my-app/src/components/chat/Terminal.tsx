@@ -13,17 +13,17 @@ import { v4 as uuidv4 } from 'uuid';
 export function Terminal({
   terminal,
   showWelcomeMessage,
-  terminalInput,
-  setTerminalInput,
-  terminalProcessing,
+  input,
+  setInput,
+  isProcessing,
   workingDirectory,
   completions,
   showCompletions,
   selectedCompletion,
-  selectCompletion,
+  onSelectCompletion,
   setShowCompletions,
   setSelectedCompletion,
-  executeTerminalCommand,
+  onSendCommand,
   copiedText,
   copyTerminalContent,
   clearTerminal,
@@ -35,61 +35,93 @@ export function Terminal({
   
   // Focus terminal input when clicking on terminal
   const focusTerminalInput = () => {
-    terminalInputRef.current?.focus();
+    terminalInputRef?.current?.focus();
   };
   
   // Handle terminal submission
   const handleTerminalSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (terminalInput.trim() && !terminalProcessing) {
-      executeTerminalCommand(terminalInput);
+    if (!input.trim() || isProcessing) return;
+    
+    const command = input.trim();
+    setInput("");
+    onSendCommand(command);
+  };
+
+  // Handle tab key press for tab completion
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      
+      // If we have completions and one is selected, use it
+      if (showCompletions && selectedCompletion >= 0 && selectedCompletion < completions.length) {
+        onSelectCompletion(completions[selectedCompletion]);
+        return;
+      }
+      
+      // Otherwise, show completions for the current input
+      if (input.trim()) {
+        setShowCompletions(true);
+      }
+    } else if (e.key === 'ArrowUp') {
+      if (showCompletions) {
+        e.preventDefault();
+        setSelectedCompletion(Math.max(0, selectedCompletion - 1));
+      }
+    } else if (e.key === 'ArrowDown') {
+      if (showCompletions) {
+        e.preventDefault();
+        setSelectedCompletion(Math.min(completions.length - 1, selectedCompletion + 1));
+      }
+    } else if (e.key === 'Escape') {
+      if (showCompletions) {
+        e.preventDefault();
+        setShowCompletions(false);
+      }
+    } else if (e.key === 'Enter') {
+      if (showCompletions && selectedCompletion >= 0 && selectedCompletion < completions.length) {
+        e.preventDefault();
+        onSelectCompletion(completions[selectedCompletion]);
+      }
     }
   };
   
   return (
-    <>
-      <div className="p-1 bg-[#1D1E1F] text-white flex items-center justify-between border-b border-gray-700">
-        <div className="flex items-center">
-          <TerminalIcon className="h-4 w-4 mr-2 text-gray-400" />
-          <span className="text-xs font-medium">Terminal</span>
-          <span className="text-xs ml-2 text-gray-500">
-            {workingDirectory 
-              ? `~/projects${workingDirectory !== '/project' ? `/${workingDirectory.split('/').pop()}` : ''}`
-              : '~/projects'}
-          </span>
-        </div>
+    <div className="h-full flex flex-col overflow-hidden" onClick={focusTerminalInput}>
+      {/* Terminal Header */}
+      <div className="bg-black border-b border-gray-800 py-1 px-2 flex justify-between items-center">
+        <span className="text-gray-400 text-xs font-semibold">Terminal</span>
         <div className="flex items-center space-x-2">
           <button 
             onClick={copyTerminalContent}
             className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
             title="Copy terminal content"
           >
-            {copiedText ? <CheckCheck size={14} className="text-green-400" /> : <Copy size={14} />}
+            {copiedText ? <CheckCheck size={14} /> : <Copy size={14} />}
           </button>
+          
           <button 
             onClick={() => {
-              clearTerminal();
-              setTimeout(() => {
-                terminalInputRef.current?.focus();
-              }, 10);
+              clearTerminal?.();
+              terminalInputRef.current?.focus();
             }}
             className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
             title="Clear terminal"
           >
             <Trash2 size={14} />
           </button>
+          
           <button 
             onClick={() => {
-              refreshFileSystem();
-              setTimeout(() => {
-                terminalInputRef.current?.focus();
-              }, 10);
+              refreshFileSystem?.();
+              terminalInputRef.current?.focus();
             }}
             className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
             title="Refresh file system"
           >
             <RefreshCw size={14} />
           </button>
+          
           <button 
             onClick={closeTerminal}
             className="text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-gray-700"
@@ -103,10 +135,9 @@ export function Terminal({
       <div 
         className="flex-1 overflow-auto p-0 font-mono bg-black text-gray-200 rounded-none terminal-scrollbar mac-terminal"
         style={{ tabSize: 4 }}
-        onClick={focusTerminalInput}
       >
         <div className="p-2 min-h-full">
-          {terminal.length === 0 && !showWelcomeMessage ? (
+          {terminal.length === 0 ? (
             <div className="flex items-center text-sm whitespace-nowrap">
               <span className="text-[#56B6C2] font-medium">virtual-user@zirak</span>
               <span className="text-white mx-1">:</span>
@@ -114,32 +145,8 @@ export function Terminal({
               <span className="text-white mx-1">$ </span>
               <span className="terminal-cursor"></span>
             </div>
-          ) : terminal.length === 0 && showWelcomeMessage ? (
-            <div className="text-left h-full">
-              <div className="mb-1">
-                <span className="text-gray-300">Last login: {new Date().toLocaleString()} on ttys001</span>
-              </div>
-              <div className="mb-1">
-                <span className="text-green-400">Welcome to Zirak Terminal</span>
-              </div>
-              <div className="mb-1 text-xs text-gray-400">
-                <p>This is an isolated environment for your project.</p>
-              </div>
-              <div className="flex items-center text-sm whitespace-nowrap">
-                <span className="text-[#56B6C2] font-medium">virtual-user@zirak</span>
-                <span className="text-white mx-1">:</span>
-                <span className="text-[#61AFEF]">~/projects</span>
-                <span className="text-white mx-1">$ </span>
-                <span className="terminal-cursor"></span>
-              </div>
-            </div>
           ) : (
             <div className="text-sm text-gray-200 whitespace-pre-line">
-              {showWelcomeMessage && terminal.length > 0 && (
-                <div className="mb-2">
-                  <span className="text-gray-300">Last login: {new Date().toLocaleString()} on ttys001</span>
-                </div>
-              )}
               {terminal.map((cmd) => (
                 <div key={cmd.id}>
                   <div className="flex items-center text-sm whitespace-nowrap">
@@ -172,12 +179,12 @@ export function Terminal({
                     `/${workingDirectory.split('/').pop()}` : ''}
                 </span>
                 <span className="text-white mx-1">$ </span>
-                {terminalProcessing ? (
+                {isProcessing ? (
                   <span className="text-gray-500">Processing...</span>
                 ) : (
-                  terminalInput ? <span className="text-gray-100">{terminalInput}</span> : null
+                  input ? <span className="text-gray-100">{input}</span> : null
                 )}
-                {!terminalProcessing && !terminalInput && (
+                {!isProcessing && !input && (
                   <span className="terminal-cursor"></span>
                 )}
               </div>
@@ -194,7 +201,7 @@ export function Terminal({
                       className={`px-3 py-1 cursor-pointer font-mono text-sm ${
                         index === selectedCompletion ? 'bg-blue-900 text-white' : 'hover:bg-gray-700'
                       }`}
-                      onClick={() => selectCompletion(item)}
+                      onClick={() => onSelectCompletion(item)}
                     >
                       {item}
                     </div>
@@ -212,34 +219,17 @@ export function Terminal({
           <Input
             ref={terminalInputRef}
             type="text"
-            value={terminalInput}
-            onChange={(e) => setTerminalInput(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             placeholder=""
             className="flex-1 bg-black border-0 text-transparent caret-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm h-8 p-0"
-            disabled={terminalProcessing}
+            disabled={isProcessing}
             autoComplete="off"
             spellCheck="false"
-            onKeyDown={(e) => {
-              if (e.key === 'Tab') {
-                e.preventDefault();
-                // Tab completion handled at parent level
-              } else if (e.key === 'ArrowUp' && showCompletions) {
-                e.preventDefault();
-                setSelectedCompletion(selectedCompletion > 0 ? selectedCompletion - 1 : completions.length - 1);
-              } else if (e.key === 'ArrowDown' && showCompletions) {
-                e.preventDefault();
-                setSelectedCompletion(selectedCompletion < completions.length - 1 ? selectedCompletion + 1 : 0);
-              } else if (e.key === 'Escape' && showCompletions) {
-                e.preventDefault();
-                setShowCompletions(false);
-              } else if (e.key === 'Enter' && showCompletions) {
-                e.preventDefault();
-                selectCompletion(completions[selectedCompletion]);
-              }
-            }}
+            onKeyDown={handleKeyDown}
           />
         </form>
       </div>
-    </>
+    </div>
   );
 } 

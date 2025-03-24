@@ -8,7 +8,7 @@ export function useTerminal() {
   const webSocket = useWebSocket();
   const [terminalInput, setTerminalInput] = useState('');
   const [terminalProcessing, setTerminalProcessing] = useState(false);
-  const [showWelcomeMessage, setShowWelcomeMessage] = useState(true);
+  const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [editingFile, setEditingFile] = useState(false);
   const [fileContent, setFileContent] = useState('');
@@ -122,64 +122,74 @@ export function useTerminal() {
     if (!editingFile || !filePath) return;
     
     try {
-      const response = await fetch('/api/terminal/interactive', {
-        method: 'POST',
+      // Use the filesystem API directly instead of the terminal/interactive endpoint
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          command: `vim ${path.basename(filePath)}`,
-          fileContent: fileContent,
-          workingDirectory: path.dirname(filePath),
-          userId: webSocket.activeWorkflowId || 'default_user'
+          content: fileContent,
+          path: filePath
         }),
       });
       
       if (!response.ok) {
-        throw new Error(`Error: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Error ${response.status}: ${errorData.message || response.statusText}`);
       }
       
-      const result = await response.json();
+      // After successful save, fetch the latest file content
+      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!getResponse.ok) {
+        throw new Error(`Error refreshing file content: ${getResponse.status}`);
+      }
       
-      // Add the result to terminal
+      // Add success message to terminal
       webSocket.addTerminalCommand({
         id: uuidv4(),
-        command: `vim ${path.basename(filePath)} (saved)`,
-        output: result.output,
+        command: `save ${path.basename(filePath)}`,
+        output: `File saved successfully: ${path.basename(filePath)}`,
         timestamp: new Date().toISOString()
       });
       
       // Update file system if files were modified
-      if (result.fileSystemChanged) {
-        refreshFileSystem();
+      refreshFileSystem();
+      
+      console.log('File saved successfully');
+      
+      // Exit edit mode only if not called from the editor
+      if (!webSocket.savingFromEditor) {
+        setEditingFile(false);
+        setFileContent('');
+        setFilePath('');
+        
+        // Refocus terminal input
+        setTimeout(() => {
+          terminalInputRef.current?.focus();
+        }, 10);
       }
-      
-      // Exit edit mode
-      setEditingFile(false);
-      setFileContent('');
-      setFilePath('');
-      
-      // Refocus terminal input
-      setTimeout(() => {
-        terminalInputRef.current?.focus();
-      }, 10);
       
     } catch (error) {
       console.error('Error saving file:', error);
       
       webSocket.addTerminalCommand({
         id: uuidv4(),
-        command: `vim ${path.basename(filePath)} (error)`,
+        command: `save ${path.basename(filePath)} (error)`,
         output: `Error saving file: ${error instanceof Error ? error.message : String(error)}`,
         timestamp: new Date().toISOString(),
         error: String(error),
         exitCode: 1
       });
       
-      // Exit edit mode even if there was an error
-      setEditingFile(false);
-      setFileContent('');
-      setFilePath('');
+      // Re-throw the error so the caller can handle it
+      throw error;
     }
   };
 
