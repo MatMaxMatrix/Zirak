@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 
 interface ProjectConfig {
   name: string;
@@ -13,12 +13,16 @@ interface ProjectConfigModalProps {
   project?: any;
   onClose: () => void;
   onSave: (project: any) => void;
+  isLoading?: boolean;
+  error?: string | null;
 }
 
 export function ProjectConfigModal({ 
   project,
   onClose, 
-  onSave
+  onSave,
+  isLoading = false,
+  error = null
 }: ProjectConfigModalProps) {
   const [config, setConfig] = useState<ProjectConfig>({
     name: project?.name || '',
@@ -59,10 +63,17 @@ export function ProjectConfigModal({
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-200"
+            disabled={isLoading}
           >
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-md text-red-200">
+            <p className="text-sm">{error}</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -75,6 +86,7 @@ export function ProjectConfigModal({
               onChange={(e) => setConfig({ ...config, name: e.target.value })}
               className="w-full bg-[#2D2D2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+              disabled={isLoading}
             />
           </div>
 
@@ -87,6 +99,7 @@ export function ProjectConfigModal({
               onChange={(e) => setConfig({ ...config, description: e.target.value })}
               className="w-full bg-[#2D2D2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               rows={3}
+              disabled={isLoading}
             />
           </div>
 
@@ -98,6 +111,7 @@ export function ProjectConfigModal({
               value={config.type}
               onChange={(e) => setConfig({ ...config, type: e.target.value as ProjectConfig['type'] })}
               className="w-full bg-[#2D2D2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
             >
               <option value="web">Web Application</option>
               <option value="mobile">Mobile Application</option>
@@ -114,6 +128,7 @@ export function ProjectConfigModal({
               value={config.language}
               onChange={(e) => setConfig({ ...config, language: e.target.value })}
               className="w-full bg-[#2D2D2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={isLoading}
             >
               <option value="typescript">TypeScript</option>
               <option value="javascript">JavaScript</option>
@@ -132,6 +147,7 @@ export function ProjectConfigModal({
                 value={config.framework}
                 onChange={(e) => setConfig({ ...config, framework: e.target.value })}
                 className="w-full bg-[#2D2D2D] text-white rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
               >
                 <option value="">Select a framework</option>
                 <option value="next">Next.js</option>
@@ -147,14 +163,19 @@ export function ProjectConfigModal({
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-gray-200 hover:text-white"
+              disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              className={`px-4 py-2 bg-blue-600 text-white rounded-md flex items-center gap-2 ${
+                isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-blue-700'
+              }`}
+              disabled={isLoading}
             >
-              Save
+              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isLoading ? 'Creating...' : 'Save'}
             </button>
           </div>
         </form>

@@ -1,6 +1,1 @@
-Hello world!
-
-This is cool!
-
-
-fff
+print("h")

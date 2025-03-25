@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+We are creating an AI application, with multiple agents working as backend and a comprehensive react UI with a lot of features. Make sure to always consider the best efficiency method in porduction mode.

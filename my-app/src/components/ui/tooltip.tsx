@@ -1,32 +1,66 @@
 "use client"
 
-import * as React from "react"
-import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+import React, { useState } from 'react';
 
-import { cn } from "@/lib/utils"
+interface TooltipProps {
+  children: React.ReactNode;
+  content: string;
+  delay?: number;
+  position?: 'top' | 'right' | 'bottom' | 'left';
+}
 
-const TooltipProvider = TooltipPrimitive.Provider
+export function Tooltip({ 
+  children, 
+  content, 
+  delay = 300, 
+  position = 'top' 
+}: TooltipProps) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
-const Tooltip = TooltipPrimitive.Root
+  const showTooltip = () => {
+    const newTimer = setTimeout(() => {
+      setIsVisible(true);
+    }, delay);
+    setTimer(newTimer);
+  };
 
-const TooltipTrigger = TooltipPrimitive.Trigger
+  const hideTooltip = () => {
+    if (timer) clearTimeout(timer);
+    setIsVisible(false);
+  };
 
-const TooltipContent = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
-      ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        "z-50 overflow-hidden rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-        className
+  const positionClass = {
+    top: 'bottom-full left-1/2 transform -translate-x-1/2 -translate-y-1 mb-1',
+    right: 'left-full top-1/2 transform -translate-y-1/2 translate-x-1 ml-1',
+    bottom: 'top-full left-1/2 transform -translate-x-1/2 translate-y-1 mt-1',
+    left: 'right-full top-1/2 transform -translate-y-1/2 -translate-x-1 mr-1'
+  }[position];
+
+  return (
+    <div 
+      className="relative inline-block" 
+      onMouseEnter={showTooltip} 
+      onMouseLeave={hideTooltip}
+      onFocus={showTooltip}
+      onBlur={hideTooltip}
+    >
+      {children}
+      {isVisible && (
+        <div 
+          className={`absolute z-50 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded-md shadow-sm max-w-xs ${positionClass}`}
+          role="tooltip"
+        >
+          {content}
+          <div className={`
+            absolute w-2 h-2 bg-gray-900 transform rotate-45
+            ${position === 'top' ? 'top-full -translate-y-1/2 left-1/2 -translate-x-1/2' : ''}
+            ${position === 'right' ? 'right-full translate-x-1/2 top-1/2 -translate-y-1/2' : ''}
+            ${position === 'bottom' ? 'bottom-full translate-y-1/2 left-1/2 -translate-x-1/2' : ''}
+            ${position === 'left' ? 'left-full -translate-x-1/2 top-1/2 -translate-y-1/2' : ''}
+          `}></div>
+        </div>
       )}
-      {...props}
-    />
-  </TooltipPrimitive.Portal>
-))
-TooltipContent.displayName = TooltipPrimitive.Content.displayName
-
-export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
+    </div>
+  );
+}

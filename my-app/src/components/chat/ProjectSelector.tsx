@@ -34,21 +34,59 @@ export function ProjectSelector({
   const [isOpen, setIsOpen] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch projects from localStorage or API
     const fetchProjects = async () => {
       try {
-        const response = await fetch('/api/projects');
-        if (!response.ok) throw new Error('Failed to fetch projects');
+        // Set a timeout for the fetch to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const response = await fetch('/api/projects', {
+          signal: controller.signal,
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Error response from projects API:', errorData);
+          throw new Error(errorData.error || `Failed to fetch projects: ${response.status}`);
+        }
+        
         const data = await response.json();
+        if (!Array.isArray(data.projects)) {
+          console.error('Invalid projects data format:', data);
+          throw new Error('Invalid projects data format');
+        }
+        
         setProjects(data.projects);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching projects:', error);
+        // Show more user-friendly error
+        if (error.name === 'AbortError') {
+          console.warn('Projects API request timed out');
+        }
+        
         // Fallback to localStorage if API fails
-        const storedProjects = localStorage.getItem('projects');
-        if (storedProjects) {
-          setProjects(JSON.parse(storedProjects));
+        try {
+          const storedProjects = localStorage.getItem('projects');
+          if (storedProjects) {
+            const parsedProjects = JSON.parse(storedProjects);
+            if (Array.isArray(parsedProjects)) {
+              setProjects(parsedProjects);
+              console.log('Using projects from localStorage');
+            }
+          }
+        } catch (localStorageError) {
+          console.error('Error using localStorage fallback:', localStorageError);
         }
       }
     };
@@ -62,6 +100,7 @@ export function ProjectSelector({
   };
 
   const handleCreateNew = () => {
+    setError(null); // Clear any previous errors
     setShowConfigModal(true);
     setIsOpen(false);
   };
@@ -69,6 +108,13 @@ export function ProjectSelector({
   const handleCreateProject = async (config: any) => {
     try {
       setIsCreating(true);
+      setError(null); // Clear any previous errors
+
+      // Validate project name
+      if (!config.name || config.name.trim() === '') {
+        throw new Error('Project name is required');
+      }
+
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: {
@@ -78,7 +124,8 @@ export function ProjectSelector({
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create project');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create project');
       }
 
       const { project } = await response.json();
@@ -99,12 +146,17 @@ export function ProjectSelector({
       if (onConfigureProject) {
         await onConfigureProject();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating project:', error);
-      // Handle error (show error message to user)
+      setError(error.message || 'Failed to create project');
+      // Keep the modal open when there's an error
+      return;
     } finally {
       setIsCreating(false);
     }
+    
+    // Close the modal only if successful
+    setShowConfigModal(false);
   };
 
   return (
@@ -154,13 +206,17 @@ export function ProjectSelector({
       {showConfigModal && (
         <ProjectConfigModal
           project={{ name: '', config: { description: '', type: 'web', language: 'typescript' } }}
-          onClose={() => setShowConfigModal(false)}
-          onSave={(newProject) => {
+          onClose={() => {
             setShowConfigModal(false);
+            setError(null); // Clear any errors on close
+          }}
+          onSave={(newProject) => {
             handleCreateProject(newProject);
           }}
+          isLoading={isCreating}
+          error={error}
         />
       )}
     </div>
   );
-} 
+}

@@ -2,10 +2,10 @@ import { WorkspaceProps } from "@/types/chat";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Terminal as TerminalIcon, FolderOpen, FolderClosed, ChevronLeft, ChevronRight, X, Trash2, Copy } from "lucide-react";
 import { WorkflowDisplay } from "./WorkflowDisplay";
-import { FileExplorer } from "./FileExplorer";
+import { EnhancedFileExplorer } from "./EnhancedFileExplorer";
 import { FileViewer } from "./FileViewer";
 import { Terminal } from "./Terminal";
-import { FileEditor } from "./FileEditor";
+import FileEditor from "./FileEditor";
 import { ResizeHandle } from "./ResizeHandle";
 import { ProjectSelector } from "./ProjectSelector";
 import { useState, useRef, useEffect } from "react";
@@ -13,6 +13,12 @@ import { FileSystem, Project } from "@/types/chat";
 import { ProjectConfigModal } from "./ProjectConfigModal";
 import { Preview } from "./Preview";
 import { useResizing } from "@/hooks/useResizing";
+import { useFileSystem } from "@/hooks/useFileSystem";
+import { FileCompare } from "./FileCompare";
+import { FileSearchModal } from "./FileSearchModal";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useFileOperations } from "@/hooks/useFileOperations";
+import { toast } from "sonner";
 
 export function Workspace({
   activeTab,
@@ -64,6 +70,16 @@ export function Workspace({
   const [minimizedPanel, setMinimizedPanel] = useState<'none' | 'fileExplorer' | 'chat' | 'preview'>('none');
   const [isCreating, setIsCreating] = useState(false);
   const [showProjectConfig, setShowProjectConfig] = useState(false);
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareFiles, setCompareFiles] = useState<{
+    file1: { path: string; name: string; content: string; };
+    file2: { path: string; name: string; content: string; };
+  } | null>(null);
+  const [compareMenuOpen, setCompareMenuOpen] = useState(false);
+  const [selectedForCompare, setSelectedForCompare] = useState<any>(null);
+  const [openedFiles, setOpenedFiles] = useState<{ path: string; content: string; hasUnsavedChanges: boolean }[]>([]);
+  const [activeFilePath, setActiveFilePath] = useState('');
+  const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
 
   // Get resize handlers and state from custom hook
   const { 
@@ -83,26 +99,145 @@ export function Workspace({
     editorRef
   } = useResizing();
 
+  // Get the file operations from the useFileSystem hook
+  const fileSystemHook = useFileSystem();
+  const { deleteFileOrDirectory, setFileSystem } = fileSystemHook;
+
   // Extract the project from fileSystem to avoid TypeScript errors
   const currentProject = Array.isArray(fileSystem) && fileSystem.length > 0 
     ? (fileSystem[0] as any)?.project 
     : null;
 
-  // Function to select a file to view its contents
+  // Update the safeRefresh function to match the expected Promise<void> type
+  const safeRefresh = async (): Promise<void> => {
+    // Use the provided refreshFileSystem from props
+    if (typeof refreshFileSystem === 'function') {
+      try {
+        // Add a small delay before refreshing to ensure file operations have completed
+        await new Promise(resolve => setTimeout(resolve, 100));
+        await refreshFileSystem();
+
+        // Perform a second refresh after a short delay to ensure consistency
+        setTimeout(async () => {
+          try {
+            await refreshFileSystem();
+          } catch (error) {
+            console.error('Error in delayed refresh:', error);
+          }
+        }, 500);
+      } catch (error) {
+        console.error('Error refreshing file system:', error);
+        
+        // Try one more time with a direct fetch approach
+        try {
+          const timestamp = new Date().getTime();
+          const response = await fetch(`/api/filesystem?_ts=${timestamp}`, {
+            method: 'GET',
+            cache: 'no-store',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            if (result && result.fileSystem) {
+              console.log('Manual file system refresh succeeded');
+            }
+          }
+        } catch (fallbackError) {
+          console.error('Fallback refresh also failed:', fallbackError);
+        }
+      }
+    }
+  };
+
+  // Add a utility function to verify file existence
+  const verifyFileExists = async (filePath: string): Promise<boolean> => {
+    try {
+      const normalizedPath = filePath
+        .startsWith('/project/') 
+        ? filePath.replace(/\/+/g, '/') 
+        : `/project/${filePath.replace(/^\/+/, '')}`;
+      
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
+        method: 'HEAD',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      return response.ok;
+    } catch (error) {
+      console.error('Error checking file existence:', error);
+      return false;
+    }
+  };
+
+  // Update selectFile to handle adding files to editor tabs
   const selectFile = async (file: any) => {
     if (file.type === 'file') {
       console.log('Selecting file:', file);
-      setSelectedFile(file);
+      
+      // Verify file exists before proceeding
+      const fileExists = await verifyFileExists(file.path);
+      if (!fileExists) {
+        console.error(`File ${file.name} doesn't exist anymore`);
+        toast.error(`The file "${file.name}" no longer exists.`);
+        await refreshFileSystem();
+        return;
+      }
+      
+      // Set active tab to editor
       setActiveTab('editor');
       
       // If we have an external openFile function, use it
       if (typeof openFile === 'function') {
-        const filePath = file.path.startsWith('/project/') ? file.path : `/project/${file.path}`;
-        console.log('Opening file using openFile function:', filePath);
-        const success = await openFile(filePath);
-        
-        if (!success) {
-          console.error('Failed to open file using openFile function');
+        try {
+          // Ensure the file path is properly formatted and normalize any double slashes
+          const normalizedPath = file.path
+            .startsWith('/project/') 
+            ? file.path.replace(/\/+/g, '/') 
+            : `/project/${file.path.replace(/^\/+/, '')}`;
+          
+          console.log('Opening file using openFile function with normalized path:', normalizedPath);
+          
+          // Dispatch file-opened-fresh event first to ensure the file is added to the editor state
+          // This guarantees it'll be in openedFiles before the editor mounts
+          // First, we need to fetch file content
+          const content = await fetchFileContent(normalizedPath);
+          if (content !== null) {
+            // Create and dispatch event with content
+            const fileOpenEvent = new CustomEvent('file-opened-fresh', {
+              detail: { 
+                path: normalizedPath,
+                content
+              }
+            });
+            window.dispatchEvent(fileOpenEvent);
+            
+            // Short delay to ensure event processing before continuing
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          
+          // Now call the openFile function
+          const success = await openFile(normalizedPath);
+          
+          if (!success) {
+            console.error('Failed to open file using openFile function');
+            toast.error(`Could not open file: ${file.name}`);
+          }
+        } catch (error) {
+          console.error('Error opening file:', error);
+          toast.error(`Error opening file: ${error instanceof Error ? error.message : String(error)}`);
         }
         
         return;
@@ -110,52 +245,95 @@ export function Workspace({
       
       try {
         // Ensure the file path is properly formatted
-        const filePath = file.path.startsWith('/project/') ? file.path : `/project/${file.path}`;
+        const normalizedPath = file.path
+          .startsWith('/project/') 
+          ? file.path.replace(/\/+/g, '/') 
+          : `/project/${file.path.replace(/^\/+/, '')}`;
         
-        console.log('Loading file:', filePath);
+        console.log('Loading file with normalized path:', normalizedPath);
         
-        const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+        // First, remove any existing versions of this file from openedFiles to ensure fresh content
+        setOpenedFiles(prev => prev.filter(f => f.path !== normalizedPath));
+        
+        // Add a timestamp query parameter to prevent caching
+        const timestamp = new Date().getTime();
+        const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
           },
         });
         
         if (!response.ok) {
-          throw new Error(`Error: ${response.status}`);
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(`Error ${response.status}: ${errorData.error || response.statusText}`);
         }
         
         const data = await response.json();
+        
         if (data.file) {
           console.log('File content loaded:', { path: data.file.path, contentLength: data.file.content.length });
           
-          // When using external editing (editingFile prop), pass content to parent components
-          if (typeof setFileContent === 'function') {
-            console.log("Using external file content state");
+          // Set selectedFile to show the file as selected in the file explorer
+          setSelectedFile(file);
+          
+          if (editingFile) {
+            // When using the terminal's editing mode, just update the content
             setFileContent(data.file.content);
-            // If we have a function to start editing mode externally
-            if (typeof saveFileContent === 'function') {
-              // This might trigger the parent component's editing state
-              file.content = data.file.content;
-            }
+            file.content = data.file.content;
           } else {
-            // Use internal state management
-            setCurrentFileContent(data.file.content);
-            setCurrentFilePath(data.file.path);
+            // Use our internal editor with multi-file support
             setIsEditing(true);
             
-            // Update the selected file's content
-            file.content = data.file.content;
+            // Before switching, save the current file's content if we're already editing
+            if (isEditing && activeFilePath) {
+              // Check if the active file already exists in openedFiles and update it
+              setOpenedFiles(prev => 
+                prev.map(f => 
+                  f.path === activeFilePath
+                    ? { ...f, content: currentFileContent, hasUnsavedChanges: true }
+                    : f
+                )
+              );
+            }
+            
+            // Always add as a new file with fresh content from the server
+            setOpenedFiles(prev => [
+              ...prev, 
+              { 
+                path: normalizedPath, 
+                content: data.file.content,
+                hasUnsavedChanges: false 
+              }
+            ]);
+            
+            // Set new file as active
+            setActiveFilePath(normalizedPath);
+            // Update current file states
+            setCurrentFilePath(normalizedPath);
+            setCurrentFileContent(data.file.content);
           }
           
-          console.log('State updated with file content');
+          // Dispatch a custom event to notify other components that we've opened a fresh file
+          const fileOpenedEvent = new CustomEvent('file-opened-fresh', {
+            detail: {
+              path: normalizedPath,
+              content: data.file.content
+            }
+          });
+          window.dispatchEvent(fileOpenedEvent);
         } else {
-          throw new Error('Invalid file data received');
+          throw new Error('File content not found in response');
         }
       } catch (error) {
-        console.error('Failed to load file content:', error);
-        window.alert(`Failed to load file: ${error instanceof Error ? error.message : String(error)}`);
+        console.error('Error loading file:', error);
+        toast.error(`Error loading file: ${error instanceof Error ? error.message : String(error)}`);
       }
+    } else if (file.type === 'directory') {
+      toggleDirectory(file);
     }
   };
   
@@ -170,10 +348,15 @@ export function Workspace({
       // Ensure the file path is properly formatted
       const filePath = file.path.startsWith('/project/') ? file.path : `/project/${file.path}`;
       
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&_ts=${timestamp}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
       });
       
@@ -215,6 +398,7 @@ export function Workspace({
       }
     } catch (error) {
       console.error('Failed to load file content:', error);
+      toast.error(`Failed to load file: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
@@ -239,10 +423,15 @@ export function Workspace({
 
       console.log('Saving file:', { filePath, contentLength: content.length });
 
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&_ts=${timestamp}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         body: JSON.stringify({ 
           content,
@@ -255,11 +444,14 @@ export function Workspace({
         throw new Error(`Error ${response.status}: ${errorData.message || response.statusText}`);
       }
 
-      // After successful save, fetch the latest file content
-      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`, {
+      // After successful save, fetch the latest file content with cache busting
+      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&_ts=${new Date().getTime()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
       });
 
@@ -274,26 +466,46 @@ export function Workspace({
         if (selectedFile) {
           selectedFile.content = data.file.content;
         }
+        
+        // Also update the file in openedFiles if it's there
+        setOpenedFiles(prev => 
+          prev.map(f => 
+            f.path === filePath
+              ? { ...f, content: data.file.content, hasUnsavedChanges: false }
+              : f
+          )
+        );
       }
       
       // Refresh the file system to show updated content
       await refreshFileSystem();
       
       console.log('File saved successfully');
+      toast.success('File saved successfully');
       
     } catch (error) {
       console.error('Failed to save file:', error);
-      window.alert(`Failed to save file: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(`Failed to save file: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   // Function to handle canceling file editing
   const handleCancelEditing = () => {
+    // Check if any files have unsaved changes
+    const hasUnsavedChanges = openedFiles.some(file => file.hasUnsavedChanges);
+    
+    if (hasUnsavedChanges) {
+      const shouldClose = window.confirm("You have unsaved changes. Are you sure you want to close the editor?");
+      if (!shouldClose) {
+        return;
+      }
+    }
+    
     setIsEditing(false);
-    setCurrentFileContent('');
+    setOpenedFiles([]);
+    setActiveFilePath('');
     setCurrentFilePath('');
-    setSelectedFile(null);
-    setActiveTab('workflow');
+    setCurrentFileContent('');
   };
 
   // Function to handle panel minimization
@@ -421,10 +633,266 @@ export function Workspace({
     setShowProjectConfig(false);
   };
 
+  // We need to correctly initialize and use the fileOperations hook 
+  // Use the file operations hook to simplify file operations:
+  const fileOperations = useFileOperations({
+    refreshFileSystem: safeRefresh
+  });
+
+  // And update the handlers to use fileOperations again
+  const handleDeleteFile = (file: FileSystem) => {
+    if (window.confirm(`Are you sure you want to delete ${file.name}?`)) {
+      fileOperations.deleteFile(file);
+    }
+  };
+  
+  const handleMoveFile = async (sourceFile: FileSystem, targetDir: FileSystem) => {
+    return fileOperations.moveFile(sourceFile, targetDir);
+  };
+
+  const handleRenameFile = async (file: FileSystem, newName: string): Promise<void> => {
+    await fileOperations.renameFile(file, newName);
+  };
+  
+  const handleCreateFile = async (path: string, name: string, isDirectory: boolean): Promise<void> => {
+    await fileOperations.createFile(path, name, isDirectory);
+  };
+  
+  const handleCopyFile = (file: FileSystem) => {
+    fileOperations.copyFile(file);
+  };
+  
+  const handlePasteFile = async (targetDir: FileSystem): Promise<void> => {
+    await fileOperations.pasteFile(targetDir);
+  };
+
+  // Add this if we're using cutting functionality
+  const handleCutFile = (file: FileSystem) => {
+    fileOperations.handleCutFile(file);
+  };
+
+  // Handler for selecting a file for comparison
+  const handleSelectForCompare = (file: any) => {
+    if (file.type !== 'file') return;
+    
+    setSelectedForCompare(file);
+    setCompareMenuOpen(true);
+  };
+
+  // Handler for comparing files
+  const handleCompareFiles = async (file1: any, file2: any) => {
+    setIsComparing(true);
+    setCompareMenuOpen(false);
+    setSelectedForCompare(null);
+    
+    try {
+      // Get file contents
+      const file1Content = await fetchFileContent(file1.path);
+      const file2Content = await fetchFileContent(file2.path);
+      
+      if (file1Content && file2Content) {
+        setCompareFiles({
+          file1: {
+            path: file1.path,
+            name: file1.name,
+            content: file1Content
+          },
+          file2: {
+            path: file2.path, 
+            name: file2.name,
+            content: file2Content
+          }
+        });
+      } else {
+        console.error('Could not load file contents for comparison');
+        setIsComparing(false);
+      }
+    } catch (error) {
+      console.error('Error setting up file comparison:', error);
+      setIsComparing(false);
+    }
+  };
+
+  // Handler for closing file comparison
+  const handleCloseCompare = () => {
+    setIsComparing(false);
+    setCompareFiles(null);
+    setSelectedForCompare(null);
+  };
+
+  // Context menu for file comparison
+  const renderCompareMenu = () => {
+    if (!compareMenuOpen || !selectedForCompare) return null;
+    
+    // Find other files that can be compared with the selected file
+    const findComparableFiles = (items: any[]): any[] => {
+      let result: any[] = [];
+      
+      items.forEach(item => {
+        if (item.type === 'file' && item.path !== selectedForCompare.path) {
+          result.push(item);
+        }
+        
+        if (item.type === 'directory' && item.children) {
+          result = [...result, ...findComparableFiles(item.children)];
+        }
+      });
+      
+      return result;
+    };
+    
+    const comparableFiles = findComparableFiles(fileSystem || []);
+    
+    return (
+      <div className="absolute z-10 bg-[#212121] border border-[#2A2A2A] rounded shadow-lg p-2 max-h-60 overflow-y-auto">
+        <div className="text-xs font-medium text-gray-400 mb-2 px-2">
+          Compare {selectedForCompare.name} with:
+        </div>
+        {comparableFiles.length > 0 ? (
+          <div className="space-y-1">
+            {comparableFiles.map(file => (
+              <div 
+                key={file.path}
+                className="px-2 py-1 text-xs hover:bg-[#2A2A2A] cursor-pointer rounded"
+                onClick={() => handleCompareFiles(selectedForCompare, file)}
+              >
+                {file.name}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500 px-2 py-1">
+            No other files available for comparison
+          </div>
+        )}
+        <div className="border-t border-[#2A2A2A] mt-2 pt-2">
+          <div 
+            className="px-2 py-1 text-xs hover:bg-[#2A2A2A] cursor-pointer rounded text-gray-400"
+            onClick={() => setCompareMenuOpen(false)}
+          >
+            Cancel
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Debug logging
   useEffect(() => {
     console.log('Workspace state updated - isEditing:', isEditing, 'editingFile:', editingFile, 'selectedFile:', selectedFile?.path);
   }, [isEditing, editingFile, selectedFile]);
+
+  // Add a listener for filesystem change events
+  useEffect(() => {
+    const handleFileSystemChange = (event: Event) => {
+      // Get the details from the custom event
+      const customEvent = event as CustomEvent;
+      const { path, action } = customEvent.detail || {};
+      
+      console.log(`File system change detected: ${action} on ${path}`);
+      
+      // If the file that was deleted is currently selected, clear selection
+      if (action === 'delete' && selectedFile && selectedFile.path === path) {
+        setSelectedFile(null);
+        setIsEditing(false);
+        setCurrentFileContent('');
+        setCurrentFilePath('');
+      }
+      
+      // Refresh the file system
+      if (typeof refreshFileSystem === 'function') {
+        console.log('Refreshing file system due to detected change');
+        refreshFileSystem();
+        
+        // Double refresh after a short delay
+        setTimeout(() => {
+          refreshFileSystem();
+        }, 500);
+      }
+    };
+    
+    // Add the event listener
+    window.addEventListener('filesystem-changed', handleFileSystemChange);
+    
+    // Remove the event listener on cleanup
+    return () => {
+      window.removeEventListener('filesystem-changed', handleFileSystemChange);
+    };
+  }, [selectedFile, refreshFileSystem]);
+
+  // Add a keyboard shortcut to open file search:
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+P or Cmd+P to open file search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        setIsFileSearchOpen(true);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Add the missing fetchFileContent function
+  const fetchFileContent = async (filePath: string): Promise<string | null> => {
+    try {
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`);
+      if (!response.ok) {
+        console.error('Failed to fetch file content:', response.statusText);
+        return null;
+      }
+      
+      const data = await response.json();
+      if (data && data.file && data.file.content !== undefined) {
+        return data.file.content;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error fetching file content:', error);
+      return null;
+    }
+  };
+
+  // Use keyboard shortcuts for file operations
+  useKeyboardShortcuts({
+    selectedFile,
+    onDelete: async (file) => {
+      if (window.confirm(`Are you sure you want to delete ${file.name}?`)) {
+        await fileOperations.deleteFile(file);
+      }
+    },
+    onCopy: handleCopyFile,
+    onCut: handleCutFile,
+    onPaste: async (dir) => {
+      if (dir.type === 'directory') {
+        await handlePasteFile(dir);
+      }
+    },
+    onRename: (file) => {
+      // Start file rename operation via the context menu
+      // This would typically be handled by handleSelectForCompare
+      handleSelectForCompare(file);
+    },
+    onNewFile: () => {
+      // Create a new file in the current directory
+      const path = selectedFile?.type === 'directory' ? 
+        selectedFile.path : 
+        workingDirectory || '';
+      handleCreateFile(path, 'new-file.js', false);
+    },
+    onNewFolder: () => {
+      // Create a new folder in the current directory
+      const path = selectedFile?.type === 'directory' ? 
+        selectedFile.path : 
+        workingDirectory || '';
+      handleCreateFile(path, 'new-folder', true);
+    },
+    onRefresh: safeRefresh,
+    // Disable shortcuts when editing a file or the file search is open
+    disableShortcuts: isEditing || isFileSearchOpen
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -504,14 +972,25 @@ export function Workspace({
               className="flex flex-col border-r border-[#2A2A2A] bg-[#181818] overflow-auto"
               style={{ width: `${fileExplorerWidth}%`, minWidth: '200px', maxWidth: '40%' }}
             >
-              <FileExplorer 
-                fileSystem={fileSystem}
-                selectedFile={selectedFile}
-                onSelectFile={selectFile}
-                onToggleDirectory={toggleDirectory}
-                workingDirectory={workingDirectory}
-                onRefresh={refreshFileSystem}
-              />
+              <div className="flex-1 overflow-x-hidden overflow-y-auto border-r border-[#1D1D1D]">
+                <EnhancedFileExplorer
+                  fileSystem={fileSystem}
+                  selectedFile={selectedFile}
+                  onSelectFile={selectFile}
+                  onToggleDirectory={toggleDirectory}
+                  workingDirectory={workingDirectory}
+                  onRefresh={safeRefresh}
+                  onDeleteFile={handleDeleteFile}
+                  onMoveFile={handleMoveFile}
+                  onCompareFile={handleSelectForCompare}
+                  onRenameFile={handleRenameFile}
+                  onCreateFile={handleCreateFile}
+                  onCopy={handleCopyFile}
+                  onPaste={handlePasteFile}
+                  width={fileExplorerWidth}
+                  onOpenSearch={() => setIsFileSearchOpen(true)}
+                />
+              </div>
               
               {/* File Explorer resize handle */}
               <div
@@ -531,8 +1010,126 @@ export function Workspace({
                   setFileContent={editingFile ? setFileContent : setCurrentFileContent}
                   saveFileContent={editingFile ? saveFileContent : handleSaveFile}
                   cancelFileEditing={editingFile ? cancelFileEditing : handleCancelEditing}
-                  filePath={editingFile ? filePath : currentFilePath}
+                  filePath={editingFile ? 
+                    (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal && terminal.activeFilePath ? 
+                      String(terminal.activeFilePath) : filePath) : 
+                    currentFilePath}
                   fileEditorRef={fileEditorRef}
+                  openFiles={editingFile ? 
+                    (terminal && typeof terminal === 'object' && 'openedFiles' in terminal ? 
+                      (terminal.openedFiles as any[]) : []) : 
+                    openedFiles}
+                  activeFilePath={editingFile ? 
+                    (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal ? 
+                      String(terminal.activeFilePath) : filePath) : 
+                    activeFilePath}
+                  onOpenFile={async (path: string, content: string) => {
+                    if (editingFile && terminal && typeof terminal === 'object' && 'openFile' in terminal && typeof terminal.openFile === 'function') {
+                      // If using the terminal's editor, just open the file
+                      return terminal.openFile(path);
+                    } else {
+                      // If using workspace's internal editor, add to our local state
+                      // Check if the file already exists
+                      const existingIndex = openedFiles.findIndex(file => file.path === path);
+                      if (existingIndex >= 0) {
+                        // Update the file's metadata if needed
+                        const existingContent = openedFiles[existingIndex].content;
+                        const hasUnsavedChanges = existingContent !== content;
+                        
+                        setOpenedFiles(prev => prev.map(file => 
+                          file.path === path 
+                            ? { ...file, hasUnsavedChanges: hasUnsavedChanges }
+                            : file
+                        ));
+                      } else {
+                        // Add a new file
+                        setOpenedFiles(prev => [
+                          ...prev,
+                          { path, content, hasUnsavedChanges: false }
+                        ]);
+                      }
+                    
+                      setActiveFilePath(path);
+                      setCurrentFilePath(path);
+                      // Only update the current content if we're not already editing that file
+                      // This prevents overwriting unsaved changes when metadata is updated
+                      if (activeFilePath !== path) {
+                        setCurrentFileContent(content);
+                      }
+                      return true;
+                    }
+                  }}
+                  onCloseFile={(path: string) => {
+                    if (editingFile && terminal && typeof terminal === 'object' && 'closeFile' in terminal && typeof terminal.closeFile === 'function') {
+                      // If using terminal's editor
+                      terminal.closeFile(path);
+                    } else {
+                      // If this is the last file, cancel editing
+                      if (openedFiles.length === 1) {
+                        handleCancelEditing();
+                        return;
+                      }
+                      
+                      // Otherwise just remove the file
+                      const newOpenedFiles = openedFiles.filter(file => file.path !== path);
+                      setOpenedFiles(newOpenedFiles);
+                      
+                      // If this was the active file, switch to another one
+                      if (path === activeFilePath) {
+                        const newActivePath = newOpenedFiles[0].path;
+                        setActiveFilePath(newActivePath);
+                        setCurrentFilePath(newActivePath);
+                        
+                        const newActiveFile = newOpenedFiles.find(file => file.path === newActivePath);
+                        if (newActiveFile) {
+                          setCurrentFileContent(newActiveFile.content);
+                        }
+                      }
+                    }
+                  }}
+                  onSwitchFile={(path: string) => {
+                    if (editingFile && terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
+                      // If using terminal's editor
+                      terminal.switchToFile(path);
+                    } else {
+                      // Before switching, save the current file's content and mark as having unsaved changes
+                      if (activeFilePath && activeFilePath !== path) {
+                        // First ensure we capture the current content
+                        const currentContent = currentFileContent;
+                        const activeFile = openedFiles.find(file => file.path === activeFilePath);
+                        
+                        // Only mark as unsaved if content actually changed
+                        const hasChanges = activeFile ? (activeFile.content !== currentContent) : false;
+                        
+                        // Update the content of the active file we're switching from
+                        setOpenedFiles(prev => {
+                          const updatedFiles = prev.map(file => 
+                            file.path === activeFilePath 
+                              ? { ...file, content: currentContent, hasUnsavedChanges: hasChanges } 
+                              : file
+                          );
+                          return updatedFiles;
+                        });
+                      }
+                      
+                      // Find the file in our list
+                      const file = openedFiles.find(file => file.path === path);
+                      if (file) {
+                        // Clone the content we're switching to, to avoid reference issues
+                        const fileContent = file.content;
+                        
+                        // First update the path state
+                        setActiveFilePath(path);
+                        setCurrentFilePath(path);
+                        
+                        // Then update the content in a separate operation 
+                        // This helps prevent synchronization issues between state updates
+                        setTimeout(() => {
+                          setCurrentFileContent(fileContent);
+                        }, 0);
+                      }
+                    }
+                  }}
                 />
               ) : selectedFile ? (
                 <FileViewer 
@@ -626,6 +1223,28 @@ export function Workspace({
           </>
         )}
       </div>
+      
+      {/* Compare menu overlay */}
+      {renderCompareMenu()}
+      
+      {/* File comparison view */}
+      {isComparing && compareFiles && (
+        <div className="absolute inset-0 z-20 bg-[#121212]">
+          <FileCompare 
+            file1={compareFiles.file1}
+            file2={compareFiles.file2}
+            onClose={handleCloseCompare}
+          />
+        </div>
+      )}
+
+      {/* FileSearchModal component */}
+      <FileSearchModal
+        isOpen={isFileSearchOpen}
+        onClose={() => setIsFileSearchOpen(false)}
+        fileSystem={fileSystem}
+        onSelectFile={selectFile}
+      />
     </div>
   );
 } 
