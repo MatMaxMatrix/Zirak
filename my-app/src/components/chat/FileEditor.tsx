@@ -1,257 +1,427 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { MonacoEditor } from './MonacoEditor';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { X, Save, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { FileEditorProps } from '@/types/chat';
+import MonacoEditorComponent from './MonacoEditorComponent';
 import { getLanguageFromFilePath } from '@/utils/languages';
-import { X, Circle, Save } from 'lucide-react';
-import { toast } from 'sonner';
-import { useWebSocket } from '@/app/contexts/WebSocketContext';
+import { getFileNameFromPath } from '@/utils/file-utils';
+import { useWindowSize } from '@/hooks/useWindowSize';
+import useKeyboardShortcut from '@/hooks/useKeyboardShortcut';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+
+// Import the monaco config to ensure it's loaded before any editor components
+import '../../utils/monaco-config';
+
+interface FileEditorProps {
+  fileContent: string;
+  setFileContent: (content: string) => void;
+  saveFileContent: () => void;
+  cancelFileEditing: () => void;
+  filePath: string;
+  fileEditorRef?: React.RefObject<any>;
+  openFiles?: any[];
+  activeFilePath?: string;
+  onOpenFile?: (path: string, content: string) => Promise<boolean>;
+  onCloseFile?: (path: string) => void;
+  onSwitchFile?: (path: string) => void;
+}
 
 interface OpenedFile {
   path: string;
-  hasUnsavedChanges: boolean;
+  content: string;
+  hasUnsavedChanges?: boolean;
 }
 
-export function FileEditor({
-  filePath,
+const FileEditor: React.FC<FileEditorProps> = ({
   fileContent,
   setFileContent,
   saveFileContent,
   cancelFileEditing,
-  handleEditorMouseDown,
+  filePath,
   fileEditorRef,
-  editorHeight
-}: FileEditorProps) {
-  const webSocket = useWebSocket();
-  const language = getLanguageFromFilePath(filePath);
-  const [isDragging, setIsDragging] = useState(false);
-  const [localEditorHeight, setLocalEditorHeight] = useState(editorHeight || 400); // Use prop or default 400px
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const layoutUpdateTimerRef = useRef<number | null>(null);
+  openFiles = [],
+  activeFilePath = '',
+  onOpenFile,
+  onCloseFile,
+  onSwitchFile
+}) => {
+  const [editorHeight, setEditorHeight] = useState(500);
+  const [isResizing, setIsResizing] = useState(false);
+  const [editorError, setEditorError] = useState<string | null>(null);
+  const [originalContent, setOriginalContent] = useState(fileContent);
+  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{type: 'close' | 'switch', path?: string} | null>(null);
+  const resizeHandleRef = useRef<HTMLDivElement>(null);
+  const windowSize = useWindowSize();
+  const isMultipleFilesOpen = openFiles && openFiles.length > 1;
   
-  // Update local state when fileContent prop changes
-  useEffect(() => {
-    if (fileContent !== undefined) {
-      setHasUnsavedChanges(false);
-    }
-  }, [fileContent]);
+  // Use path for tab key if activeFilePath not provided
+  const currentPath = activeFilePath || filePath;
   
-  // Update local editor height when prop changes
-  useEffect(() => {
-    if (editorHeight && editorHeight !== localEditorHeight) {
-      setLocalEditorHeight(editorHeight);
-    }
-  }, [editorHeight]);
+  // Track if file has unsaved changes
+  const hasUnsavedChanges = fileContent !== originalContent;
 
-  const handleContentChange = (newContent: string) => {
-    if (newContent !== fileContent) {
-      setFileContent(newContent);
-      setHasUnsavedChanges(true);
-    }
+  // Store original content when file first loads
+  useEffect(() => {
+    setOriginalContent(fileContent);
+  }, [currentPath]);
+  
+  // Get filename from path
+  const getFileName = (path: string) => {
+    return getFileNameFromPath(path);
   };
-
-  const handleSave = async () => {
-    if (isSaving) return;
+  
+  // Get language from file extension
+  const getLanguage = (path: string) => {
+    return getLanguageFromFilePath(path);
+  };
+  
+  // Get language for current file
+  const language = getLanguage(currentPath);
+  
+  // Handle editor errors
+  const handleEditorError = (error: Error) => {
+    console.error('Monaco editor error:', error);
+    setEditorError('An error occurred in the editor. Try reloading the page.');
     
-    try {
-      setIsSaving(true);
-      console.log('Saving file...');
+    // Attempt to recover from "V is not iterable" error
+    if (error.message?.includes('V is not iterable')) {
+      console.warn('Detected "V is not iterable" error, attempting recovery...');
       
-      // Set savingFromEditor flag in the WebSocketContext
-      webSocket.savingFromEditor = true;
-      
-      // Check if saveFileContent is a function before calling it
-      if (typeof saveFileContent === 'function') {
-        await saveFileContent();
-      } else {
-        console.error('saveFileContent is not a function');
-        throw new Error('Save function is not available');
-      }
-      
-      // Reset the flag after save
-      webSocket.savingFromEditor = false;
-      
-      console.log('File saved successfully');
-      setHasUnsavedChanges(false);
-      toast.success('File saved successfully');
-    } catch (error) {
-      console.error('Error saving file:', error);
-      toast.error(`Failed to save file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      
-      // Reset the flag if save fails
-      webSocket.savingFromEditor = false;
-    } finally {
-      setIsSaving(false);
+      // Wait a moment and try to reset the editor content
+      setTimeout(() => {
+        try {
+          if (fileEditorRef?.current) {
+            const model = fileEditorRef.current.getModel();
+            if (model) {
+              // Try setting empty content first
+              model.setValue('');
+              
+              // Then after a brief delay, set the actual content
+              setTimeout(() => {
+                try {
+                  model.setValue(fileContent || '');
+                  setEditorError(null);
+                } catch (innerError) {
+                  console.error('Recovery attempt failed:', innerError);
+                }
+              }, 50);
+            }
+          }
+        } catch (recoveryError) {
+          console.error('Error during recovery attempt:', recoveryError);
+        }
+      }, 100);
     }
   };
-
-  const handleClose = () => {
-    if (hasUnsavedChanges) {
-      const shouldClose = window.confirm('You have unsaved changes. Do you want to close without saving?');
-      if (!shouldClose) {
-        return;
-      }
+  
+  // Update editor height on window resize
+  useEffect(() => {
+    if (windowSize.height) {
+      const idealHeight = windowSize.height * 0.6;
+      const minHeight = 300;
+      const maxHeight = windowSize.height * 0.8;
+      setEditorHeight(Math.min(Math.max(idealHeight, minHeight), maxHeight));
     }
-    cancelFileEditing();
+  }, [windowSize]);
+  
+  // Save file handler - also updates the original content to mark file as saved
+  const handleSaveFile = () => {
+    saveFileContent();
+    setOriginalContent(fileContent);
   };
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  
+  // Keyboard shortcut for saving
+  useKeyboardShortcut(['Meta', 's'], (e: KeyboardEvent) => {
     e.preventDefault();
-    setIsDragging(true);
-    const startY = e.clientY;
-    const startHeight = localEditorHeight;
-    let rafId: number | null = null;
-    let lastY = startY;
-    let currentHeight = startHeight;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      // Cancel any pending animation frame to avoid multiple updates
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-      
-      // Schedule the resize in an animation frame for smoother performance
-      rafId = requestAnimationFrame(() => {
-        const deltaY = e.clientY - lastY;
-        lastY = e.clientY;
-        
-        currentHeight = Math.max(150, currentHeight + deltaY); // Minimum height of 150px
-        
-        // Apply height change to the element directly for immediate feedback
-        if (fileEditorRef.current) {
-          fileEditorRef.current.style.height = `${currentHeight}px`;
-        }
-        
-        // Throttle the state updates to reduce re-renders
-        if (layoutUpdateTimerRef.current) {
-          clearTimeout(layoutUpdateTimerRef.current);
-        }
-        
-        layoutUpdateTimerRef.current = window.setTimeout(() => {
-          setLocalEditorHeight(currentHeight);
-          layoutUpdateTimerRef.current = null;
-        }, 50) as unknown as number;
-      });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      
-      // Cancel any pending animation frame
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-      }
-      
-      // Clear any throttled updates
-      if (layoutUpdateTimerRef.current) {
-        clearTimeout(layoutUpdateTimerRef.current);
-        layoutUpdateTimerRef.current = null;
-      }
-      
-      // Remove event listeners
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      
-      // Ensure final height is committed to state
-      setLocalEditorHeight(currentHeight);
-      
-      // Remove class from body
-      document.body.classList.remove('resize-active');
-    };
-
-    // Use passive: false to ensure preventDefault works properly
-    document.addEventListener('mousemove', handleMouseMove, { passive: false });
-    document.addEventListener('mouseup', handleMouseUp);
-    
-    // Add class to body to prevent text selection during resize
-    document.body.classList.add('resize-active');
-  }, [localEditorHeight, fileEditorRef]);
-
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Add global Ctrl+S or Command+S handler
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      e.preventDefault();
-      handleSave();
-    }
-  }, [handleSave]);
-
-  // Add global key handler
+    handleSaveFile();
+  });
+  
+  // Handle editor resize
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+  
+  // Handle mouse move during resize
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const editorContainer = document.getElementById('editor-container');
+      if (editorContainer) {
+        const containerRect = editorContainer.getBoundingClientRect();
+        const newHeight = Math.max(200, e.clientY - containerRect.top);
+        setEditorHeight(newHeight);
+      }
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+    
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+  
+  // Check for unsaved changes before closing or switching
+  const checkUnsavedChanges = (actionType: 'close' | 'switch', path?: string) => {
+    if (hasUnsavedChanges) {
+      setPendingAction({ type: actionType, path });
+      setShowUnsavedDialog(true);
+      return false;
+    }
+    return true;
+  };
+  
+  // Proceed with the pending action after handling unsaved changes
+  const proceedWithPendingAction = () => {
+    if (!pendingAction) return;
+    
+    if (pendingAction.type === 'close' && onCloseFile) {
+      onCloseFile(currentPath);
+    } else if (pendingAction.type === 'switch' && onSwitchFile && pendingAction.path) {
+      onSwitchFile(pendingAction.path);
+    } else if (pendingAction.type === 'close') {
+      cancelFileEditing();
+    }
+    
+    setShowUnsavedDialog(false);
+    setPendingAction(null);
+  };
+  
+  // Handle file tab selection with unsaved changes check
+  const handleTabSelect = (path: string) => {
+    if (path === currentPath) return;
+    
+    if (checkUnsavedChanges('switch', path) && onSwitchFile) {
+      onSwitchFile(path);
+    }
+  };
+  
+  // Handle file tab close with unsaved changes check
+  const handleTabClose = (e: React.MouseEvent, path: string) => {
+    e.stopPropagation();
+    
+    if (path === currentPath) {
+      if (checkUnsavedChanges('close') && onCloseFile) {
+        onCloseFile(path);
+      }
+    } else if (onCloseFile) {
+      onCloseFile(path);
+    }
+  };
+  
+  // Handle cancel editing with unsaved changes check
+  const handleCancelEditing = () => {
+    if (checkUnsavedChanges('close')) {
+      cancelFileEditing();
+    }
+  };
+  
+  // Ensure window beforeunload event captures unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        // Standard message (browsers will show their own message)
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges]);
+
+  // Update parent component about unsaved changes status
+  useEffect(() => {
+    // If the current file is in the openFiles array, we should update its hasUnsavedChanges flag
+    if (openFiles && currentPath) {
+      const fileIndex = openFiles.findIndex(file => file.path === currentPath);
+      if (fileIndex >= 0 && openFiles[fileIndex].hasUnsavedChanges !== hasUnsavedChanges) {
+        // Create an updated file object with the hasUnsavedChanges flag
+        const updatedFile = { ...openFiles[fileIndex], hasUnsavedChanges };
+        
+        // Use a callback approach to ensure we're working with the latest state
+        // This isn't directly updating the parent's state, just informing it
+        if (onOpenFile) {
+          // This is a bit of a hack, using onOpenFile to update the file's metadata
+          // Ideally we would have a separate callback for updating file metadata
+          onOpenFile(updatedFile.path, updatedFile.content)
+            .then(() => {
+              // Handle success if needed
+            })
+            .catch(err => {
+              console.error('Failed to update file metadata:', err);
+            });
+        }
+      }
+    }
+  }, [hasUnsavedChanges, currentPath, openFiles, onOpenFile]);
 
   return (
-    <div 
-      className={`flex flex-col ${isDragging ? 'select-none' : ''}`} 
-      ref={fileEditorRef}
-      style={{ height: `${localEditorHeight}px`, minHeight: '150px' }}
-    >
-      {/* Tab Bar */}
-      <div className="flex items-center bg-[#252526] border-b border-[#1D1D1D] h-9 px-2">
-        <div className="flex items-center h-full">
-          <div 
-            className={`
-              flex items-center h-full px-3 gap-2 
-              bg-[#1E1E1E] border-t border-l border-r border-[#1D1D1D]
-              text-sm text-gray-300
-            `}
+    <div className="flex flex-col h-full">
+      <div className="flex justify-between items-center bg-[#1F1F1F] border-b border-[#2A2A2A] px-3 py-2">
+        <div className="text-sm text-gray-300">
+          Editing: <span className="font-medium">{getFileName(currentPath)}</span>
+          {hasUnsavedChanges && <span className="text-blue-400 ml-2">•</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSaveFile}
+            className={`px-3 py-1 h-8 text-sm flex items-center gap-1 ${hasUnsavedChanges ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-500' : ''}`}
           >
-            <span className="max-w-[150px] truncate">{filePath.split('/').pop()}</span>
-            {hasUnsavedChanges && (
-              <Circle className="h-2 w-2 fill-current text-gray-400" />
-            )}
-            <button
-              onClick={handleClose}
-              className="hover:bg-[#333333] rounded p-0.5 -mr-1"
-            >
-              <X className="h-4 w-4 text-gray-400" />
-            </button>
+            <Save size={14} /> Save {hasUnsavedChanges ? '(⌘S)' : ''}
+          </Button>
           </div>
-        </div>
-        <div className="ml-auto">
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !hasUnsavedChanges}
-            className={`
-              flex items-center gap-1 px-2 py-1 rounded text-xs
-              ${isSaving ? 'bg-gray-600 cursor-not-allowed' : hasUnsavedChanges ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-600 cursor-not-allowed'}
-              text-white transition-colors
-            `}
-            title="Save file (⌘S on Mac, Ctrl+S on Windows/Linux)"
-          >
-            <Save className="h-3 w-3" />
-            {isSaving ? 'Saving...' : 'Save'}
-          </button>
-        </div>
       </div>
 
-      {/* File Path Bar */}
-      <div className="flex items-center justify-between p-2 border-b border-[#1D1D1D] bg-[#1E1E1E] shrink-0">
-        <div className="text-sm text-gray-400 flex items-center gap-2">
-          <span className="text-gray-500 text-xs">{filePath}</span>
+      {isMultipleFilesOpen && (
+        <div className="flex bg-[#1A1A1A] overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+          {openFiles.map((file: OpenedFile) => (
+            <div
+              key={file.path}
+              className={`flex items-center min-w-0 max-w-[200px] px-3 py-1 text-xs border-r border-[#2A2A2A] cursor-pointer ${
+                file.path === currentPath
+                  ? 'bg-[#2A2A2A] text-white'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              onClick={() => handleTabSelect(file.path)}
+            >
+              <div className="truncate">
+                {getFileName(file.path)}
+                {(file.path === currentPath ? hasUnsavedChanges : file.hasUnsavedChanges) && <span className="text-blue-400 ml-1">•</span>}
+              </div>
+              <button
+                className="ml-2 text-gray-500 hover:text-gray-300"
+                onClick={(e) => handleTabClose(e, file.path)}
+              >
+                <X size={12} />
+              </button>
+          </div>
+          ))}
         </div>
-      </div>
+      )}
 
-      {/* Editor */}
-      <div className="flex-1 relative">
-        <MonacoEditor
-          value={fileContent || ''}
+      <div
+        id="editor-container"
+        className="flex-1 overflow-hidden bg-[#1E1E1E] relative"
+        style={{ height: `${editorHeight}px` }}
+      >
+        {editorError && (
+          <div className="absolute inset-0 z-10 bg-red-900/20 flex items-center justify-center text-red-300 p-4">
+            <div className="bg-[#1A1A1A] p-4 rounded-md border border-red-800 max-w-md">
+              <p className="mb-2">{editorError}</p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="mt-2" 
+                onClick={() => window.location.reload()}
+              >
+                Reload Page
+              </Button>
+            </div>
+          </div>
+        )}
+        
+          <MonacoEditorComponent
+          content={fileContent}
+          onChange={setFileContent}
           language={language}
-          onChange={handleContentChange}
-          onSave={handleSave}
-          height={`${localEditorHeight - 40}px`} // Subtract header height
+          path={currentPath}
+          options={{
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            fontSize: 14,
+            lineNumbers: 'on',
+            guides: { indentation: true },
+            wordWrap: 'on',
+            tabSize: 2,
+            insertSpaces: true,
+            automaticLayout: true,
+          }}
+          editorRef={fileEditorRef}
+          onError={handleEditorError}
+          onSave={handleSaveFile}
+        />
+        
+        <div
+          ref={resizeHandleRef}
+          className="absolute bottom-0 left-0 right-0 h-1 bg-transparent cursor-ns-resize hover:bg-blue-500"
+          onMouseDown={handleResizeStart}
         />
       </div>
-
-      {/* Resize Handle */}
-      <div
-        className="h-2 bg-[#1D1D1D] hover:bg-blue-500 cursor-row-resize transition-colors shrink-0 relative"
-        onMouseDown={handleMouseDown}
-      >
-        <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-16 h-1 bg-current rounded-full opacity-50" />
+      
+      <div className="flex items-center justify-between p-2 bg-[#1A1A1A] border-t border-[#2A2A2A]">
+        <div className="text-xs text-gray-400">
+          {currentPath}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCancelEditing}
+            className="text-gray-400 hover:text-white"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSaveFile}
+            className={`flex items-center gap-1 ${hasUnsavedChanges ? 'text-blue-400 hover:text-blue-300' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Save size={14} /> Save
+          </Button>
+        </div>
       </div>
+      
+      {/* Unsaved Changes Dialog */}
+      <Dialog open={showUnsavedDialog} onOpenChange={setShowUnsavedDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertCircle size={18} className="text-yellow-500" />
+              Unsaved Changes
+            </DialogTitle>
+            <DialogDescription>
+              You have unsaved changes in {getFileName(currentPath)}. What would you like to do?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowUnsavedDialog(false)}>
+              Continue Editing
+            </Button>
+            <Button variant="destructive" onClick={() => {
+              setShowUnsavedDialog(false);
+              proceedWithPendingAction();
+            }}>
+              Discard Changes
+            </Button>
+            <Button onClick={() => {
+              handleSaveFile();
+              setShowUnsavedDialog(false);
+              proceedWithPendingAction();
+            }}>
+              Save & Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
+};
+
+export default FileEditor;

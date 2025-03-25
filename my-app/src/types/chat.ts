@@ -73,6 +73,13 @@ export interface TerminalProps {
   terminalEndRef: React.RefObject<HTMLDivElement>;
 }
 
+// Define OpenedFile interface
+export interface OpenedFile {
+  path: string;
+  content: string;
+  hasUnsavedChanges: boolean;
+}
+
 export interface FileEditorProps {
   filePath: string;
   fileContent: string;
@@ -82,6 +89,12 @@ export interface FileEditorProps {
   handleEditorMouseDown?: (e: React.MouseEvent) => void;
   fileEditorRef: React.RefObject<HTMLDivElement>;
   editorHeight?: number;
+  // Optional properties for multi-tab support
+  openFiles?: OpenedFile[];
+  activeFilePath?: string;
+  onOpenFile?: (path: string, content: string) => Promise<void>;
+  onCloseFile?: (path: string) => void;
+  onSwitchFile?: (path: string) => void;
 }
 
 // File system item interface
@@ -123,6 +136,16 @@ export interface FileSystem {
   content?: string;
   expanded?: boolean;
   children?: FileSystem[];
+  selected?: boolean;
+  modified?: boolean;
+  hidden?: boolean;
+  icon?: string;
+  meta?: {
+    size?: number;
+    mtime?: string;
+    ctime?: string;
+    permissions?: string;
+  };
 }
 
 export interface WorkspaceProps {
@@ -193,15 +216,6 @@ export interface ChatAreaProps {
 export interface WorkflowDisplayProps {
   workflowSteps: any[];
   workflowEndRef: React.RefObject<HTMLDivElement>;
-}
-
-export interface FileExplorerProps {
-  fileSystem: FileSystem[];
-  selectedFile: FileSystem | null;
-  onSelectFile: (file: FileSystem) => Promise<void>;
-  onToggleDirectory: (path: string) => void;
-  workingDirectory?: string;
-  onRefresh: () => Promise<void>;
 }
 
 export interface FileViewerProps {

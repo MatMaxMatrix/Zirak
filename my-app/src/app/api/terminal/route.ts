@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import { syncFile } from '@/lib/file-sync';
 
 // Create isolated project directories for each user session
 const PROJECT_ROOT = path.join(process.cwd(), 'virtual_projects');
@@ -283,6 +284,40 @@ export async function POST(request: NextRequest) {
     const fileSystemCommands = ['mkdir', 'touch', 'rm', 'mv', 'cp', 'git', 'npm', 'yarn', 'npx', 'cat >', 'echo >', 'nano', 'vi'];
     if (fileSystemCommands.some(cmd => command.includes(cmd))) {
       fileSystemChanged = true;
+    }
+    
+    // Handle special 'sync' command for file synchronization
+    if (command.startsWith('sync ')) {
+      const filePath = command.substring(5).trim();
+      if (!filePath) {
+        return {
+          output: 'Error: Please specify a file to sync.',
+          error: 'No file specified',
+          exitCode: 1
+        };
+      }
+      
+      try {
+        // Normalize the path
+        const normalizedPath = filePath.startsWith('/project/') 
+          ? filePath 
+          : path.join('/project', filePath);
+          
+        // Use syncFile utility
+        const result = await syncFile(userId, normalizedPath);
+        
+        return {
+          output: `File synchronized successfully:\n- Web path: ${result.hierarchyPath}\n- Terminal path: ${result.cwdPath}`,
+          exitCode: 0,
+          fileSystemChanged: true
+        };
+      } catch (error) {
+        return {
+          output: `Error synchronizing file: ${error instanceof Error ? error.message : String(error)}`,
+          error: String(error),
+          exitCode: 1
+        };
+      }
     }
     
     // Prepare environment for command execution

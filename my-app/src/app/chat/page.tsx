@@ -107,8 +107,11 @@ export default function ChatPage() {
 
   // Check if workflow contains clarification requests
   useEffect(() => {
-    setNeedsClarification(webSocket.inputRequired || false);
-  }, [webSocket.inputRequired]);
+    const inputRequired = webSocket.inputRequired || false;
+    if (needsClarification !== inputRequired) {
+      setNeedsClarification(inputRequired);
+    }
+  }, [webSocket.inputRequired, needsClarification]);
 
   // Use the terminal and editor refs from resizing hook
   useEffect(() => {

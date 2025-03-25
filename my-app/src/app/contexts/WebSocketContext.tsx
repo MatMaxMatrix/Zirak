@@ -704,10 +704,16 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       }
     };
     
-    // Add event listeners
+    // Register event listeners
     window.addEventListener('online', handleNetworkChange);
     window.addEventListener('offline', handleNetworkChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Check connection status immediately if page is visible and we're online
+    if (document.visibilityState === 'visible' && navigator.onLine && socket && !socket.connected) {
+      console.log('Initial connection check');
+      refreshConnection();
+    }
     
     // Clean up event listeners
     return () => {
@@ -715,7 +721,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       window.removeEventListener('offline', handleNetworkChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [socket, refreshConnection]);
+  }, [socket, refreshConnection, setConnected, setMessages]);
 
   // Send message function - initialize socket if not already done
   const sendMessage = (message: string) => {
@@ -819,24 +825,41 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
   };
 
   // Function to update the file system
-  const updateFileSystem = (newFileSystem: FileSystem[]) => {
+  const updateFileSystem = useCallback((newFileSystem: FileSystem[]) => {
     setFileSystem(newFileSystem);
-  };
+  }, []);
 
   // Function to add a terminal command
-  const addTerminalCommand = (command: TerminalCommand) => {
-    setTerminal(prev => [...prev, command]);
-  };
+  const addTerminalCommand = useCallback((command: TerminalCommand) => {
+    // Prevent adding duplicate commands that might cause excessive updates
+    setTerminal(prev => {
+      // Check if this is a system refresh command - skip adding these to prevent cycles
+      if (command.command.startsWith('# Refresh') || 
+          command.command === '# Refreshed file system') {
+        return prev;
+      }
+      
+      // Check for duplicate commands with same timestamp (within 100ms)
+      const lastCommand = prev[prev.length - 1];
+      if (lastCommand && 
+          lastCommand.command === command.command &&
+          Math.abs(new Date(lastCommand.timestamp).getTime() - new Date(command.timestamp).getTime()) < 100) {
+        return prev;
+      }
+      
+      return [...prev, command];
+    });
+  }, []);
 
   // Update a terminal command by ID
-  const updateTerminalCommand = (updatedCommand: TerminalCommand) => {
+  const updateTerminalCommand = useCallback((updatedCommand: TerminalCommand) => {
     setTerminal(prev => prev.map(cmd => 
       cmd.id === updatedCommand.id ? updatedCommand : cmd
     ));
-  };
+  }, []);
   
   // Update the last terminal command with partial data
-  const updateLastTerminalCommand = (partialCommand: Partial<TerminalCommand>) => {
+  const updateLastTerminalCommand = useCallback((partialCommand: Partial<TerminalCommand>) => {
     setTerminal(prev => {
       if (prev.length === 0) return prev;
       
@@ -848,12 +871,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         updatedLast
       ];
     });
-  };
+  }, []);
   
   // Clear the terminal history
-  const clearTerminal = () => {
+  const clearTerminal = useCallback(() => {
     setTerminal([]);
-  };
+  }, []);
 
   // Return the provider with all the context values
   return (
