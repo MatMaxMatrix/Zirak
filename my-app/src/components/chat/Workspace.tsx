@@ -19,6 +19,9 @@ import { FileSearchModal } from "./FileSearchModal";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useFileOperations } from "@/hooks/useFileOperations";
 import { toast } from "sonner";
+import { ScriptEditorPanel } from "./index";
+import { getFileNameFromPath } from "@/utils/file-utils";
+import { EditorFile } from "./EditorManager";
 
 export function Workspace({
   activeTab,
@@ -108,6 +111,10 @@ export function Workspace({
     ? (fileSystem[0] as any)?.project 
     : null;
 
+  // Track open editor files with a more robust structure
+  const [openEditorFiles, setOpenEditorFiles] = useState<EditorFile[]>([]);
+  const [activeEditorFilePath, setActiveEditorFilePath] = useState<string | null>(null);
+
   // Update the safeRefresh function to match the expected Promise<void> type
   const safeRefresh = async (): Promise<void> => {
     // Use the provided refreshFileSystem from props
@@ -182,158 +189,197 @@ export function Workspace({
     }
   };
 
-  // Update selectFile to handle adding files to editor tabs
-  const selectFile = async (file: any) => {
-    if (file.type === 'file') {
-      console.log('Selecting file:', file);
-      
-      // Verify file exists before proceeding
-      const fileExists = await verifyFileExists(file.path);
-      if (!fileExists) {
-        console.error(`File ${file.name} doesn't exist anymore`);
-        toast.error(`The file "${file.name}" no longer exists.`);
-        await refreshFileSystem();
-        return;
-      }
-      
-      // Set active tab to editor
-      setActiveTab('editor');
-      
-      // If we have an external openFile function, use it
-      if (typeof openFile === 'function') {
-        try {
-          // Ensure the file path is properly formatted and normalize any double slashes
-          const normalizedPath = file.path
-            .startsWith('/project/') 
-            ? file.path.replace(/\/+/g, '/') 
-            : `/project/${file.path.replace(/^\/+/, '')}`;
-          
-          console.log('Opening file using openFile function with normalized path:', normalizedPath);
-          
-          // Dispatch file-opened-fresh event first to ensure the file is added to the editor state
-          // This guarantees it'll be in openedFiles before the editor mounts
-          // First, we need to fetch file content
-          const content = await fetchFileContent(normalizedPath);
-          if (content !== null) {
-            // Create and dispatch event with content
-            const fileOpenEvent = new CustomEvent('file-opened-fresh', {
-              detail: { 
-                path: normalizedPath,
-                content
-              }
-            });
-            window.dispatchEvent(fileOpenEvent);
-            
-            // Short delay to ensure event processing before continuing
-            await new Promise(resolve => setTimeout(resolve, 10));
-          }
-          
-          // Now call the openFile function
-          const success = await openFile(normalizedPath);
-          
-          if (!success) {
-            console.error('Failed to open file using openFile function');
-            toast.error(`Could not open file: ${file.name}`);
-          }
-        } catch (error) {
-          console.error('Error opening file:', error);
-          toast.error(`Error opening file: ${error instanceof Error ? error.message : String(error)}`);
+  // Helper function to normalize file paths consistently
+  const normalizePath = (path: string): string => {
+    return path.startsWith('/project/') 
+      ? path.replace(/\/+/g, '/') 
+      : `/project/${path.replace(/^\/+/, '')}`;
+  };
+
+  // Helper function to check if a file exists
+  const isFileExists = (filePath: string): boolean => {
+    const isInFileSystem = (items: any[]): boolean => {
+      for (const item of items) {
+        if (item.type === 'file' && normalizePath(item.path) === normalizePath(filePath)) {
+          return true;
         }
-        
-        return;
+        if (item.children) {
+          const found = isInFileSystem(item.children);
+          if (found) return true;
+        }
+      }
+      return false;
+    };
+    
+    return isInFileSystem(Array.isArray(fileSystem) ? fileSystem : []);
+  };
+
+  // Update selectFile to prioritize switching to already open files
+  const selectFile = async (file: FileSystem) => {
+    if (file.type === 'directory') {
+      toggleDirectory(file.path);
+      return;
+    }
+    
+    // For files, check if it exists before proceeding
+    const filePathExists = isFileExists(file.path);
+    if (!filePathExists) {
+      console.error(`File not found: ${file.path}`);
+      toast.error(`The file "${file.name}" doesn't exist or can't be accessed.`);
+      return;
+    }
+
+    const normalizedPath = normalizePath(file.path);
+    console.log(`Opening/switching to file: ${normalizedPath}`);
+    
+    // Always set active tab to editor and update selectedFile
+    setActiveTab('editor');
+    setSelectedFile(file);
+    
+    // Check if this file is already open in EditorManager
+    const fileAlreadyOpen = openEditorFiles.some(f => f.path === normalizedPath);
+    
+    if (fileAlreadyOpen) {
+      console.log(`File already open: ${normalizedPath}. Switching to it.`);
+      // Important: Set this file as the active file
+      setActiveEditorFilePath(normalizedPath);
+      
+      // If using terminal's editor, also switch there
+      if (terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
+        terminal.switchToFile(normalizedPath);
       }
       
+      // Set this file as active in the internal editor state too
+      if (isEditing) {
+        const fileInOpenedFiles = openedFiles.find(f => f.path === normalizedPath);
+        if (fileInOpenedFiles) {
+          setActiveFilePath(normalizedPath);
+          setCurrentFilePath(normalizedPath);
+          setCurrentFileContent(fileInOpenedFiles.content);
+        }
+      }
+      
+      // Force an event to notify editor components about the switch
+      const switchEvent = new CustomEvent('file-switch', {
+        detail: { path: normalizedPath }
+      });
+      window.dispatchEvent(switchEvent);
+      return;
+    }
+    
+    // If not already open, continue with opening the file...
+    
+    // If we have an external openFile function, use it
+    if (typeof openFile === 'function') {
       try {
-        // Ensure the file path is properly formatted
-        const normalizedPath = file.path
-          .startsWith('/project/') 
-          ? file.path.replace(/\/+/g, '/') 
-          : `/project/${file.path.replace(/^\/+/, '')}`;
-        
-        console.log('Loading file with normalized path:', normalizedPath);
-        
-        // First, remove any existing versions of this file from openedFiles to ensure fresh content
-        setOpenedFiles(prev => prev.filter(f => f.path !== normalizedPath));
-        
-        // Add a timestamp query parameter to prevent caching
-        const timestamp = new Date().getTime();
-        const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-          },
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(`Error ${response.status}: ${errorData.error || response.statusText}`);
+        // First, fetch the content to ensure the file exists and is readable
+        const content = await fetchFileContent(normalizedPath);
+        if (content === null) {
+          toast.error(`Could not read file: ${getFileNameFromPath(normalizedPath)}`);
+          return;
         }
         
-        const data = await response.json();
-        
-        if (data.file) {
-          console.log('File content loaded:', { path: data.file.path, contentLength: data.file.content.length });
-          
-          // Set selectedFile to show the file as selected in the file explorer
-          setSelectedFile(file);
-          
-          if (editingFile) {
-            // When using the terminal's editing mode, just update the content
-            setFileContent(data.file.content);
-            file.content = data.file.content;
-          } else {
-            // Use our internal editor with multi-file support
-            setIsEditing(true);
-            
-            // Before switching, save the current file's content if we're already editing
-            if (isEditing && activeFilePath) {
-              // Check if the active file already exists in openedFiles and update it
-              setOpenedFiles(prev => 
-                prev.map(f => 
-                  f.path === activeFilePath
-                    ? { ...f, content: currentFileContent, hasUnsavedChanges: true }
-                    : f
-                )
-              );
-            }
-            
-            // Always add as a new file with fresh content from the server
-            setOpenedFiles(prev => [
-              ...prev, 
-              { 
-                path: normalizedPath, 
-                content: data.file.content,
-                hasUnsavedChanges: false 
-              }
-            ]);
-            
-            // Set new file as active
-            setActiveFilePath(normalizedPath);
-            // Update current file states
-            setCurrentFilePath(normalizedPath);
-            setCurrentFileContent(data.file.content);
+        // Dispatch file opened event
+        const fileOpenEvent = new CustomEvent('file-opened-fresh', {
+          detail: { 
+            path: normalizedPath,
+            content
           }
-          
-          // Dispatch a custom event to notify other components that we've opened a fresh file
-          const fileOpenedEvent = new CustomEvent('file-opened-fresh', {
-            detail: {
-              path: normalizedPath,
-              content: data.file.content
-            }
-          });
-          window.dispatchEvent(fileOpenedEvent);
-        } else {
-          throw new Error('File content not found in response');
+        });
+        window.dispatchEvent(fileOpenEvent);
+        
+        // Add the new file to our open files
+        setOpenEditorFiles(prevFiles => [...prevFiles, {
+          path: normalizedPath,
+          name: file.name,
+          content: content,
+          hasUnsavedChanges: false
+        }]);
+        setActiveEditorFilePath(normalizedPath);
+        
+        // Now also call the openFile function to open it in the terminal's editor
+        const success = await openFile(normalizedPath);
+        
+        if (!success) {
+          console.error('Failed to open file using openFile function');
+          toast.error(`Could not open file: ${file.name}`);
         }
       } catch (error) {
-        console.error('Error loading file:', error);
-        toast.error(`Error loading file: ${error instanceof Error ? error.message : String(error)}`);
+        console.error('Error opening file:', error);
+        toast.error(`Error opening file: ${error instanceof Error ? error.message : String(error)}`);
       }
-    } else if (file.type === 'directory') {
-      toggleDirectory(file);
+      
+      return;
+    }
+    
+    // If not using external openFile, use our internal implementation
+    try {
+      const content = await fetchFileContent(normalizedPath);
+      if (content === null) {
+        toast.error(`Could not read file: ${getFileNameFromPath(normalizedPath)}`);
+        return;
+      }
+      
+      // Mark file as selected in file explorer
+      setSelectedFile(file);
+      
+      // Check if file is already open
+      const existingFileIndex = openedFiles.findIndex(f => f.path === normalizedPath);
+      
+      if (existingFileIndex >= 0) {
+        // File already exists, just switch to it
+        setActiveFilePath(normalizedPath);
+        setCurrentFilePath(normalizedPath);
+        setCurrentFileContent(openedFiles[existingFileIndex].content);
+        
+        // If content changed on disk, ask to reload
+        if (openedFiles[existingFileIndex].content !== content) {
+          const shouldUpdate = window.confirm(
+            `The file "${getFileNameFromPath(normalizedPath)}" has changed on disk. Load the new content?`
+          );
+          
+          if (shouldUpdate) {
+            // Update content
+            setOpenedFiles(prev => 
+              prev.map(f => 
+                f.path === normalizedPath
+                  ? { ...f, content, hasUnsavedChanges: false }
+                  : f
+              )
+            );
+            setCurrentFileContent(content);
+          }
+        }
+      } else {
+        // Add new file to openedFiles
+        setOpenedFiles(prev => [
+          ...prev, 
+          { 
+            path: normalizedPath, 
+            content,
+            hasUnsavedChanges: false 
+          }
+        ]);
+        
+        setActiveFilePath(normalizedPath);
+        setCurrentFilePath(normalizedPath);
+        setCurrentFileContent(content);
+      }
+      
+      // Set editing mode to true
+      setIsEditing(true);
+      
+      // Dispatch event
+      const fileOpenedEvent = new CustomEvent('file-opened-fresh', {
+        detail: {
+          path: normalizedPath,
+          content
+        }
+      });
+      window.dispatchEvent(fileOpenedEvent);
+    } catch (error) {
+      console.error('Error loading file:', error);
+      toast.error(`Error loading file: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
   
@@ -837,7 +883,23 @@ export function Workspace({
   // Add the missing fetchFileContent function
   const fetchFileContent = async (filePath: string): Promise<string | null> => {
     try {
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}`);
+      const normalizedPath = filePath
+        .startsWith('/project/') 
+        ? filePath.replace(/\/+/g, '/') 
+        : `/project/${filePath.replace(/^\/+/, '')}`;
+
+      // Add timestamp to prevent caching
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
       if (!response.ok) {
         console.error('Failed to fetch file content:', response.statusText);
         return null;
@@ -1005,7 +1067,7 @@ export function Workspace({
               style={{ width: `${100 - fileExplorerWidth}%` }}
             >
               {editingFile || isEditing ? (
-                <FileEditor 
+                <ScriptEditorPanel 
                   fileContent={editingFile ? fileContent : currentFileContent}
                   setFileContent={editingFile ? setFileContent : setCurrentFileContent}
                   saveFileContent={editingFile ? saveFileContent : handleSaveFile}
@@ -1024,45 +1086,50 @@ export function Workspace({
                       String(terminal.activeFilePath) : filePath) : 
                     activeFilePath}
                   onOpenFile={async (path: string, content: string) => {
+                    // Always normalize path first
+                    const normalizedPath = normalizePath(path);
+                    
                     if (editingFile && terminal && typeof terminal === 'object' && 'openFile' in terminal && typeof terminal.openFile === 'function') {
                       // If using the terminal's editor, just open the file
-                      return terminal.openFile(path);
+                      return terminal.openFile(normalizedPath);
                     } else {
-                      // If using workspace's internal editor, add to our local state
+                      // Using workspace's internal editor, add to our local state
                       // Check if the file already exists
-                      const existingIndex = openedFiles.findIndex(file => file.path === path);
+                      const existingIndex = openedFiles.findIndex(file => file.path === normalizedPath);
+                      
                       if (existingIndex >= 0) {
-                        // Update the file's metadata if needed
+                        // Just update the file if needed
                         const existingContent = openedFiles[existingIndex].content;
                         const hasUnsavedChanges = existingContent !== content;
                         
-                        setOpenedFiles(prev => prev.map(file => 
-                          file.path === path 
-                            ? { ...file, hasUnsavedChanges: hasUnsavedChanges }
-                            : file
-                        ));
+                        if (hasUnsavedChanges) {
+                          setOpenedFiles(prev => prev.map(file => 
+                            file.path === normalizedPath 
+                              ? { ...file, content, hasUnsavedChanges: false }
+                              : file
+                          ));
+                        }
                       } else {
                         // Add a new file
                         setOpenedFiles(prev => [
                           ...prev,
-                          { path, content, hasUnsavedChanges: false }
+                          { path: normalizedPath, content, hasUnsavedChanges: false }
                         ]);
                       }
                     
-                      setActiveFilePath(path);
-                      setCurrentFilePath(path);
-                      // Only update the current content if we're not already editing that file
-                      // This prevents overwriting unsaved changes when metadata is updated
-                      if (activeFilePath !== path) {
-                        setCurrentFileContent(content);
-                      }
+                      setActiveFilePath(normalizedPath);
+                      setCurrentFilePath(normalizedPath);
+                      setCurrentFileContent(content);
                       return true;
                     }
                   }}
                   onCloseFile={(path: string) => {
+                    // Always normalize path
+                    const normalizedPath = normalizePath(path);
+                    
                     if (editingFile && terminal && typeof terminal === 'object' && 'closeFile' in terminal && typeof terminal.closeFile === 'function') {
-                      // If using terminal's editor
-                      terminal.closeFile(path);
+                      // Using terminal's editor
+                      terminal.closeFile(normalizedPath);
                     } else {
                       // If this is the last file, cancel editing
                       if (openedFiles.length === 1) {
@@ -1070,66 +1137,63 @@ export function Workspace({
                         return;
                       }
                       
-                      // Otherwise just remove the file
-                      const newOpenedFiles = openedFiles.filter(file => file.path !== path);
+                      // Remove the file
+                      const newOpenedFiles = openedFiles.filter(file => file.path !== normalizedPath);
                       setOpenedFiles(newOpenedFiles);
                       
-                      // If this was the active file, switch to another one
-                      if (path === activeFilePath) {
-                        const newActivePath = newOpenedFiles[0].path;
-                        setActiveFilePath(newActivePath);
-                        setCurrentFilePath(newActivePath);
-                        
-                        const newActiveFile = newOpenedFiles.find(file => file.path === newActivePath);
-                        if (newActiveFile) {
-                          setCurrentFileContent(newActiveFile.content);
+                      // If removing active file, switch to another
+                      if (normalizedPath === activeFilePath) {
+                        const newActivePath = newOpenedFiles[0]?.path;
+                        if (newActivePath) {
+                          setActiveFilePath(newActivePath);
+                          setCurrentFilePath(newActivePath);
+                          
+                          const newActiveFile = newOpenedFiles.find(file => file.path === newActivePath);
+                          if (newActiveFile) {
+                            setCurrentFileContent(newActiveFile.content);
+                          }
                         }
                       }
                     }
                   }}
                   onSwitchFile={(path: string) => {
+                    // Always normalize path
+                    const normalizedPath = normalizePath(path);
+                    
                     if (editingFile && terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
-                      // If using terminal's editor
-                      terminal.switchToFile(path);
+                      // Using terminal's editor
+                      terminal.switchToFile(normalizedPath);
                     } else {
-                      // Before switching, save the current file's content and mark as having unsaved changes
-                      if (activeFilePath && activeFilePath !== path) {
-                        // First ensure we capture the current content
-                        const currentContent = currentFileContent;
-                        const activeFile = openedFiles.find(file => file.path === activeFilePath);
-                        
-                        // Only mark as unsaved if content actually changed
-                        const hasChanges = activeFile ? (activeFile.content !== currentContent) : false;
-                        
-                        // Update the content of the active file we're switching from
+                      // Before switching, save the current content
+                      if (activeFilePath && activeFilePath !== normalizedPath) {
+                        // Save current content to openedFiles
                         setOpenedFiles(prev => {
-                          const updatedFiles = prev.map(file => 
+                          return prev.map(file => 
                             file.path === activeFilePath 
-                              ? { ...file, content: currentContent, hasUnsavedChanges: hasChanges } 
+                              ? { 
+                                  ...file, 
+                                  content: currentFileContent, 
+                                  hasUnsavedChanges: file.content !== currentFileContent 
+                              } 
                               : file
                           );
-                          return updatedFiles;
                         });
                       }
                       
-                      // Find the file in our list
-                      const file = openedFiles.find(file => file.path === path);
+                      // Switch to the file
+                      const file = openedFiles.find(file => file.path === normalizedPath);
                       if (file) {
-                        // Clone the content we're switching to, to avoid reference issues
-                        const fileContent = file.content;
+                        // Update path first
+                        setActiveFilePath(normalizedPath);
+                        setCurrentFilePath(normalizedPath);
                         
-                        // First update the path state
-                        setActiveFilePath(path);
-                        setCurrentFilePath(path);
-                        
-                        // Then update the content in a separate operation 
-                        // This helps prevent synchronization issues between state updates
-                        setTimeout(() => {
-                          setCurrentFileContent(fileContent);
-                        }, 0);
+                        // Then content
+                        setCurrentFileContent(file.content);
                       }
                     }
                   }}
+                  fetchScriptContent={fetchFileContent}
+                  height="100%"
                 />
               ) : selectedFile ? (
                 <FileViewer 

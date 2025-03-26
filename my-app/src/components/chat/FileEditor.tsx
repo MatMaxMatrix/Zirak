@@ -8,6 +8,7 @@ import { getFileNameFromPath } from '@/utils/file-utils';
 import { useWindowSize } from '@/hooks/useWindowSize';
 import useKeyboardShortcut from '@/hooks/useKeyboardShortcut';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import * as monaco from 'monaco-editor';
 
 // Import the monaco config to ensure it's loaded before any editor components
 import '../../utils/monaco-config';
@@ -30,6 +31,8 @@ interface OpenedFile {
   path: string;
   content: string;
   hasUnsavedChanges?: boolean;
+  model?: monaco.editor.ITextModel;
+  viewState?: monaco.editor.ICodeEditorViewState;
 }
 
 const FileEditor: React.FC<FileEditorProps> = ({
@@ -58,6 +61,15 @@ const FileEditor: React.FC<FileEditorProps> = ({
   // Use path for tab key if activeFilePath not provided
   const currentPath = activeFilePath || filePath;
   
+  // Reference to Monaco editor instance
+  const monacoInstanceRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  
+  // Map to store models for each file
+  const [fileModelsMap, setFileModelsMap] = useState<Record<string, {
+    model: monaco.editor.ITextModel | null;
+    viewState: monaco.editor.ICodeEditorViewState | null;
+  }>>({});
+  
   // Track if file has unsaved changes
   const hasUnsavedChanges = fileContent !== originalContent;
 
@@ -79,6 +91,70 @@ const FileEditor: React.FC<FileEditorProps> = ({
   // Get language for current file
   const language = getLanguage(currentPath);
   
+  // Handle editor mount to store the Monaco instance
+  const handleEditorMount = (editor: monaco.editor.IStandaloneCodeEditor, monacoInstance: any) => {
+    monacoInstanceRef.current = editor;
+    
+    // If fileEditorRef is provided, update it
+    if (fileEditorRef) {
+      // Use a type assertion to make TypeScript happy
+      (fileEditorRef as React.MutableRefObject<monaco.editor.IStandaloneCodeEditor>).current = editor;
+    }
+    
+    // Create or update model for the current file if it doesn't exist
+    if (!fileModelsMap[currentPath]) {
+      const model = createOrGetModel(currentPath, fileContent, monacoInstance);
+      // Set the model for the current editor
+      if (model) {
+        editor.setModel(model);
+      }
+    } else if (fileModelsMap[currentPath].model) {
+      // If model exists, set it
+      editor.setModel(fileModelsMap[currentPath].model);
+      
+      // Restore view state if exists
+      if (fileModelsMap[currentPath].viewState) {
+        editor.restoreViewState(fileModelsMap[currentPath].viewState);
+      }
+    }
+  };
+  
+  // Function to create or get model for a file
+  const createOrGetModel = (path: string, content: string, monacoInstance: any): monaco.editor.ITextModel | null => {
+    // Check if model already exists in Monaco's model registry
+    const existingModels = monaco.editor.getModels();
+    const existingModel = existingModels.find(model => model.uri.toString() === monaco.Uri.file(path).toString());
+    
+    if (existingModel) {
+      // Update existing model content if it's different
+      if (existingModel.getValue() !== content) {
+        existingModel.setValue(content);
+      }
+      return existingModel;
+    }
+    
+    // Create a new model
+    try {
+      const uri = monaco.Uri.file(path);
+      const language = getLanguage(path);
+      const model = monaco.editor.createModel(content, language, uri);
+      
+      // Update the models map
+      setFileModelsMap(prev => ({
+        ...prev,
+        [path]: {
+          model,
+          viewState: null
+        }
+      }));
+      
+      return model;
+    } catch (error) {
+      console.error('Error creating model:', error);
+      return null;
+    }
+  };
+  
   // Handle editor errors
   const handleEditorError = (error: Error) => {
     console.error('Monaco editor error:', error);
@@ -91,8 +167,8 @@ const FileEditor: React.FC<FileEditorProps> = ({
       // Wait a moment and try to reset the editor content
       setTimeout(() => {
         try {
-          if (fileEditorRef?.current) {
-            const model = fileEditorRef.current.getModel();
+          if (monacoInstanceRef.current) {
+            const model = monacoInstanceRef.current.getModel();
             if (model) {
               // Try setting empty content first
               model.setValue('');
@@ -186,8 +262,12 @@ const FileEditor: React.FC<FileEditorProps> = ({
     if (!pendingAction) return;
     
     if (pendingAction.type === 'close' && onCloseFile) {
+      // Save the view state before closing
+      saveCurrentViewState();
       onCloseFile(currentPath);
     } else if (pendingAction.type === 'switch' && onSwitchFile && pendingAction.path) {
+      // Save the view state before switching
+      saveCurrentViewState();
       onSwitchFile(pendingAction.path);
     } else if (pendingAction.type === 'close') {
       cancelFileEditing();
@@ -197,9 +277,29 @@ const FileEditor: React.FC<FileEditorProps> = ({
     setPendingAction(null);
   };
   
+  // Save the current editor's view state
+  const saveCurrentViewState = () => {
+    if (monacoInstanceRef.current && currentPath) {
+      const viewState = monacoInstanceRef.current.saveViewState();
+      const model = monacoInstanceRef.current.getModel();
+      
+      // Update the model map with the current view state
+      setFileModelsMap(prev => ({
+        ...prev,
+        [currentPath]: {
+          model: model,
+          viewState
+        }
+      }));
+    }
+  };
+  
   // Handle file tab selection with unsaved changes check
   const handleTabSelect = (path: string) => {
     if (path === currentPath) return;
+    
+    // Save the current file's view state before switching
+    saveCurrentViewState();
     
     if (checkUnsavedChanges('switch', path) && onSwitchFile) {
       onSwitchFile(path);
@@ -268,6 +368,18 @@ const FileEditor: React.FC<FileEditorProps> = ({
       }
     }
   }, [hasUnsavedChanges, currentPath, openFiles, onOpenFile]);
+  
+  // Clean up models when unmounting
+  useEffect(() => {
+    return () => {
+      // Dispose all models created by this component
+      Object.entries(fileModelsMap).forEach(([path, { model }]) => {
+        if (model && !model.isDisposed()) {
+          model.dispose();
+        }
+      });
+    };
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -336,7 +448,7 @@ const FileEditor: React.FC<FileEditorProps> = ({
           </div>
         )}
         
-          <MonacoEditorComponent
+        <MonacoEditorComponent
           content={fileContent}
           onChange={setFileContent}
           language={language}
@@ -355,6 +467,7 @@ const FileEditor: React.FC<FileEditorProps> = ({
           editorRef={fileEditorRef}
           onError={handleEditorError}
           onSave={handleSaveFile}
+          onMount={handleEditorMount}
         />
         
         <div
