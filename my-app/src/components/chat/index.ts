@@ -17,6 +17,8 @@ export { modelManager, EditorModelManager } from './EditorModelManager';
 // Sub-components
 export { default as MonacoEditorComponent } from './MonacoEditorComponent';
 export { default as MonacoEditor } from './MonacoEditor';
+export { default as EditorManager } from './EditorManager';
+export { default as ScriptEditorPanel } from './ScriptEditorPanel';
 
 // Types
 export type { 
@@ -24,6 +26,7 @@ export type {
   TabModelData,
   EditorConfig
 } from './types';
+export type { EditorFile } from './EditorManager';
 
 // Event types
 export type { 
