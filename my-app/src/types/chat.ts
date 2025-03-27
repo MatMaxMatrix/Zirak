@@ -224,4 +224,5 @@ export interface FileViewerProps {
   content: string;
   filePath: string;
   onEdit: () => Promise<void>;
+  selectedFile: FileSystem | null;
 } 
