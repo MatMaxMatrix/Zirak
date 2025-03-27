@@ -190,7 +190,7 @@ async function getDirectoryCompletions(prefix: string, workingDir: string): Prom
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<Response> {
   try {
     const body = await request.json();
     const { command, workingDirectory, userId = 'default_user', tabCompletion } = body;
@@ -290,11 +290,11 @@ export async function POST(request: NextRequest) {
     if (command.startsWith('sync ')) {
       const filePath = command.substring(5).trim();
       if (!filePath) {
-        return {
+        return NextResponse.json({
           output: 'Error: Please specify a file to sync.',
           error: 'No file specified',
           exitCode: 1
-        };
+        });
       }
       
       try {
@@ -303,20 +303,31 @@ export async function POST(request: NextRequest) {
           ? filePath 
           : path.join('/project', filePath);
           
-        // Use syncFile utility
-        const result = await syncFile(userId, normalizedPath);
+        // Read file content first
+        const fileContent = await fs.readFile(normalizedPath, 'utf-8');
         
-        return {
-          output: `File synchronized successfully:\n- Web path: ${result.hierarchyPath}\n- Terminal path: ${result.cwdPath}`,
+        // Use syncFile utility
+        const success = await syncFile(userId, normalizedPath, fileContent);
+        
+        if (!success) {
+          return NextResponse.json({
+            output: 'Error: Failed to sync file.',
+            error: 'Sync failed',
+            exitCode: 1
+          });
+        }
+        
+        return NextResponse.json({
+          output: `File synchronized successfully:\n- Web path: ${normalizedPath}`,
           exitCode: 0,
           fileSystemChanged: true
-        };
+        });
       } catch (error) {
-        return {
+        return NextResponse.json({
           output: `Error synchronizing file: ${error instanceof Error ? error.message : String(error)}`,
           error: String(error),
           exitCode: 1
-        };
+        });
       }
     }
     
