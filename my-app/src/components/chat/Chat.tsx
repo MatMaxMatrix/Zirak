@@ -67,7 +67,7 @@ export function Chat() {
         setShowCompletions={() => {}}
         setSelectedCompletion={() => {}}
         executeTerminalCommand={async () => {}}
-        copiedText=""
+        copiedText={false}
         copyTerminalContent={() => {}}
         clearTerminal={() => {}}
         refreshFileSystem={async () => {}}
