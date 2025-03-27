@@ -270,7 +270,7 @@ export default function ChatPage() {
         <div className="flex flex-row w-full h-[calc(100vh-48px)] chat-workspace-container">
           {/* Workspace Section */}
           <div 
-            className="flex flex-col border-r border-[#2A2A2A] transition-all duration-75 bg-[#161616] relative"
+            className="flex flex-col border-r border-[#2A2A2A] transition-all duration-150 bg-[#161616] relative"
             style={{ width: showWorkspace ? `${resizing.workspaceWidth}%` : '0%' }}
           >
             {showWorkspace && (
@@ -323,6 +323,8 @@ export default function ChatPage() {
                   workflowEndRef={workflowEndRef}
                   fileExplorerWidth={resizing.fileExplorerWidth}
                   handleFileExplorerResize={resizing.handleFileExplorerResize}
+                  projectListWidth={resizing.projectListWidth}
+                  handleProjectListResize={resizing.handleProjectListResize}
                   openFile={terminal.openFile}
                   previewUrl={previewUrl}
                   isPreviewLoading={isPreviewLoading}

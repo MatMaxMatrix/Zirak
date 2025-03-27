@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FolderOpen, Plus, ChevronDown } from 'lucide-react';
 import { ProjectConfigModal } from './ProjectConfigModal';
+import { ResizeHandle } from './ResizeHandle';
 
 interface Project {
   id: string;
@@ -21,6 +22,8 @@ interface ProjectSelectorProps {
   onCreateProject: (project: Project) => Promise<void>;
   onConfigureProject: () => void;
   navbarMode?: boolean;
+  width?: number;
+  onResize?: (e: React.MouseEvent) => void;
 }
 
 export function ProjectSelector({ 
@@ -28,7 +31,9 @@ export function ProjectSelector({
   onSelect, 
   onCreateProject, 
   onConfigureProject,
-  navbarMode = false
+  navbarMode = false,
+  width = 200,
+  onResize
 }: ProjectSelectorProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -160,7 +165,7 @@ export function ProjectSelector({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" style={!navbarMode ? { width: `${width}px` } : {}}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={
@@ -200,6 +205,16 @@ export function ProjectSelector({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {!navbarMode && onResize && (
+        <div className="absolute top-0 right-0 bottom-0">
+          <ResizeHandle
+            direction="horizontal"
+            onMouseDown={onResize}
+            className="h-full opacity-0 hover:opacity-100"
+          />
         </div>
       )}
 

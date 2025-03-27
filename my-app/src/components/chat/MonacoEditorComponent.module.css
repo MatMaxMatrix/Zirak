@@ -1,0 +1,49 @@
+.editorContainer {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Add styles for transition between files */
+.editorContainer.transitioning {
+  opacity: 0.5;
+  transition: opacity 150ms ease-in-out;
+}
+
+/* Add styles for error overlay */
+.errorOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem;
+  background-color: rgba(220, 38, 38, 0.8);
+  color: white;
+  font-size: 0.875rem;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.errorOverlay button {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  margin-left: 1rem;
+}
+
+/* Loading state */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  color: #888;
+  font-size: 0.875rem;
+} 

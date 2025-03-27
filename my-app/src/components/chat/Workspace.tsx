@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ScriptEditorPanel } from "./index";
 import { getFileNameFromPath } from "@/utils/file-utils";
 import { EditorFile } from "./EditorManager";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function Workspace({
   activeTab,
@@ -83,24 +84,66 @@ export function Workspace({
   const [openedFiles, setOpenedFiles] = useState<{ path: string; content: string; hasUnsavedChanges: boolean }[]>([]);
   const [activeFilePath, setActiveFilePath] = useState('');
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
+  const [compareMenuPosition, setCompareMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
   // Get resize handlers and state from custom hook
   const { 
     workspaceWidth,
     setWorkspaceWidth,
-    fileExplorerWidth, 
+    fileExplorerWidth,
     setFileExplorerWidth,
+    projectListWidth,
+    setProjectListWidth,
+    handleProjectListResize,
     terminalHeight,
     setTerminalHeight,
     editorHeight,
     setEditorHeight,
     handleHorizontalMouseDown,
     handleFileExplorerResize,
-    handleTerminalMouseDown,
+    handleTerminalMouseDown: _handleTerminalMouseDown,
     handleEditorMouseDown,
     terminalRef,
     editorRef
   } = useResizing();
+
+  // Custom terminal resize handler that works with our absolute positioning
+  const handleTerminalMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const workspaceHeight = document.querySelector('.workspace-container')?.clientHeight || window.innerHeight;
+    const terminalContainer = document.querySelector('.terminal-container') as HTMLElement;
+    const startHeight = terminalContainer?.clientHeight || 0;
+    
+    // Remove any transition for direct resizing
+    if (terminalContainer) {
+      terminalContainer.style.transition = '';
+    }
+    
+    // Add resize-active class to prevent text selection
+    document.body.classList.add('resize-active');
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!terminalContainer) return;
+      
+      const delta = startY - e.clientY;
+      const newHeight = startHeight + delta;
+      const percentHeight = Math.min(Math.max((newHeight / workspaceHeight) * 100, 10), 70);
+      
+      terminalContainer.style.height = `${percentHeight}%`;
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      
+      // Remove resize-active class when done
+      document.body.classList.remove('resize-active');
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Get the file operations from the useFileSystem hook
   const fileSystemHook = useFileSystem();
@@ -658,16 +701,24 @@ export function Workspace({
   };
 
   const handleTerminalToggle = () => {
+    // Simply toggle the terminal visibility
+    setShowTerminal(!showTerminal);
+    
+    // Reset terminal height to default 30% when opening
     if (!showTerminal) {
-      // Open terminal - use either 25% of the viewport height or the previous height if it was set
-      const viewportHeight = window.innerHeight;
-      const initialHeight = Math.round(viewportHeight * 0.25);
-      const newHeight = terminalHeight > 5 ? terminalHeight : initialHeight;
-      setShowTerminal(true);
-      setTerminalHeight(newHeight);
-    } else {
-      // Close terminal
-      setShowTerminal(false);
+      const terminalContainer = document.querySelector('.terminal-container') as HTMLElement;
+      if (terminalContainer) {
+        // Add transition for smooth animation
+        terminalContainer.style.transition = 'height 0.2s ease-in-out';
+        terminalContainer.style.height = '30%';
+        
+        // Remove transition after animation completes
+        setTimeout(() => {
+          if (terminalContainer) {
+            terminalContainer.style.transition = '';
+          }
+        }, 200);
+      }
     }
   };
 
@@ -718,12 +769,40 @@ export function Workspace({
   };
 
   // Handler for selecting a file for comparison
-  const handleSelectForCompare = (file: any) => {
+  const handleSelectForCompare = (file: any, event?: React.MouseEvent) => {
     if (file.type !== 'file') return;
     
     setSelectedForCompare(file);
     setCompareMenuOpen(true);
+    
+    // Set position for context menu
+    if (event) {
+      const { clientX, clientY } = event;
+      setCompareMenuPosition({ x: clientX, y: clientY });
+    } else {
+      // Center on screen if no event
+      setCompareMenuPosition(null);
+    }
   };
+  
+  // Close the compare menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (compareMenuOpen) {
+        const target = event.target as HTMLElement;
+        const menuElement = document.querySelector('.compare-menu');
+        
+        if (menuElement && !menuElement.contains(target)) {
+          setCompareMenuOpen(false);
+        }
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [compareMenuOpen]);
 
   // Handler for comparing files
   const handleCompareFiles = async (file1: any, file2: any) => {
@@ -790,7 +869,14 @@ export function Workspace({
     const comparableFiles = findComparableFiles(fileSystem || []);
     
     return (
-      <div className="absolute z-10 bg-[#212121] border border-[#2A2A2A] rounded shadow-lg p-2 max-h-60 overflow-y-auto">
+      <div
+        className="absolute z-30 bg-[#212121] border border-[#2A2A2A] rounded shadow-lg p-2 max-h-60 overflow-y-auto compare-menu"
+        style={{
+          top: compareMenuPosition?.y || '50%',
+          left: compareMenuPosition?.x || '50%',
+          transform: compareMenuPosition ? 'none' : 'translate(-50%, -50%)'
+        }}
+      >
         <div className="text-xs font-medium text-gray-400 mb-2 px-2">
           Compare {selectedForCompare.name} with:
         </div>
@@ -957,310 +1043,327 @@ export function Workspace({
   });
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Tabs + Workspace Toggle */}
-      <div className="flex bg-[#1A1A1A] border-b border-[#2A2A2A] justify-between items-center h-8">
-        <div className="flex h-full">
-          <button
-            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
-              activeTab === 'workflow' 
-                ? 'border-blue-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('workflow')}
-          >
-            Workflow
-          </button>
-          <button
-            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
-              activeTab === 'editor' 
-                ? 'border-blue-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('editor')}
-          >
-            Editor
-          </button>
-          <button
-            className={`px-3 h-full text-xs font-medium border-b-2 transition-colors ${
-              activeTab === 'preview' 
-                ? 'border-blue-500 text-white'
-                : 'border-transparent text-gray-400 hover:text-gray-300'
-            }`}
-            onClick={() => setActiveTab('preview')}
-          >
-            Preview
-          </button>
-        </div>
-        
-        {showProjectConfig && (
-          <ProjectConfigModal
-            project={currentProject}
-            onClose={() => setShowProjectConfig(false)}
-            onSave={handleSaveProjectConfig}
+    <div className="h-full w-full flex flex-row relative workspace-container">
+      {/* File explorer */}
+      <div className="flex flex-col h-full bg-[#1A1A1A] border-r border-[#2A2A2A]" style={{ width: `${fileExplorerWidth}px` }}>
+        {/* File Explorer */}
+        <div className="flex-1 overflow-auto">
+          <EnhancedFileExplorer
+            fileSystem={fileSystem}
+            selectedFile={selectedFile}
+            onSelectFile={selectFile}
+            onToggleDirectory={toggleDirectory}
+            workingDirectory={workingDirectory}
+            onDeleteFile={handleDeleteFile}
+            onMoveFile={handleMoveFile}
+            onCompareFile={handleSelectForCompare}
+            onRenameFile={handleRenameFile}
+            onCreateFile={handleCreateFile}
+            onCopy={handleCopyFile}
+            onPaste={handlePasteFile}
+            onRefresh={safeRefresh}
+            width={fileExplorerWidth}
+            onOpenSearch={() => setIsFileSearchOpen(true)}
           />
-        )}
-        
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          onClick={() => setShowWorkspace(false)}
-          className="h-6 w-6 mr-1"
-          title="Hide Workspace"
-        >
-          <ChevronLeft size={14} />
-        </Button>
+        </div>
       </div>
       
-      {/* Main content area */}
-      <div className="flex-1 overflow-hidden flex flex-col">
-        {/* Workflow Tab */}
-        {activeTab === 'workflow' && (
-          <div className="flex flex-col h-full overflow-hidden">
-            <div className="flex-1 overflow-auto bg-[#121212] p-2">
-              <WorkflowDisplay 
-                workflowSteps={workflowSteps || []}
-                workflowEndRef={workflowEndRef}
-              />
-            </div>
-          </div>
-        )}
-        
-        {/* Editor Tab */}
-        {activeTab === 'editor' && (
-          <div className="flex flex-row h-full">
-            {/* File Explorer */}
-            <div 
-              className="flex flex-col border-r border-[#2A2A2A] bg-[#181818] overflow-auto"
-              style={{ width: `${fileExplorerWidth}%`, minWidth: '200px', maxWidth: '40%' }}
+      {/* Resize handle between file explorer and main area */}
+      <ResizeHandle 
+        direction="horizontal" 
+        onMouseDown={handleFileExplorerResize} 
+        className="w-1 bg-[#2A2A2A] hover:bg-blue-500 transition-colors"
+      />
+      
+      {/* Main content area with tabs */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
+        {/* Tabs Navigation */}
+        <div className="flex-none bg-[#181818] border-b border-[#2D2D2D] flex justify-between items-center">
+          <Tabs value={activeTab} className="w-full" onValueChange={(value) => setActiveTab(value as any)}>
+            <TabsList className="bg-transparent border-b border-[#2D2D2D] rounded-none h-10 gap-2 px-2">
+              <TabsTrigger
+                value="workflow"
+                className="h-8 flex items-center gap-1 text-xs font-normal data-[state=active]:border-b data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-white rounded-none px-3 py-0"
+              >
+                Workflow
+              </TabsTrigger>
+              <TabsTrigger
+                value="editor"
+                className="h-8 flex items-center gap-1 text-xs font-normal data-[state=active]:border-b data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-white rounded-none px-3 py-0"
+              >
+                Editor
+              </TabsTrigger>
+              <TabsTrigger
+                value="preview"
+                className="h-8 flex items-center gap-1 text-xs font-normal data-[state=active]:border-b data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-white rounded-none px-3 py-0"
+              >
+                Preview
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          
+          <div className="flex items-center gap-1 pr-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-8 w-8 rounded-full p-0" 
+              onClick={() => setShowWorkspace(false)}
             >
-              <div className="flex-1 overflow-x-hidden overflow-y-auto border-r border-[#1D1D1D]">
-                <EnhancedFileExplorer
-                  fileSystem={fileSystem}
-                  selectedFile={selectedFile}
-                  onSelectFile={selectFile}
-                  onToggleDirectory={toggleDirectory}
-                  workingDirectory={workingDirectory}
-                  onRefresh={safeRefresh}
-                  onDeleteFile={handleDeleteFile}
-                  onMoveFile={handleMoveFile}
-                  onCompareFile={handleSelectForCompare}
-                  onRenameFile={handleRenameFile}
-                  onCreateFile={handleCreateFile}
-                  onCopy={handleCopyFile}
-                  onPaste={handlePasteFile}
-                  width={fileExplorerWidth}
-                  onOpenSearch={() => setIsFileSearchOpen(true)}
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Content Area */}
+        <div className="flex-1 overflow-auto">
+          {/* Workflow Tab */}
+          {activeTab === 'workflow' && (
+            <div className="flex flex-col h-full overflow-hidden">
+              <div className="flex-1 overflow-auto bg-[#121212] p-2">
+                <WorkflowDisplay 
+                  workflowSteps={workflowSteps || []}
+                  workflowEndRef={workflowEndRef}
                 />
               </div>
-              
-              {/* File Explorer resize handle */}
-              <div
-                className="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize bg-[#2A2A2A] hover:bg-blue-500 transition-colors"
-                onMouseDown={handleFileExplorerResize}
-              />
             </div>
-
-            {/* File content area */}
-            <div 
-              className="flex-1 flex flex-col overflow-hidden bg-[#121212]"
-              style={{ width: `${100 - fileExplorerWidth}%` }}
-            >
-              {editingFile || isEditing ? (
-                <ScriptEditorPanel 
-                  fileContent={editingFile ? fileContent : currentFileContent}
-                  setFileContent={editingFile ? setFileContent : setCurrentFileContent}
-                  saveFileContent={editingFile ? saveFileContent : handleSaveFile}
-                  cancelFileEditing={editingFile ? cancelFileEditing : handleCancelEditing}
-                  filePath={editingFile ? 
-                    (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal && terminal.activeFilePath ? 
-                      String(terminal.activeFilePath) : filePath) : 
-                    currentFilePath}
-                  fileEditorRef={fileEditorRef}
-                  openFiles={editingFile ? 
-                    (terminal && typeof terminal === 'object' && 'openedFiles' in terminal ? 
-                      (terminal.openedFiles as any[]) : []) : 
-                    openedFiles}
-                  activeFilePath={editingFile ? 
-                    (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal ? 
-                      String(terminal.activeFilePath) : filePath) : 
-                    activeFilePath}
-                  onOpenFile={async (path: string, content: string) => {
-                    // Always normalize path first
-                    const normalizedPath = normalizePath(path);
-                    
-                    if (editingFile && terminal && typeof terminal === 'object' && 'openFile' in terminal && typeof terminal.openFile === 'function') {
-                      // If using the terminal's editor, just open the file
-                      return terminal.openFile(normalizedPath);
-                    } else {
-                      // Using workspace's internal editor, add to our local state
-                      // Check if the file already exists
-                      const existingIndex = openedFiles.findIndex(file => file.path === normalizedPath);
+          )}
+          
+          {/* Editor Tab */}
+          {activeTab === 'editor' && (
+            <div className="flex flex-col h-full">
+              {/* File content area */}
+              <div 
+                className="flex-1 flex flex-col overflow-hidden bg-[#121212]"
+              >
+                {editingFile || isEditing ? (
+                  <ScriptEditorPanel 
+                    fileContent={editingFile ? fileContent : currentFileContent}
+                    setFileContent={editingFile ? setFileContent : setCurrentFileContent}
+                    saveFileContent={editingFile ? saveFileContent : handleSaveFile}
+                    cancelFileEditing={editingFile ? cancelFileEditing : handleCancelEditing}
+                    filePath={editingFile ? 
+                      (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal && terminal.activeFilePath ? 
+                        String(terminal.activeFilePath) : filePath) : 
+                      currentFilePath}
+                    fileEditorRef={fileEditorRef}
+                    openFiles={editingFile ? 
+                      (terminal && typeof terminal === 'object' && 'openedFiles' in terminal ? 
+                        (terminal.openedFiles as any[]) : []) : 
+                      openedFiles}
+                    activeFilePath={editingFile ? 
+                      (terminal && typeof terminal === 'object' && 'activeFilePath' in terminal ? 
+                        String(terminal.activeFilePath) : filePath) : 
+                      activeFilePath}
+                    onOpenFile={async (path: string, content: string) => {
+                      // Always normalize path first
+                      const normalizedPath = normalizePath(path);
                       
-                      if (existingIndex >= 0) {
-                        // Just update the file if needed
-                        const existingContent = openedFiles[existingIndex].content;
-                        const hasUnsavedChanges = existingContent !== content;
-                        
-                        if (hasUnsavedChanges) {
-                          setOpenedFiles(prev => prev.map(file => 
-                            file.path === normalizedPath 
-                              ? { ...file, content, hasUnsavedChanges: false }
-                              : file
-                          ));
-                        }
+                      if (editingFile && terminal && typeof terminal === 'object' && 'openFile' in terminal && typeof terminal.openFile === 'function') {
+                        // If using the terminal's editor, just open the file
+                        return terminal.openFile(normalizedPath);
                       } else {
-                        // Add a new file
-                        setOpenedFiles(prev => [
-                          ...prev,
-                          { path: normalizedPath, content, hasUnsavedChanges: false }
-                        ]);
-                      }
-                    
-                      setActiveFilePath(normalizedPath);
-                      setCurrentFilePath(normalizedPath);
-                      setCurrentFileContent(content);
-                      return true;
-                    }
-                  }}
-                  onCloseFile={(path: string) => {
-                    // Always normalize path
-                    const normalizedPath = normalizePath(path);
-                    
-                    if (editingFile && terminal && typeof terminal === 'object' && 'closeFile' in terminal && typeof terminal.closeFile === 'function') {
-                      // Using terminal's editor
-                      terminal.closeFile(normalizedPath);
-                    } else {
-                      // If this is the last file, cancel editing
-                      if (openedFiles.length === 1) {
-                        handleCancelEditing();
-                        return;
-                      }
-                      
-                      // Remove the file
-                      const newOpenedFiles = openedFiles.filter(file => file.path !== normalizedPath);
-                      setOpenedFiles(newOpenedFiles);
-                      
-                      // If removing active file, switch to another
-                      if (normalizedPath === activeFilePath) {
-                        const newActivePath = newOpenedFiles[0]?.path;
-                        if (newActivePath) {
-                          setActiveFilePath(newActivePath);
-                          setCurrentFilePath(newActivePath);
+                        // Using workspace's internal editor, add to our local state
+                        // Check if the file already exists
+                        const existingIndex = openedFiles.findIndex(file => file.path === normalizedPath);
+                        
+                        if (existingIndex >= 0) {
+                          // Just update the file if needed
+                          const existingContent = openedFiles[existingIndex].content;
+                          const hasUnsavedChanges = existingContent !== content;
                           
-                          const newActiveFile = newOpenedFiles.find(file => file.path === newActivePath);
-                          if (newActiveFile) {
-                            setCurrentFileContent(newActiveFile.content);
+                          if (hasUnsavedChanges) {
+                            setOpenedFiles(prev => prev.map(file => 
+                              file.path === normalizedPath 
+                                ? { ...file, content, hasUnsavedChanges: false }
+                                : file
+                            ));
+                          }
+                        } else {
+                          // Add a new file
+                          setOpenedFiles(prev => [
+                            ...prev,
+                            { path: normalizedPath, content, hasUnsavedChanges: false }
+                          ]);
+                        }
+                      
+                        setActiveFilePath(normalizedPath);
+                        setCurrentFilePath(normalizedPath);
+                        setCurrentFileContent(content);
+                        return true;
+                      }
+                    }}
+                    onCloseFile={(path: string) => {
+                      // Always normalize path
+                      const normalizedPath = normalizePath(path);
+                      
+                      if (editingFile && terminal && typeof terminal === 'object' && 'closeFile' in terminal && typeof terminal.closeFile === 'function') {
+                        // Using terminal's editor
+                        terminal.closeFile(normalizedPath);
+                      } else {
+                        // If this is the last file, cancel editing
+                        if (openedFiles.length === 1) {
+                          handleCancelEditing();
+                          return;
+                        }
+                        
+                        // Remove the file
+                        const newOpenedFiles = openedFiles.filter(file => file.path !== normalizedPath);
+                        setOpenedFiles(newOpenedFiles);
+                        
+                        // If removing active file, switch to another
+                        if (normalizedPath === activeFilePath) {
+                          const newActivePath = newOpenedFiles[0]?.path;
+                          if (newActivePath) {
+                            setActiveFilePath(newActivePath);
+                            setCurrentFilePath(newActivePath);
+                            
+                            const newActiveFile = newOpenedFiles.find(file => file.path === newActivePath);
+                            if (newActiveFile) {
+                              setCurrentFileContent(newActiveFile.content);
+                            }
                           }
                         }
                       }
-                    }
-                  }}
-                  onSwitchFile={(path: string) => {
-                    // Always normalize path
-                    const normalizedPath = normalizePath(path);
-                    
-                    if (editingFile && terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
-                      // Using terminal's editor
-                      terminal.switchToFile(normalizedPath);
-                    } else {
-                      // Before switching, save the current content
-                      if (activeFilePath && activeFilePath !== normalizedPath) {
-                        // Save current content to openedFiles
-                        setOpenedFiles(prev => {
-                          return prev.map(file => 
-                            file.path === activeFilePath 
-                              ? { 
-                                  ...file, 
-                                  content: currentFileContent, 
-                                  hasUnsavedChanges: file.content !== currentFileContent 
-                              } 
-                              : file
-                          );
-                        });
-                      }
+                    }}
+                    onSwitchFile={(path: string) => {
+                      // Always normalize path
+                      const normalizedPath = normalizePath(path);
                       
-                      // Switch to the file
-                      const file = openedFiles.find(file => file.path === normalizedPath);
-                      if (file) {
-                        // Update path first
-                        setActiveFilePath(normalizedPath);
-                        setCurrentFilePath(normalizedPath);
+                      if (editingFile && terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
+                        // Using terminal's editor
+                        terminal.switchToFile(normalizedPath);
+                      } else {
+                        // Before switching, save the current content
+                        if (activeFilePath && activeFilePath !== normalizedPath) {
+                          // Save current content to openedFiles
+                          setOpenedFiles(prev => {
+                            return prev.map(file => 
+                              file.path === activeFilePath 
+                                ? { 
+                                    ...file, 
+                                    content: currentFileContent, 
+                                    hasUnsavedChanges: file.content !== currentFileContent 
+                                } 
+                                : file
+                            );
+                          });
+                        }
                         
-                        // Then content
-                        setCurrentFileContent(file.content);
+                        // Switch to the file
+                        const file = openedFiles.find(file => file.path === normalizedPath);
+                        if (file) {
+                          // Update path first
+                          setActiveFilePath(normalizedPath);
+                          setCurrentFilePath(normalizedPath);
+                          
+                          // Then content
+                          setCurrentFileContent(file.content);
+                        }
                       }
-                    }
-                  }}
-                  fetchScriptContent={fetchFileContent}
-                  height="100%"
-                />
-              ) : selectedFile ? (
-                <FileViewer 
-                  content={selectedFile.content || ''} 
-                  filePath={selectedFile.path}
-                  onEdit={() => handleEditFile(selectedFile)}
-                />
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-400">
-                  <div className="text-center">
-                    <FolderOpen className="mx-auto h-12 w-12 opacity-50 mb-2" />
-                    <p>Select a file to view its content</p>
+                    }}
+                    fetchScriptContent={fetchFileContent}
+                    height="100%"
+                  />
+                ) : selectedFile ? (
+                  <FileViewer 
+                    content={selectedFile.content || ''} 
+                    filePath={selectedFile.path}
+                    onEdit={() => handleEditFile(selectedFile)}
+                  />
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <FolderOpen className="mx-auto h-12 w-12 opacity-50 mb-2" />
+                      <p>Select a file to view its content</p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        
-        {/* Preview Tab */}
-        {activeTab === 'preview' && (
-          <Preview url={previewUrl || ''} isLoading={isPreviewLoading} />
-        )}
-        
-        {/* Terminal Panel */}
-        {showTerminal && (
-          <>
-            <ResizeHandle
-              direction="vertical"
-              onMouseDown={handleTerminalMouseDown}
-            />
-            <div 
-              className="border-t border-[#2A2A2A] bg-[#1A1A1A]"
-              style={{ height: `${terminalHeight}%`, minHeight: '10%', maxHeight: '60%' }}
-            >
-              <div className="flex items-center justify-between p-1 bg-[#212121] border-b border-[#2A2A2A]">
-                <div className="text-xs font-medium text-gray-400 px-2">Terminal</div>
-                <div className="flex items-center gap-1">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6"
-                    onClick={copyTerminalContent}
-                    title="Copy Terminal Content"
-                  >
-                    <Copy size={13} />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6"
-                    onClick={clearTerminal}
-                    title="Clear Terminal"
-                  >
-                    <Trash2 size={13} />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-6 w-6"
-                    onClick={() => setShowTerminal(false)}
-                    title="Close Terminal"
-                  >
-                    <X size={13} />
-                  </Button>
-                </div>
+                )}
               </div>
+            </div>
+          )}
+          
+          {/* Preview Tab */}
+          {activeTab === 'preview' && (
+            <Preview url={previewUrl || ''} isLoading={isPreviewLoading} />
+          )}
+        </div>
+      </div>
+      
+      {/* File Search Modal */}
+      <FileSearchModal
+        isOpen={isFileSearchOpen}
+        onClose={() => setIsFileSearchOpen(false)}
+        fileSystem={fileSystem}
+        onSelectFile={selectFile}
+      />
+      
+      {/* Compare menu */}
+      {compareMenuOpen && renderCompareMenu()}
+      
+      {/* File comparison view */}
+      {isComparing && compareFiles && (
+        <div className="absolute inset-0 z-20 bg-[#121212]">
+          <FileCompare
+            file1={compareFiles.file1}
+            file2={compareFiles.file2}
+            onClose={handleCloseCompare}
+          />
+        </div>
+      )}
+      
+      {/* Terminal toggle button - always visible */}
+      <button
+        className="absolute left-4 bottom-4 z-20 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-2 shadow-lg"
+        onClick={handleTerminalToggle}
+        title={showTerminal ? "Hide Terminal" : "Show Terminal"}
+      >
+        <TerminalIcon size={16} />
+      </button>
+
+      {/* Terminal Panel - Positioned at the bottom of the entire workspace */}
+      {showTerminal && (
+        <div className="absolute left-0 right-0 bottom-0 z-30 terminal-container shadow-lg" style={{ height: "30%" }}>
+          {/* Terminal resize handle - make it more visible and easier to grab */}
+          <div 
+            className="absolute top-0 left-0 right-0 h-2 -mt-1 bg-[#2A2A2A] hover:bg-blue-500 cursor-ns-resize z-20 flex items-center justify-center"
+            onMouseDown={handleTerminalMouseDown}
+          >
+            <div className="w-10 h-1 bg-gray-500 rounded-full hover:bg-blue-400"></div>
+          </div>
+          <div className="h-full border-t border-[#2A2A2A] bg-[#1A1A1A] flex flex-col">
+            <div className="flex items-center justify-between p-1 bg-[#212121] border-b border-[#2A2A2A]">
+              <div className="text-xs font-medium text-gray-400 px-2">Terminal <span className="text-gray-500">({workingDirectory})</span></div>
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  onClick={copyTerminalContent}
+                  title="Copy Terminal Content"
+                >
+                  <Copy size={13} />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  onClick={clearTerminal}
+                  title="Clear Terminal"
+                >
+                  <Trash2 size={13} />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6"
+                  onClick={() => setShowTerminal(false)}
+                  title="Close Terminal"
+                >
+                  <X size={13} />
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden bg-[#1A1A1A]">
               <Terminal 
                 terminal={terminal}
                 showWelcomeMessage={showWelcomeMessage}
@@ -1284,31 +1387,18 @@ export function Workspace({
                 closeTerminal={closeTerminal}
               />
             </div>
-          </>
-        )}
-      </div>
-      
-      {/* Compare menu overlay */}
-      {renderCompareMenu()}
-      
-      {/* File comparison view */}
-      {isComparing && compareFiles && (
-        <div className="absolute inset-0 z-20 bg-[#121212]">
-          <FileCompare 
-            file1={compareFiles.file1}
-            file2={compareFiles.file2}
-            onClose={handleCloseCompare}
-          />
+          </div>
         </div>
       )}
-
-      {/* FileSearchModal component */}
-      <FileSearchModal
-        isOpen={isFileSearchOpen}
-        onClose={() => setIsFileSearchOpen(false)}
-        fileSystem={fileSystem}
-        onSelectFile={selectFile}
-      />
+      
+      {/* Project Config Modal */}
+      {showProjectConfig && (
+        <ProjectConfigModal
+          project={currentProject}
+          onClose={() => setShowProjectConfig(false)}
+          onSave={handleSaveProjectConfig}
+        />
+      )}
     </div>
   );
 } 

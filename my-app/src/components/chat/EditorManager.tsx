@@ -134,21 +134,26 @@ const EditorManager: React.FC<EditorManagerProps> = ({
   }, [externalActivePath, files]);
 
   // Get or create a model for a file
-  const getOrCreateModel = (file: EditorFile): monaco.editor.ITextModel => {
-    // Check if we already have a model for this file
-    if (modelsRegistry.current.has(file.path)) {
-      return modelsRegistry.current.get(file.path)!;
+  const getOrCreateModel = (file: EditorFile): monaco.editor.ITextModel | null => {
+    try {
+      // Check if we already have a model for this file
+      if (modelsRegistry.current.has(file.path)) {
+        return modelsRegistry.current.get(file.path)!;
+      }
+      
+      // Create a new model
+      const uri = monaco.Uri.file(file.path);
+      const language = getLanguageFromFilePath(file.path);
+      const model = monaco.editor.createModel(file.content, language, uri);
+      
+      // Store in registry
+      modelsRegistry.current.set(file.path, model);
+      
+      return model;
+    } catch (error) {
+      console.error(`Failed to get or create model for ${file.path}:`, error);
+      return null;
     }
-    
-    // Create a new model
-    const uri = monaco.Uri.file(file.path);
-    const language = getLanguageFromFilePath(file.path);
-    const model = monaco.editor.createModel(file.content, language, uri);
-    
-    // Store in registry
-    modelsRegistry.current.set(file.path, model);
-    
-    return model;
   };
 
   // Handle editor mounting
@@ -165,16 +170,23 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     // If we have an active file, set its model
     if (activeFile) {
       const model = getOrCreateModel(activeFile);
-      editor.setModel(model);
-      
-      // Restore view state if we have one
-      const viewState = viewStatesRegistry.current.get(activeFile.path);
-      if (viewState) {
-        editor.restoreViewState(viewState);
+      // Check if editor is valid before using it
+      if (model && editor) {
+        try {
+          editor.setModel(model);
+          
+          // Restore view state if we have one
+          const viewState = viewStatesRegistry.current.get(activeFile.path);
+          if (viewState) {
+            editor.restoreViewState(viewState);
+          }
+          
+          // Focus the editor
+          editor.focus();
+        } catch (error) {
+          console.error('Error setting model:', error);
+        }
       }
-      
-      // Focus the editor
-      editor.focus();
     }
   };
 
@@ -265,35 +277,37 @@ const EditorManager: React.FC<EditorManagerProps> = ({
       if (file) {
         try {
           const model = getOrCreateModel(file);
-          editorRef.current.setModel(model);
-          
-          // Restore view state if we have one
-          const viewState = viewStatesRegistry.current.get(path);
-          if (viewState) {
-            editorRef.current.restoreViewState(viewState);
-          }
-          
-          // Focus the editor after switching
-          editorRef.current.focus();
-          
-          // Force a layout update to ensure editor renders correctly
-          setTimeout(() => {
-            if (editorRef.current) {
-              editorRef.current.layout();
-              // Scroll to ensure the cursor is visible
-              editorRef.current.revealPositionInCenter({
-                lineNumber: editorRef.current.getPosition()?.lineNumber || 1,
-                column: editorRef.current.getPosition()?.column || 1
-              });
+          if (model) {
+            editorRef.current.setModel(model);
+            
+            // Restore view state if we have one
+            const viewState = viewStatesRegistry.current.get(path);
+            if (viewState) {
+              editorRef.current.restoreViewState(viewState);
             }
-          }, 10);
+            
+            // Focus the editor after switching
+            editorRef.current.focus();
+            
+            // Force a layout update to ensure editor renders correctly
+            setTimeout(() => {
+              if (editorRef.current) {
+                editorRef.current.layout();
+                // Scroll to ensure the cursor is visible
+                editorRef.current.revealPositionInCenter({
+                  lineNumber: editorRef.current.getPosition()?.lineNumber || 1,
+                  column: editorRef.current.getPosition()?.column || 1
+                });
+              }
+            }, 10);
+          }
         } catch (error) {
-          console.error('Error switching to file:', error);
+          console.error(`Error switching to file ${path}:`, error);
         }
       }
     }
     
-    // Call external switch handler if provided
+    // Notify external components if needed
     if (externalSwitchFile) {
       externalSwitchFile(path);
     }
@@ -454,19 +468,37 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     }
   };
 
-  // Clean up models on unmount
+  // Add proper model cleanup on unmount
   useEffect(() => {
     return () => {
-      // Dispose all models
-      modelsRegistry.current.forEach(model => {
-        if (model && !model.isDisposed()) {
-          model.dispose();
+      // Cleanup logic for when component unmounts
+      try {
+        // Dispose all models when component unmounts
+        modelsRegistry.current.forEach((model) => {
+          if (model) {
+            try {
+              model.dispose();
+            } catch (err) {
+              console.error('Error disposing model:', err);
+            }
+          }
+        });
+        
+        // Clear registries
+        modelsRegistry.current.clear();
+        viewStatesRegistry.current.clear();
+        
+        // Clear editor reference
+        if (internalEditorRef.current) {
+          try {
+            internalEditorRef.current.setModel(null);
+          } catch (err) {
+            console.error('Error clearing editor model:', err);
+          }
         }
-      });
-      
-      // Clear registries
-      modelsRegistry.current.clear();
-      viewStatesRegistry.current.clear();
+      } catch (error) {
+        console.error('Error during editor cleanup:', error);
+      }
     };
   }, []);
 
@@ -576,7 +608,7 @@ const EditorManager: React.FC<EditorManagerProps> = ({
             );
           })}
         </div>
-        
+         
         {/* Active file info */}
         {activeFile && (
           <div className="flex justify-between items-center bg-[#1F1F1F] px-3 py-2">
@@ -657,4 +689,4 @@ const EditorManager: React.FC<EditorManagerProps> = ({
   );
 };
 
-export default EditorManager; 
+export default EditorManager;

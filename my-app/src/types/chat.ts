@@ -60,16 +60,16 @@ export interface TerminalProps {
   completions: string[];
   showCompletions: boolean;
   selectedCompletion: number;
-  onSelectCompletion: (completion: string) => void;
+  onSelectCompletion: (index: number) => void;
   setShowCompletions: (show: boolean) => void;
   setSelectedCompletion: (index: number) => void;
   onSendCommand: (command: string) => Promise<void>;
-  copiedText: boolean;
+  copiedText: string;
   copyTerminalContent?: () => void;
   clearTerminal?: () => void;
   refreshFileSystem?: () => Promise<void>;
   closeTerminal?: () => void;
-  terminalInputRef: React.RefObject<HTMLInputElement>;
+  terminalInputRef: React.RefObject<HTMLTextAreaElement>;
   terminalEndRef: React.RefObject<HTMLDivElement>;
 }
 
@@ -149,11 +149,12 @@ export interface FileSystem {
 }
 
 export interface WorkspaceProps {
-  width?: number;
-  showWorkspace: boolean;
-  setShowWorkspace: (show: boolean) => void;
   activeTab: 'workflow' | 'editor' | 'preview';
   setActiveTab: (tab: 'workflow' | 'editor' | 'preview') => void;
+  showWorkspace: boolean;
+  setShowWorkspace: (show: boolean) => void;
+  width: number;
+  handleHorizontalMouseDown: (e: React.MouseEvent) => void;
   fileSystem: FileSystem[];
   selectedFile: FileSystem | null;
   workflowSteps: any[];
@@ -164,41 +165,42 @@ export interface WorkspaceProps {
   workingDirectory: string;
   showTerminal: boolean;
   setShowTerminal: (show: boolean) => void;
-  terminalHeight: number;
-  handleTerminalMouseDown: (e: React.MouseEvent) => void;
-  handleHorizontalMouseDown: (e: React.MouseEvent) => void;
+  terminalHeight?: number;
+  handleTerminalMouseDown?: (e: React.MouseEvent) => void;
   editingFile: boolean;
   fileContent: string;
   filePath: string;
   setFileContent: (content: string) => void;
-  saveFileContent: () => Promise<void>;
+  saveFileContent: () => void;
   cancelFileEditing: () => void;
-  editorHeight: number;
-  handleEditorMouseDown: (e: React.MouseEvent) => void;
+  editorHeight?: number;
+  handleEditorMouseDown?: (e: React.MouseEvent) => void;
   terminalInput: string;
   setTerminalInput: (input: string) => void;
   terminalProcessing: boolean;
-  completions: string[];
+  completions: any[]; 
   showCompletions: boolean;
   selectedCompletion: number;
-  selectCompletion: (completion: string) => void;
+  selectCompletion: (index: number) => void;
   setShowCompletions: (show: boolean) => void;
   setSelectedCompletion: (index: number) => void;
   executeTerminalCommand: (command: string) => Promise<void>;
-  copiedText: boolean;
+  copiedText: string;
   copyTerminalContent: () => void;
   clearTerminal: () => void;
   refreshFileSystem: () => Promise<void>;
-  terminalInputRef: React.RefObject<HTMLInputElement>;
+  terminalInputRef: React.RefObject<HTMLTextAreaElement>;
   terminalEndRef: React.RefObject<HTMLDivElement>;
-  fileEditorRef: React.RefObject<HTMLDivElement>;
-  terminalRef?: React.RefObject<HTMLDivElement>;
+  fileEditorRef?: React.RefObject<any>;
   workflowEndRef: React.RefObject<HTMLDivElement>;
-  fileExplorerWidth: number;
-  handleFileExplorerResize: (e: React.MouseEvent) => void;
+  terminalRef?: React.RefObject<HTMLDivElement>;
+  fileExplorerWidth?: number;
+  handleFileExplorerResize?: (e: React.MouseEvent) => void;
+  projectListWidth?: number;
+  handleProjectListResize?: (e: React.MouseEvent) => void;
+  openFile?: (path: string) => Promise<boolean>;
   previewUrl?: string;
   isPreviewLoading?: boolean;
-  openFile?: (filePath: string) => Promise<boolean>;
 }
 
 export interface ChatAreaProps {

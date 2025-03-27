@@ -45,7 +45,7 @@ export function useTerminal() {
   const [terminalInput, setTerminalInput] = useState('');
   const [terminalProcessing, setTerminalProcessing] = useState(false);
   const [showWelcomeMessage, setShowWelcomeMessage] = useState(false);
-  const [copiedText, setCopiedText] = useState(false);
+  const [copiedText, setCopiedText] = useState('');
   const [editingFile, setEditingFile] = useState(false);
   const [fileContent, setFileContent] = useState('');
   const [filePath, setFilePath] = useState('');
@@ -61,7 +61,7 @@ export function useTerminal() {
   const [activeFilePath, setActiveFilePath] = useState<string>('');
 
   // Reference to the terminal input for focus management
-  const terminalInputRef = useRef<HTMLInputElement>(null);
+  const terminalInputRef = useRef<HTMLTextAreaElement>(null);
   const fileEditorRef = useRef<HTMLTextAreaElement>(null);
   const terminalEndRef = useRef<HTMLDivElement>(null);
   
@@ -170,7 +170,10 @@ export function useTerminal() {
   };
 
   // Select a completion option
-  const selectCompletion = (completion: string) => {
+  const selectCompletion = (index: number) => {
+    const completion = completions[index];
+    if (!completion) return;
+    
     const cursorPos = terminalInputRef.current?.selectionStart || terminalInput.length;
     const textBeforeCursor = terminalInput.substring(0, cursorPos);
     const parts = textBeforeCursor.split(' ');
@@ -495,14 +498,20 @@ export function useTerminal() {
 
   // Function to copy terminal content
   const copyTerminalContent = () => {
-    const terminalContent = webSocket.terminal.map(cmd => {
-      return `$ ${cmd.command}\n${cmd.output || ''}`;
-    }).join('\n');
+    const terminalCommands = webSocket.terminal.map(cmd => 
+      `$ ${cmd.command}\n${cmd.output}`
+    ).join('\n\n');
     
-    navigator.clipboard.writeText(terminalContent).then(() => {
-      setCopiedText(true);
-      setTimeout(() => setCopiedText(false), 2000);
-    });
+    navigator.clipboard.writeText(terminalCommands)
+      .then(() => {
+        setCopiedText('Terminal content copied to clipboard');
+        setTimeout(() => setCopiedText(''), 2000);
+      })
+      .catch(err => {
+        console.error('Error copying terminal content:', err);
+        setCopiedText('Failed to copy terminal content');
+        setTimeout(() => setCopiedText(''), 2000);
+      });
   };
 
   // Function to clear terminal

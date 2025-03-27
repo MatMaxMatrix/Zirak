@@ -42,6 +42,7 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [opacity, setOpacity] = useState(1);
   const prevPathRef = useRef<string>(path);
+  const isMountedRef = useRef<boolean>(true);
 
   // Setup editor options with defaults
   const editorOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
@@ -57,11 +58,25 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
     ...options,
   };
 
+  // Keep track of component mounting state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   /**
    * Handle editor mount
    */
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     try {
+      // If component is no longer mounted, don't do anything
+      if (!isMountedRef.current) {
+        console.warn('Editor mounted after component unmounted, skipping setup');
+        return;
+      }
+      
       // Set internal ref
       internalEditorRef.current = editor;
       monacoRef.current = monaco;
@@ -74,16 +89,20 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
       // Setup keyboard shortcuts for saving
       if (onSave) {
         // Add Cmd+S (Mac) and Ctrl+S (Windows/Linux) shortcuts
-        editor.addCommand(
-          monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, 
-          () => {
-            // Prevent default browser save dialog
-            editor.trigger('keyboard', 'editor.action.stopFindInSelection', null);
-            onSave();
-          },
-          // Higher priority to override browser default
-          '!findWidgetVisible && !inReferenceSearchEditor && !editorHasSelection'
-        );
+        try {
+          editor.addCommand(
+            monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, 
+            () => {
+              // Prevent default browser save dialog
+              editor.trigger('keyboard', 'editor.action.stopFindInSelection', null);
+              onSave();
+            },
+            // Higher priority to override browser default
+            '!findWidgetVisible && !inReferenceSearchEditor && !editorHasSelection'
+          );
+        } catch (keyError) {
+          console.warn('Could not add keyboard shortcut:', keyError);
+        }
       }
 
       // Call external onMount if provided
@@ -102,6 +121,9 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
    * Handle content change
    */
   const handleChange = (value: string | undefined) => {
+    // Skip if component is unmounted
+    if (!isMountedRef.current) return;
+    
     try {
       if (onChange && value !== undefined) {
         onChange(value);
@@ -172,9 +194,32 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
         // Use either the external or internal ref
         const editor = (externalEditorRef?.current || internalEditorRef.current);
         if (editor) {
+          // First, set the model to null to avoid disposal issues
+          try {
+            editor.setModel(null);
+          } catch (setModelError) {
+            console.warn('Could not clear editor model during cleanup:', setModelError);
+          }
+          
           // Prevent "Canceled" errors during unmounting
-          safelyCleanupWordHighlighter(editor);
-          editor.dispose();
+          try {
+            safelyCleanupWordHighlighter(editor);
+          } catch (cleanupError) {
+            console.warn('Word highlighter cleanup failed:', cleanupError);
+          }
+          
+          // Finally dispose the editor
+          try {
+            editor.dispose();
+          } catch (disposeError) {
+            console.warn('Editor disposal failed:', disposeError);
+          }
+          
+          // Clear references
+          internalEditorRef.current = null;
+          if (externalEditorRef) {
+            (externalEditorRef as any).current = null;
+          }
         }
       } catch (error) {
         console.error('Error during editor cleanup:', error);
@@ -201,12 +246,18 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
         onMount={handleEditorDidMount}
         loading={<div className="editor-loading">Loading editor...</div>}
         beforeMount={(monaco) => {
+          // Only proceed if the component is still mounted
+          if (!isMountedRef.current) return;
+          
           // Ensure Monaco Environment is properly configured
           if (typeof window !== 'undefined' && !(window as any).MonacoEnvironment) {
             console.warn('Monaco environment not properly set up. Some features may not work correctly.');
           }
         }}
         onValidate={(markers) => {
+          // Skip if component is unmounted
+          if (!isMountedRef.current) return;
+          
           // Process validation markers if needed
         }}
       />

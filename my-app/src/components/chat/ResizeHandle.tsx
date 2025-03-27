@@ -6,8 +6,8 @@ export function ResizeHandle({
   className = "" 
 }: ResizeHandlerProps) {
   const baseClasses = {
-    horizontal: "w-1 bg-gray-300 hover:bg-blue-500 cursor-col-resize z-30 transition-all duration-150 group flex items-center justify-center",
-    vertical: "absolute top-0 left-0 right-0 h-1 -mt-0.5 bg-gray-300 hover:bg-blue-500 cursor-ns-resize flex justify-center items-center z-30 transition-all duration-150 group"
+    horizontal: "w-1 bg-gray-800 hover:bg-blue-500 cursor-col-resize z-30 transition-all duration-150 group flex items-center justify-center",
+    vertical: "absolute top-0 left-0 right-0 h-1 -mt-0.5 bg-gray-800 hover:bg-blue-500 cursor-ns-resize flex justify-center items-center z-30 transition-all duration-150 group"
   };
   
   const handleClasses = {
