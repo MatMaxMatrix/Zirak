@@ -1,0 +1,47 @@
+/* Add terminal cursor styling */
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.terminal-cursor {
+  background-color: rgba(255, 255, 255, 0.7);
+  width: 0.5em;
+  height: 1em;
+  display: inline-block;
+  animation: blink 1s step-end infinite;
+}
+
+/* Terminal scrollbar styling */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Mac terminal styling */
+.mac-terminal {
+  font-family: "Menlo", "Monaco", "Consolas", monospace;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+/* Prevent text selection during resize operations */
+.resize-active {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+} 

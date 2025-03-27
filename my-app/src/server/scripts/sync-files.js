@@ -12,6 +12,8 @@ const mkdirAsync = promisify(fs.mkdir);
 
 // Define virtual projects directory
 const PROJECT_ROOT = path.join(process.cwd(), 'virtual_projects');
+// Define projects directory where files will be mirrored
+const PROJECTS_DIR = path.join(process.cwd(), 'projects');
 
 /**
  * Main function to synchronize all files for all users
@@ -19,6 +21,9 @@ const PROJECT_ROOT = path.join(process.cwd(), 'virtual_projects');
 async function syncAllUserFiles() {
   try {
     console.log('Starting file system synchronization...');
+    
+    // Ensure projects directory exists
+    await mkdirAsync(PROJECTS_DIR, { recursive: true }).catch(() => {});
     
     // Get all user directories
     const userDirs = await readdirAsync(PROJECT_ROOT);
@@ -35,8 +40,20 @@ async function syncAllUserFiles() {
         continue;
       }
       
+      // Ensure user directory exists in projects dir
+      const userProjectsDir = path.join(PROJECTS_DIR, userId);
+      await mkdirAsync(userProjectsDir, { recursive: true }).catch(() => {});
+      
       console.log(`Processing user: ${userId}`);
-      await synchronizeUserFiles(userProjectDir);
+      
+      // Bi-directional synchronization
+      // 1. Sync virtual_projects to projects
+      await synchronizeUserFiles(userProjectDir, path.join(PROJECTS_DIR, userId));
+      
+      // 2. Sync from projects to virtual_projects
+      if (fs.existsSync(userProjectsDir)) {
+        await synchronizeUserFiles(userProjectsDir, userProjectDir);
+      }
     }
     
     console.log('File system synchronization completed successfully!');
@@ -48,36 +65,56 @@ async function syncAllUserFiles() {
 /**
  * Synchronize all files for a specific user
  */
-async function synchronizeUserFiles(userProjectDir) {
+async function synchronizeUserFiles(sourceDir, targetDir) {
   // Get all files and directories recursively
-  const allFiles = await getAllFiles(userProjectDir, userProjectDir);
+  const allFiles = await getAllFiles(sourceDir, sourceDir);
   
-  console.log(`Found ${allFiles.length} files to synchronize for user directory ${path.basename(userProjectDir)}`);
+  console.log(`Found ${allFiles.length} files to synchronize from ${path.basename(sourceDir)} to ${path.basename(targetDir)}`);
   
-  // For each file, ensure it exists in both locations
+  // For each file, ensure it exists in the target location
   for (const filePath of allFiles) {
     try {
       // Skip directories
       const stats = await statAsync(filePath);
       if (stats.isDirectory()) continue;
       
-      // Get the relative path from the user project dir
-      const relativePath = path.relative(userProjectDir, filePath);
+      // Get the relative path from the source dir
+      const relativePath = path.relative(sourceDir, filePath);
+      
       // Skip files that are already in the root directory
       if (!relativePath.includes(path.sep)) continue;
+      
+      // Get the destination path in the target directory
+      const destFilePath = path.join(targetDir, relativePath);
+      
+      // Create destination directory if it doesn't exist
+      const destDir = path.dirname(destFilePath);
+      await mkdirAsync(destDir, { recursive: true }).catch(() => {});
       
       // Get the content of the file
       const content = await readFileAsync(filePath, 'utf-8');
       
-      // Create the file in the user's root directory
-      const rootFilePath = path.join(userProjectDir, path.basename(filePath));
+      // Check if destination exists and is different
+      let shouldWrite = true;
+      try {
+        const existingContent = await readFileAsync(destFilePath, 'utf-8');
+        if (existingContent === content) {
+          shouldWrite = false;
+        }
+      } catch (err) {
+        // File doesn't exist or can't be read - proceed with writing
+      }
       
-      console.log(`Synchronizing file: ${relativePath} → ${path.basename(filePath)}`);
-      
-      // Write to the root path
-      await writeFileAsync(rootFilePath, content, 'utf-8');
-      
-      console.log(`Successfully synchronized ${relativePath}`);
+      if (shouldWrite) {
+        console.log(`Synchronizing file: ${relativePath} → ${destFilePath}`);
+        
+        // Write to the destination path
+        await writeFileAsync(destFilePath, content, 'utf-8');
+        
+        console.log(`Successfully synchronized ${relativePath}`);
+      } else {
+        console.log(`Skipping identical file: ${relativePath}`);
+      }
     } catch (error) {
       console.error(`Error synchronizing file ${filePath}:`, error);
     }

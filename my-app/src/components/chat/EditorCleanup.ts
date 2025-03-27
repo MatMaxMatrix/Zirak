@@ -12,6 +12,16 @@ export function safelyCleanupWordHighlighter(editor: monaco.editor.IStandaloneCo
     // This is an internal API that may change, but helps prevent memory leaks
     const editorInstance = editor as any;
     
+    // Handle InstantiationService disposed errors specifically
+    try {
+      if (editorInstance._instantiationService) {
+        // Mark as disposed to prevent further attempts to use it
+        editorInstance._instantiationService._disposed = true;
+      }
+    } catch (error) {
+      console.debug('Error handling instantiation service:', error);
+    }
+    
     if (editorInstance._themeService) {
       try {
         // Attempt to clean up theme-related resources
@@ -29,6 +39,15 @@ export function safelyCleanupWordHighlighter(editor: monaco.editor.IStandaloneCo
     try {
       const model = editor.getModel();
       if (model && !model.isDisposed()) {
+        // Try to set model to null before disposing it
+        try {
+          editor.setModel(null);
+        } catch (setModelError) {
+          // Ignore set model errors, especially InstantiationService errors
+          if (setModelError instanceof Error && setModelError.message.includes('InstantiationService')) {
+            console.debug('Ignored InstantiationService error during cleanup');
+          }
+        }
         model.dispose();
       }
     } catch (error) {

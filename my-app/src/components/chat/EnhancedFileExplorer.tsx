@@ -18,7 +18,7 @@ interface EnhancedFileExplorerProps {
   workingDirectory?: string;
   onDeleteFile?: (file: FileSystem) => void;
   onMoveFile?: (sourceFile: FileSystem, destinationDir: FileSystem) => void;
-  onCompareFile?: (file: FileSystem) => void;
+  onCompareFile?: (file: FileSystem, event?: React.MouseEvent) => void;
   onRenameFile?: (file: FileSystem, newName: string) => Promise<void>;
   onCreateFile?: (path: string, name: string, isDirectory: boolean) => Promise<void>;
   onCopy?: (file: FileSystem) => void;
@@ -403,7 +403,7 @@ export function EnhancedFileExplorer({
                 className="p-1 text-gray-400 hover:text-blue-500"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (onCompareFile) onCompareFile(item);
+                  if (onCompareFile) onCompareFile(item, e);
                 }}
                 title="Compare with another file"
               >
@@ -639,8 +639,8 @@ export function EnhancedFileExplorer({
               
               <button
                 className="flex items-center gap-2 w-full text-left px-3 py-1 text-xs hover:bg-[#2D2D2D]"
-                onClick={() => {
-                  if (onCompareFile) onCompareFile(contextMenuFile);
+                onClick={(e) => {
+                  if (onCompareFile) onCompareFile(contextMenuFile, e);
                   setContextMenuPosition(null);
                 }}
               >

@@ -77,6 +77,7 @@ export function useResizing() {
   // State for resizing panels
   const [workspaceWidth, setWorkspaceWidth] = useState(50); // 50% as default
   const [fileExplorerWidth, setFileExplorerWidth] = useState(250); // Default width in pixels
+  const [projectListWidth, setProjectListWidth] = useState(200); // Default width for project list
   const [terminalHeight, setTerminalHeight] = useState(initialTerminalHeight);
   const [editorHeight, setEditorHeight] = useState(300); // Default height
   
@@ -163,6 +164,41 @@ export function useResizing() {
     document.body.classList.add('resize-active');
   };
   
+  // Handle horizontal resizing for the project list
+  const handleProjectListResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    const startX = e.clientX;
+    const startWidth = projectListWidth;
+    let rafId: number | null = null;
+    let currentWidth = startWidth;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+
+      rafId = requestAnimationFrame(() => {
+        const deltaX = e.clientX - startX;
+        currentWidth = Math.max(150, Math.min(400, startWidth + deltaX));
+        setProjectListWidth(currentWidth);
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.classList.remove('resize-active');
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.classList.add('resize-active');
+  };
+  
   // Handle vertical resizing for the terminal panel
   const handleTerminalMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -208,12 +244,15 @@ export function useResizing() {
     setWorkspaceWidth,
     fileExplorerWidth,
     setFileExplorerWidth,
+    projectListWidth,
+    setProjectListWidth,
     terminalHeight,
     setTerminalHeight,
     editorHeight,
     setEditorHeight,
     handleHorizontalMouseDown,
     handleFileExplorerResize,
+    handleProjectListResize,
     handleTerminalMouseDown,
     handleEditorMouseDown,
     terminalRef,

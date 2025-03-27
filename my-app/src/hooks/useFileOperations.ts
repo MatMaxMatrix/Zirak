@@ -89,12 +89,26 @@ export function useFileOperations({ refreshFileSystem }: FileOperationsProps) {
       const response = await fetch('/api/terminal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command })
+        body: JSON.stringify({ 
+          command,
+          userId: 'default_user', // Add user ID for proper synchronization
+          workingDirectory: path || '/' // Add working directory 
+        })
       });
       
       if (!response.ok) {
         return false;
       }
+      
+      // Manually trigger sync-files script to ensure bi-directional synchronization
+      const syncResponse = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          command: 'cd "$(git rev-parse --show-toplevel || echo .)" && node src/server/scripts/sync-files.js',
+          userId: 'default_user'
+        })
+      });
       
       // Refresh the file system
       await refreshFileSystem();

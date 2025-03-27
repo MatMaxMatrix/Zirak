@@ -8,6 +8,7 @@ import {
   XCircle 
 } from "lucide-react";
 import { TerminalProps } from "@/types/chat";
+import { useEffect, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export function Terminal({
@@ -16,7 +17,7 @@ export function Terminal({
   input,
   setInput,
   isProcessing,
-  workingDirectory,
+  workingDirectory = '',
   completions,
   showCompletions,
   selectedCompletion,
@@ -32,62 +33,128 @@ export function Terminal({
   terminalInputRef,
   terminalEndRef
 }: TerminalProps) {
-  
-  // Focus terminal input when clicking on terminal
-  const focusTerminalInput = () => {
-    terminalInputRef?.current?.focus();
-  };
-  
-  // Handle terminal submission
-  const handleTerminalSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isProcessing) return;
-    
-    const command = input.trim();
-    setInput("");
-    onSendCommand(command);
-  };
 
-  // Handle tab key press for tab completion
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Use a hidden textarea for actual input
+  const hiddenInputRef = useRef<HTMLTextAreaElement>(null);
+  
+  // Keep track of cursor blinking
+  const [cursorVisible, setCursorVisible] = useState(true);
+  
+  // Focus hidden input when clicking on terminal
+  const focusTerminal = () => {
+    if (hiddenInputRef.current) {
+      hiddenInputRef.current.focus();
+    }
+  };
+  
+  // When terminal updates, scroll to bottom and focus
+  useEffect(() => {
+    if (terminalEndRef?.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+    setTimeout(focusTerminal, 0);
+  }, [terminal]);
+
+  // Set up blink animation
+  useEffect(() => {
+    const blinkInterval = setInterval(() => {
+      setCursorVisible(prev => !prev);
+    }, 500);
+    
+    return () => clearInterval(blinkInterval);
+  }, []);
+
+  // Initial focus and setup
+  useEffect(() => {
+    focusTerminal();
+    
+    // Listen for click events anywhere in the terminal
+    const handleClick = () => focusTerminal();
+    document.querySelector('.mac-terminal')?.addEventListener('click', handleClick);
+    
+    return () => {
+      document.querySelector('.mac-terminal')?.removeEventListener('click', handleClick);
+    };
+  }, []);
+  
+  // Handle key presses
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Submit on Enter
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTerminalSubmit();
+      return;
+    }
+    
+    // Handle tab completion
     if (e.key === 'Tab') {
       e.preventDefault();
       
-      // If we have completions and one is selected, use it
-      if (showCompletions && selectedCompletion >= 0 && selectedCompletion < completions.length) {
-        onSelectCompletion(completions[selectedCompletion]);
-        return;
-      }
-      
-      // Otherwise, show completions for the current input
-      if (input.trim()) {
-        setShowCompletions(true);
-      }
-    } else if (e.key === 'ArrowUp') {
       if (showCompletions) {
+        // If completions are already shown, select the current one
+        onSelectCompletion(selectedCompletion);
+      } else {
+        // Otherwise try to get completions
+        console.log('Tab pressed, should show completions');
+      }
+      return;
+    }
+    
+    // Navigate completions with arrow keys
+    if (showCompletions) {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedCompletion(Math.max(0, selectedCompletion - 1));
-      }
-    } else if (e.key === 'ArrowDown') {
-      if (showCompletions) {
+        setSelectedCompletion((selectedCompletion + 1) % completions.length);
+      } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedCompletion(Math.min(completions.length - 1, selectedCompletion + 1));
-      }
-    } else if (e.key === 'Escape') {
-      if (showCompletions) {
+        setSelectedCompletion((selectedCompletion - 1 + completions.length) % completions.length);
+      } else if (e.key === 'Escape') {
         e.preventDefault();
         setShowCompletions(false);
-      }
-    } else if (e.key === 'Enter') {
-      if (showCompletions && selectedCompletion >= 0 && selectedCompletion < completions.length) {
-        e.preventDefault();
-        onSelectCompletion(completions[selectedCompletion]);
       }
     }
   };
   
+  // Handle form submission
+  const handleTerminalSubmit = () => {
+    if (!input.trim() || isProcessing) return;
+    
+    // Store the command we're about to send
+    const commandToSend = input;
+    
+    // Clear input state
+    setInput('');
+    setShowCompletions(false);
+    
+    // Clear the input field
+    if (hiddenInputRef.current) {
+      hiddenInputRef.current.value = '';
+    }
+    
+    // Send the command
+    onSendCommand(commandToSend);
+    
+    // Keep focus in terminal after submission
+    setTimeout(focusTerminal, 10);
+  };
+  
+  // Handle completion selection
+  const handleCompletionClick = (index: number) => {
+    onSelectCompletion(index);
+  };
+  
   return (
-    <div className="h-full flex flex-col overflow-hidden" onClick={focusTerminalInput}>
+    <div className="h-full flex flex-col overflow-hidden relative" onClick={focusTerminal}>
+      {/* Hidden textarea for capturing input */}
+      <textarea
+        ref={hiddenInputRef}
+        className="opacity-0 absolute h-0 w-0 overflow-hidden"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        autoFocus
+      />
+    
       {/* Terminal Content */}
       <div 
         className="flex-1 overflow-auto p-0 font-mono bg-black text-gray-200 rounded-none terminal-scrollbar mac-terminal"
@@ -100,7 +167,8 @@ export function Terminal({
               <span className="text-white mx-1">:</span>
               <span className="text-[#61AFEF]">~/projects</span>
               <span className="text-white mx-1">$ </span>
-              <span className="terminal-cursor"></span>
+              <span className="text-gray-100">{input}</span>
+              {cursorVisible && <span className="bg-white w-[0.5em] h-[1.2em] inline-block ml-[1px]"></span>}
             </div>
           ) : (
             <div className="text-sm text-gray-200 whitespace-pre-line">
@@ -128,7 +196,9 @@ export function Terminal({
                   )}
                 </div>
               ))}
-              <div className="flex items-center text-sm whitespace-nowrap mt-1">
+              
+              {/* Current command line */}
+              <div className="flex items-start text-sm whitespace-nowrap mt-1">
                 <span className="text-[#56B6C2] font-medium">virtual-user@zirak</span>
                 <span className="text-white mx-1">:</span>
                 <span className="text-[#61AFEF]">
@@ -139,10 +209,10 @@ export function Terminal({
                 {isProcessing ? (
                   <span className="text-gray-500">Processing...</span>
                 ) : (
-                  input ? <span className="text-gray-100">{input}</span> : null
-                )}
-                {!isProcessing && !input && (
-                  <span className="terminal-cursor"></span>
+                  <>
+                    <span className="text-gray-100">{input}</span>
+                    {cursorVisible && <span className="bg-white w-[0.5em] h-[1.2em] inline-block ml-[1px]"></span>}
+                  </>
                 )}
               </div>
               
@@ -158,7 +228,7 @@ export function Terminal({
                       className={`px-3 py-1 cursor-pointer font-mono text-sm ${
                         index === selectedCompletion ? 'bg-blue-900 text-white' : 'hover:bg-gray-700'
                       }`}
-                      onClick={() => onSelectCompletion(item)}
+                      onClick={() => handleCompletionClick(index)}
                     >
                       {item}
                     </div>
@@ -171,22 +241,12 @@ export function Terminal({
         </div>
       </div>
       
-      <div className="border-t border-gray-800 bg-black">
-        <form onSubmit={handleTerminalSubmit} className="flex">
-          <Input
-            ref={terminalInputRef}
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder=""
-            className="flex-1 bg-black border-0 text-transparent caret-transparent focus-visible:ring-0 focus-visible:ring-offset-0 text-sm h-8 p-0"
-            disabled={isProcessing}
-            autoComplete="off"
-            spellCheck="false"
-            onKeyDown={handleKeyDown}
-          />
-        </form>
-      </div>
+      {/* Show notification when text is copied */}
+      {copiedText && (
+        <div className="absolute top-2 right-2 bg-black bg-opacity-80 text-white px-3 py-1.5 rounded text-sm animate-fadeOut">
+          {copiedText}
+        </div>
+      )}
     </div>
   );
 } 
