@@ -6,3 +6,4 @@ my-app/tsconfig.tsbuildinfo
 my-app/virtual_projects
 # GPG test
 .gpg-test
+.vercel
