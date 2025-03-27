@@ -190,7 +190,7 @@ async function getDirectoryCompletions(prefix: string, workingDir: string): Prom
   }
 }
 
-export async function POST(request: NextRequest): Promise<Response> {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { command, workingDirectory, userId = 'default_user', tabCompletion } = body;
@@ -290,11 +290,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     if (command.startsWith('sync ')) {
       const filePath = command.substring(5).trim();
       if (!filePath) {
-        return NextResponse.json({
+        return {
           output: 'Error: Please specify a file to sync.',
           error: 'No file specified',
           exitCode: 1
-        });
+        };
       }
       
       try {
@@ -303,31 +303,20 @@ export async function POST(request: NextRequest): Promise<Response> {
           ? filePath 
           : path.join('/project', filePath);
           
-        // Read file content first
-        const fileContent = await fs.readFile(path.join(validatedDir, filePath), 'utf-8');
-        
         // Use syncFile utility
-        const success = await syncFile(userId, normalizedPath, fileContent);
+        const result = await syncFile(userId, normalizedPath);
         
-        if (!success) {
-          return NextResponse.json({
-            output: 'Error: Failed to sync file.',
-            error: 'Sync failed',
-            exitCode: 1
-          });
-        }
-        
-        return NextResponse.json({
-          output: 'File synchronized successfully',
+        return {
+          output: `File synchronized successfully:\n- Web path: ${result.hierarchyPath}\n- Terminal path: ${result.cwdPath}`,
           exitCode: 0,
           fileSystemChanged: true
-        });
+        };
       } catch (error) {
-        return NextResponse.json({
+        return {
           output: `Error synchronizing file: ${error instanceof Error ? error.message : String(error)}`,
           error: String(error),
           exitCode: 1
-        });
+        };
       }
     }
     
@@ -347,30 +336,26 @@ export async function POST(request: NextRequest): Promise<Response> {
     };
     
     // Execute the command
-    return new Promise<Response>((resolve: (value: Response) => void) => {
+    return new Promise((resolve) => {
       exec(command, execOptions, (error: ExecException | null, stdout: string, stderr: string) => {
         if (error) {
-          resolve(new Response(JSON.stringify({
+          resolve(NextResponse.json({
             output: stderr || 'Command failed',
             error: stderr,
             exitCode: error.code || 1,
             newWorkingDirectory,
             fileSystemChanged,
             virtualPath: path.relative(userProjectDir, newWorkingDirectory) || '/'
-          }), {
-            headers: { 'Content-Type': 'application/json' }
           }));
           return;
         }
         
-        resolve(new Response(JSON.stringify({
+        resolve(NextResponse.json({
           output: stdout,
           exitCode: 0,
           newWorkingDirectory,
           fileSystemChanged,
           virtualPath: path.relative(userProjectDir, newWorkingDirectory) || '/'
-        }), {
-          headers: { 'Content-Type': 'application/json' }
         }));
       });
     });
