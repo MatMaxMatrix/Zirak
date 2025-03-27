@@ -347,26 +347,30 @@ export async function POST(request: NextRequest): Promise<Response> {
     };
     
     // Execute the command
-    return new Promise<Response>((resolve) => {
+    return new Promise<Response>((resolve: (value: Response) => void) => {
       exec(command, execOptions, (error: ExecException | null, stdout: string, stderr: string) => {
         if (error) {
-          resolve(NextResponse.json({
+          resolve(new Response(JSON.stringify({
             output: stderr || 'Command failed',
             error: stderr,
             exitCode: error.code || 1,
             newWorkingDirectory,
             fileSystemChanged,
             virtualPath: path.relative(userProjectDir, newWorkingDirectory) || '/'
+          }), {
+            headers: { 'Content-Type': 'application/json' }
           }));
           return;
         }
         
-        resolve(NextResponse.json({
+        resolve(new Response(JSON.stringify({
           output: stdout,
           exitCode: 0,
           newWorkingDirectory,
           fileSystemChanged,
           virtualPath: path.relative(userProjectDir, newWorkingDirectory) || '/'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
         }));
       });
     });
