@@ -209,7 +209,24 @@ export function useTerminal() {
       // Add a timestamp to prevent caching
       const timestamp = new Date().getTime();
       
-      // Save the file with robust cache-busting headers
+      console.log(`Saving file ${normalizedPath} with content length: ${fileContent.length}`);
+      
+      // Use a direct fetch with the terminal API first to ensure the server knows we're saving this file
+      await fetch('/api/terminal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          command: `cat > "${normalizedPath}" << 'EOF_ZIRAK_SAVE'
+${fileContent}
+EOF_ZIRAK_SAVE`,
+          workingDirectory: normalizedPath.substring(0, normalizedPath.lastIndexOf('/')),
+          userId: 'default_user'
+        }),
+      });
+      
+      // Now save the file with robust cache-busting headers using the regular API
       const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
         method: 'PUT',
         headers: {
@@ -220,7 +237,8 @@ export function useTerminal() {
         },
         body: JSON.stringify({ 
           content: fileContent,
-          path: normalizedPath
+          path: normalizedPath,
+          forceOverwrite: true
         }),
       });
       
@@ -233,19 +251,16 @@ export function useTerminal() {
       const saveResult = await response.json();
       const realFilePath = saveResult.realPath || normalizedPath;
       
-      // Update the state to reflect saved status
-      setOpenedFiles(prev => 
-        prev.map(file => 
-          file.path === normalizedPath 
-            ? { ...file, content: fileContent, hasUnsavedChanges: false } 
-            : file
-        )
-      );
+      console.log(`File saved successfully at path: ${realFilePath}`);
       
-      // After saving, refresh the file content to ensure consistency
-      const refreshTimestamp = new Date().getTime();
-      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${refreshTimestamp}`, {
+      // Delay to ensure file is written to disk
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // After saving, refresh the file content to ensure consistency - use a completely fresh request
+      const fetchTimestamp = Date.now();
+      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&fresh=true&_ts=${fetchTimestamp}`, {
         method: 'GET',
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -258,18 +273,49 @@ export function useTerminal() {
         const data = await getResponse.json();
         if (data.file && data.file.content !== undefined) {
           // Update local state with the refreshed content
+          console.log(`Retrieved fresh file content, length: ${data.file.content.length}`);
           setFileContent(data.file.content);
+          
+          // Update the opened files array with the fresh content
+          setOpenedFiles(prev => 
+            prev.map(file => 
+              file.path === normalizedPath 
+                ? { ...file, content: data.file.content, hasUnsavedChanges: false } 
+                : file
+            )
+          );
           
           // Notify other components that this file was saved and refreshed
           const refreshEvent = new CustomEvent('file-refresh-needed', {
-            detail: { path: normalizedPath }
+            detail: { path: normalizedPath, action: 'save', content: data.file.content }
           });
           window.dispatchEvent(refreshEvent);
         }
       }
       
-      // Trigger file system refresh to update the file explorer
-      await refreshFileSystem();
+      // Force a complete file system refresh with explicit cache invalidation
+      try {
+        // First clear any in-memory caches by using a special query
+        await fetch(`/api/clear-cache?path=${encodeURIComponent(normalizedPath)}&_ts=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }).catch(() => {}); // Ignore errors if endpoint doesn't exist
+        
+        // Now refresh the file system
+        await refreshFileSystem();
+      } catch (refreshError) {
+        console.error('Error during file system refresh:', refreshError);
+      }
+      
+      // Create an event to reset the file selection state after saving
+      const resetSelectionEvent = new CustomEvent('reset-file-selection', {
+        detail: { path: normalizedPath, action: 'save' }
+      });
+      window.dispatchEvent(resetSelectionEvent);
       
       return true;
     } catch (error) {
@@ -314,6 +360,12 @@ export function useTerminal() {
       output: hasUnsavedChanges ? 'Exited editor without saving changes' : 'Exited editor',
       timestamp: new Date().toISOString()
     });
+    
+    // Notify other components that file selection should be reset
+    const resetSelectionEvent = new CustomEvent('reset-file-selection', {
+      detail: { action: 'close' }
+    });
+    window.dispatchEvent(resetSelectionEvent);
     
     // Focus terminal input after exiting edit mode
     setTimeout(() => {
@@ -541,50 +593,63 @@ export function useTerminal() {
         ? filePath.replace(/\/+/g, '/') 
         : `/project/${filePath.replace(/^\/+/, '')}`;
       
-      // Add a timestamp to prevent caching
-      const timestamp = new Date().getTime();
+      // Make sure we're in editing mode
+      setEditingFile(true);
       
-      // First check if the file exists using a HEAD request with cache-busting
-      try {
-        const checkResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
-          method: 'HEAD',
+      console.log(`Opening file: ${normalizedPath}`);
+      
+      // First, try to read the file directly from disk using the terminal API
+      // This ensures we bypass any cached content
+      const terminalResponse = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          command: `cat "${normalizedPath}"`,
+          workingDirectory: normalizedPath.substring(0, normalizedPath.lastIndexOf('/')),
+          userId: 'default_user'
+        }),
+      });
+      
+      let freshFileContent = '';
+      
+      if (terminalResponse.ok) {
+        const terminalData = await terminalResponse.json();
+        if (terminalData.output && !terminalData.error) {
+          console.log('Successfully read file content via terminal command');
+          freshFileContent = terminalData.output;
+        }
+      }
+      
+      // If the terminal approach didn't work, use the regular API with strong cache-busting
+      if (!freshFileContent) {
+        // Use a different timestamp to ensure we're not getting a cached response
+        const fetchTimestamp = Date.now();
+        const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&fresh=true&_ts=${fetchTimestamp}`, {
+          method: 'GET',
           headers: {
+            'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0'
-          }
+          },
+          cache: 'no-store'
         });
         
-        if (!checkResponse.ok) {
-          errorLog(`File ${normalizedPath} does not exist or cannot be accessed`);
-          return false;
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
         }
-      } catch (headError) {
-        errorLog(`Error checking file existence: ${normalizedPath}`, headError);
-      }
-      
-      // Now fetch the full file content with fresh request and a new timestamp
-      const fetchTimestamp = new Date().getTime();
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${fetchTimestamp}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+        
+        const data = await response.json();
+        if (!data.file || data.file.content === undefined) {
+          throw new Error('Invalid file data received');
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+        
+        freshFileContent = data.file.content;
       }
       
-      const data = await response.json();
-      if (!data.file || data.file.content === undefined) {
-        throw new Error('Invalid file data received');
-      }
-      
-      const freshFileContent = data.file.content;
+      console.log(`Loaded file content, length: ${freshFileContent.length}`);
       
       // First, dispatch a file-opened-fresh event so any FileEditor instances can update
       const fileOpenEvent = new CustomEvent('file-opened-fresh', {
@@ -609,7 +674,7 @@ export function useTerminal() {
         const fileExists = prev.some(file => file.path === normalizedPath);
         
         if (fileExists) {
-          // Update existing file
+          // Update existing file with fresh content
           return prev.map(file => 
             file.path === normalizedPath
               ? { ...file, content: freshFileContent, hasUnsavedChanges: false }

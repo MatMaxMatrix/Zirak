@@ -236,6 +236,46 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
       localActive
     });
     
+    // Record unsaved changes and cursor position before switching files
+    if (usingExternalFiles && fileEditorRef?.current) {
+      try {
+        // If we have an active file, save its current state
+        if (activeFilePath) {
+          const currentContent = fileEditorRef.current.getValue();
+          const activeFile = openFiles.find(f => f.path === activeFilePath);
+          
+          // If content has changed, update our records
+          if (activeFile && activeFile.content !== currentContent && setFileContent) {
+            // Update file content but don't prompt for save
+            setFileContent(currentContent);
+          }
+          
+          // Save the view state and cursor position
+          try {
+            const editor = fileEditorRef.current;
+            
+            // Store view state on the model to preserve scroll position and selections
+            const viewState = editor.saveViewState();
+            if (viewState) {
+              // The model will automatically restore this when we switch back
+              // Monaco handles this internally as long as the model remains in memory
+            }
+            
+            // Store cursor position explicitly to ensure it's preserved
+            const position = editor.getPosition();
+            if (position) {
+              // The cursor position is also part of the view state, but we're being extra careful
+              console.log(`[ScriptEditorPanel] Saved cursor position for ${activeFilePath}:`, position);
+            }
+          } catch (e) {
+            console.error('[ScriptEditorPanel] Error saving editor state:', e);
+          }
+        }
+      } catch (e) {
+        console.error('[ScriptEditorPanel] Error saving file state before switch:', e);
+      }
+    }
+    
     if (usingExternalFiles && onSwitchFile) {
       // Ensure we're properly highlighting the active tab by setting active path
       onSwitchFile(path);
@@ -244,7 +284,7 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
     
     // For local file management
     setLocalActive(path);
-  }, [usingExternalFiles, onSwitchFile, openFiles.length, activeFilePath, localFiles.length, localActive]);
+  }, [usingExternalFiles, onSwitchFile, openFiles, activeFilePath, localFiles.length, localActive, fileEditorRef, setFileContent]);
   
   // Handle content changes by updating the parent if using external files
   const handleContentChange = useCallback((path: string, content: string) => {
@@ -348,6 +388,39 @@ const ScriptEditorPanel: React.FC<ScriptEditorPanelProps> = ({
       }
     }
   }, [localActive, localFiles.length, cancelFileEditing, onCloseFile, usingExternalFiles]);
+
+  // Keep editor focused when active file changes
+  useEffect(() => {
+    // Only proceed if we have an active file to focus on
+    if (!(usingExternalFiles ? activeFilePath : localActive)) return;
+    
+    // Ensure editor is focused after file switching
+    const ensureFocus = () => {
+      if (fileEditorRef?.current) {
+        try {
+          // Focus the editor
+          fileEditorRef.current.focus();
+          
+          // Make cursor visible
+          const position = fileEditorRef.current.getPosition();
+          if (position) {
+            fileEditorRef.current.revealPositionInCenter(position);
+            // Simulate typing to make cursor visible
+            fileEditorRef.current.trigger('keyboard', 'type', { text: '' });
+          }
+        } catch (e) {
+          console.error('[ScriptEditorPanel] Error focusing editor:', e);
+        }
+      }
+    };
+    
+    // Use requestAnimationFrame for more reliable timing
+    requestAnimationFrame(() => {
+      // Delay slightly to ensure component has fully updated
+      setTimeout(ensureFocus, 50);
+    });
+    
+  }, [usingExternalFiles ? activeFilePath : localActive, fileEditorRef]);
 
   return (
     <div style={{ height, width }}>

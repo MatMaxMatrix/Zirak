@@ -59,6 +59,9 @@ const EditorManager: React.FC<EditorManagerProps> = ({
   // View states registry
   const viewStatesRegistry = useRef<Map<string, monaco.editor.ICodeEditorViewState | null>>(new Map());
   
+  // Cursor positions registry to track cursor position separately
+  const cursorPositionsRegistry = useRef<Map<string, monaco.Position | null>>(new Map());
+  
   // Dialog state for unsaved changes
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -179,10 +182,29 @@ const EditorManager: React.FC<EditorManagerProps> = ({
           const viewState = viewStatesRegistry.current.get(activeFile.path);
           if (viewState) {
             editor.restoreViewState(viewState);
+            
+            // If we have a saved cursor position, restore that
+            const savedCursorPosition = cursorPositionsRegistry.current.get(activeFile.path);
+            if (savedCursorPosition) {
+              editor.setPosition(savedCursorPosition);
+            }
+          } else {
+            // No view state saved, this might be a new file
+            // Set cursor to end of first line
+            const firstLine = model.getLineContent(1);
+            if (firstLine) {
+              editor.setPosition({ lineNumber: 1, column: firstLine.length + 1 });
+            }
           }
           
           // Focus the editor
           editor.focus();
+          
+          // Make sure cursor is visible
+          const position = editor.getPosition();
+          if (position) {
+            editor.revealPositionInCenter(position);
+          }
         } catch (error) {
           console.error('Error setting model:', error);
         }
@@ -241,6 +263,16 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     // Save the current view state
     const viewState = editorRef.current.saveViewState();
     viewStatesRegistry.current.set(activeFile.path, viewState);
+    
+    // Also save cursor position separately
+    try {
+      const position = editorRef.current.getPosition();
+      if (position) {
+        cursorPositionsRegistry.current.set(activeFile.path, position);
+      }
+    } catch (e) {
+      console.error('Error saving cursor position:', e);
+    }
   };
 
   // Handle switching files
@@ -253,14 +285,8 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     // Save the current view state
     saveViewState();
     
-    // Check if the current file has unsaved changes
-    if (activeFile?.hasUnsavedChanges) {
-      setPendingAction({ type: 'switch', path });
-      setShowUnsavedDialog(true);
-      return;
-    }
-    
-    // Actually switch
+    // Skip the unsaved changes check when switching between files
+    // Just perform the switch directly
     performSwitch(path);
   };
 
@@ -286,20 +312,43 @@ const EditorManager: React.FC<EditorManagerProps> = ({
               editorRef.current.restoreViewState(viewState);
             }
             
-            // Focus the editor after switching
+            // Restore cursor position explicitly if we have saved it
+            const savedCursorPosition = cursorPositionsRegistry.current.get(path);
+            if (savedCursorPosition) {
+              editorRef.current.setPosition(savedCursorPosition);
+            } else if (!viewState) {
+              // If this is a new file with no view state, place cursor at end of first line
+              const firstLine = model.getLineContent(1);
+              if (firstLine) {
+                const position = { lineNumber: 1, column: firstLine.length + 1 };
+                editorRef.current.setPosition(position);
+              }
+            }
+            
+            // Focus the editor after switching to make cursor visible immediately
             editorRef.current.focus();
             
             // Force a layout update to ensure editor renders correctly
+            // Use a single timeout for all related operations to reduce event loop overhead
             setTimeout(() => {
               if (editorRef.current) {
+                // Update layout
                 editorRef.current.layout();
-                // Scroll to ensure the cursor is visible
-                editorRef.current.revealPositionInCenter({
-                  lineNumber: editorRef.current.getPosition()?.lineNumber || 1,
-                  column: editorRef.current.getPosition()?.column || 1
-                });
+                
+                // Make sure cursor is visible by revealing the position
+                const currentPosition = editorRef.current.getPosition();
+                if (currentPosition) {
+                  // Make the cursor position visible
+                  editorRef.current.revealPositionInCenter(currentPosition);
+                  
+                  // Force the cursor to be visible by triggering a focus and cursor update
+                  editorRef.current.focus();
+                  
+                  // Force editor to render the cursor
+                  editorRef.current.trigger('keyboard', 'type', { text: '' });
+                }
               }
-            }, 10);
+            }, 50);
           }
         } catch (error) {
           console.error(`Error switching to file ${path}:`, error);
@@ -353,6 +402,12 @@ const EditorManager: React.FC<EditorManagerProps> = ({
           if (viewState) {
             editorRef.current.restoreViewState(viewState);
           }
+          
+          // Restore cursor position if available
+          const savedCursorPosition = cursorPositionsRegistry.current.get(nextFile.path);
+          if (savedCursorPosition) {
+            editorRef.current.setPosition(savedCursorPosition);
+          }
         }
       } else {
         // No more files, clear the editor
@@ -376,6 +431,7 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     }
     
     viewStatesRegistry.current.delete(path);
+    cursorPositionsRegistry.current.delete(path);
     
     // Call onFileClose prop if provided
     if (onFileClose) {
@@ -461,6 +517,34 @@ const EditorManager: React.FC<EditorManagerProps> = ({
           
           // Switch to it
           switchToFile(path);
+          
+          // Extra focus to ensure cursor is visible in new file
+          // Use requestAnimationFrame for more reliable animation timing
+          requestAnimationFrame(() => {
+            setTimeout(() => {
+              if (editorRef.current) {
+                // Focus and prepare cursor
+                editorRef.current.focus();
+                
+                // Position cursor at end of first line for better UX
+                const model = editorRef.current.getModel();
+                if (model) {
+                  const firstLine = model.getLineContent(1);
+                  if (firstLine) {
+                    const position = { lineNumber: 1, column: firstLine.length + 1 };
+                    editorRef.current.setPosition(position);
+                    editorRef.current.revealPositionInCenter(position);
+                    
+                    // Save this cursor position for future reference
+                    cursorPositionsRegistry.current.set(path, position as monaco.Position);
+                    
+                    // Force cursor to be visible
+                    editorRef.current.trigger('keyboard', 'type', { text: '' });
+                  }
+                }
+              }
+            }, 50);
+          });
         }
       } catch (error) {
         console.error('Error opening file:', error);
@@ -468,37 +552,24 @@ const EditorManager: React.FC<EditorManagerProps> = ({
     }
   };
 
-  // Add proper model cleanup on unmount
+  // Add cleanup effect for models
   useEffect(() => {
     return () => {
-      // Cleanup logic for when component unmounts
-      try {
-        // Dispose all models when component unmounts
-        modelsRegistry.current.forEach((model) => {
-          if (model) {
-            try {
-              model.dispose();
-            } catch (err) {
-              console.error('Error disposing model:', err);
-            }
+      // Cleanup all models when component unmounts
+      modelsRegistry.current.forEach((model, path) => {
+        try {
+          if (!model.isDisposed()) {
+            model.dispose();
           }
-        });
-        
-        // Clear registries
-        modelsRegistry.current.clear();
-        viewStatesRegistry.current.clear();
-        
-        // Clear editor reference
-        if (internalEditorRef.current) {
-          try {
-            internalEditorRef.current.setModel(null);
-          } catch (err) {
-            console.error('Error clearing editor model:', err);
-          }
+        } catch (error) {
+          console.debug(`Error disposing model for ${path}:`, error);
         }
-      } catch (error) {
-        console.error('Error during editor cleanup:', error);
-      }
+      });
+      modelsRegistry.current.clear();
+      
+      // Clear other registries
+      viewStatesRegistry.current.clear();
+      cursorPositionsRegistry.current.clear();
     };
   }, []);
 

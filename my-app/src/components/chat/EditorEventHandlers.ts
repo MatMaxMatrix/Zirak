@@ -95,6 +95,8 @@ export const handleFileTabSwitch = async (
     // First update activeFilePath state to trigger useEffect
     setActiveFilePath(path);
     
+    // Skip checking for unsaved changes - we just want to switch without prompting
+    
     // Ensure target file has a registered model
     const language = getLanguageFromFilePath(path);
     modelManager.registerTab(path, targetFile.content, language);
@@ -349,33 +351,38 @@ export const handleCloseTab = async (
   console.log('Closing file tab:', path);
   
   try {
-    // First save any unsaved changes if this is the active tab
-    if (editorRef.current && path === activeFilePath) {
-      try {
-        // Get current content
-        const currentContent = editorRef.current.getValue();
-        const file = openedFiles.find(f => f.path === path);
-        
-        if (file && file.content !== currentContent && file.hasUnsavedChanges) {
-          // Ask user if they want to save changes
-          if (window.confirm(`Save changes to ${path.split('/').pop()} before closing?`)) {
-            // Update file content in state
-            setOpenedFiles(prev => 
-              prev.map(f => 
-                f.path === path
-                  ? { ...f, content: currentContent, hasUnsavedChanges: false }
-                  : f
-              )
-            );
-            
-            // Call save function
-            await saveFileContent().catch(error => {
-              console.error('Error saving file before close:', error);
-            });
-          }
+    // Check for unsaved changes regardless of which tab it is
+    const file = openedFiles.find(f => f.path === path);
+    
+    // We should prompt for save when the file has unsaved changes and is being closed
+    if (file && file.hasUnsavedChanges) {
+      // If it's the active file, get the current content from the editor
+      let currentContent = file.content;
+      if (path === activeFilePath && editorRef.current) {
+        try {
+          currentContent = editorRef.current.getValue();
+        } catch (e) {
+          console.error('Error getting editor value:', e);
         }
-      } catch (e) {
-        console.error('Error during tab close cleanup:', e);
+      }
+      
+      // Ask user if they want to save changes
+      if (window.confirm(`Save changes to ${path.split('/').pop()} before closing?`)) {
+        // Update file content in state
+        setOpenedFiles(prev => 
+          prev.map(f => 
+            f.path === path
+              ? { ...f, content: currentContent, hasUnsavedChanges: false }
+              : f
+          )
+        );
+        
+        // If it's the active file, call save function
+        if (path === activeFilePath) {
+          await saveFileContent().catch(error => {
+            console.error('Error saving file before close:', error);
+          });
+        }
       }
     }
     

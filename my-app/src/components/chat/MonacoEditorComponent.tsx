@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import * as monaco from 'monaco-editor';
 import Editor, { Monaco, OnMount } from '@monaco-editor/react';
-import { safelyCleanupWordHighlighter } from './EditorCleanup';
+import { safelyCleanupWordHighlighter, safelyDetachModel } from './EditorCleanup';
 
 // Import monaco config to ensure it's loaded
 import '../../utils/monaco-config';
@@ -105,6 +105,41 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
         }
       }
 
+      // Ensure cursor is visible without requiring a click
+      setTimeout(() => {
+        if (editor && isMountedRef.current) {
+          // Focus the editor
+          editor.focus();
+
+          // Get current cursor position
+          const currentPosition = editor.getPosition();
+          
+          // If no position set, place at end of first line
+          if (!currentPosition) {
+            const model = editor.getModel();
+            if (model && model.getLineCount() > 0) {
+              const firstLine = model.getLineContent(1);
+              // Use proper IPosition interface instead of custom object
+              const newPosition: monaco.IPosition = {
+                lineNumber: 1,
+                column: firstLine.length + 1
+              };
+              editor.setPosition(newPosition);
+              
+              // Ensure cursor is visible
+              editor.revealPositionInCenter(newPosition);
+              // Trigger a dummy edit to make cursor blink and be visible
+              editor.trigger('keyboard', 'type', { text: '' });
+            }
+          } else {
+            // For existing position, make it visible
+            editor.revealPositionInCenter(currentPosition);
+            // Trigger a dummy edit to make cursor blink and be visible
+            editor.trigger('keyboard', 'type', { text: '' });
+          }
+        }
+      }, 100);
+
       // Call external onMount if provided
       if (onMount) {
         onMount(editor, monaco);
@@ -127,6 +162,11 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
     try {
       if (onChange && value !== undefined) {
         onChange(value);
+        
+        // After content change, ensure cursor is still visible using helper
+        setTimeout(() => {
+          keepCursorFocused(internalEditorRef.current);
+        }, 10);
       }
     } catch (error) {
       console.error('Error during content change:', error);
@@ -186,46 +226,69 @@ const MonacoEditorComponent: React.FC<MonacoEditorProps> = ({
   }, [path]);
 
   /**
-   * Cleanup editor when component unmounts
+   * Helper function to ensure cursor is visible
+   */
+  const keepCursorFocused = (editor: monaco.editor.IStandaloneCodeEditor | null) => {
+    if (!editor || !isMountedRef.current) return;
+    
+    try {
+      // Focus the editor
+      editor.focus();
+      
+      // Get current cursor position
+      const position = editor.getPosition();
+      if (position) {
+        // Make sure cursor is visible in viewport
+        editor.revealPositionInCenterIfOutsideViewport(position);
+        
+        // Force cursor to be visible
+        setTimeout(() => {
+          if (editor && isMountedRef.current) {
+            // Re-focus to ensure cursor is blinking
+            editor.focus();
+            // Force cursor to render by simulating typing
+            editor.trigger('keyboard', 'type', { text: '' });
+          }
+        }, 10);
+      }
+    } catch (e) {
+      console.warn('Error ensuring cursor visibility:', e);
+    }
+  };
+
+  /**
+   * Keep editor focused
    */
   useEffect(() => {
+    // Skip if transitioning
+    if (isTransitioning) return;
+    
+    // Focus editor with a slight delay after content updates
+    const focusTimeout = setTimeout(() => {
+      keepCursorFocused(internalEditorRef.current);
+    }, 200);
+    
+    return () => clearTimeout(focusTimeout);
+  }, [isTransitioning, editorContent]);
+
+  // Add cleanup effect
+  useEffect(() => {
     return () => {
-      try {
-        // Use either the external or internal ref
-        const editor = (externalEditorRef?.current || internalEditorRef.current);
-        if (editor) {
-          // First, set the model to null to avoid disposal issues
-          try {
-            editor.setModel(null);
-          } catch (setModelError) {
-            console.warn('Could not clear editor model during cleanup:', setModelError);
-          }
-          
-          // Prevent "Canceled" errors during unmounting
-          try {
-            safelyCleanupWordHighlighter(editor);
-          } catch (cleanupError) {
-            console.warn('Word highlighter cleanup failed:', cleanupError);
-          }
-          
-          // Finally dispose the editor
-          try {
-            editor.dispose();
-          } catch (disposeError) {
-            console.warn('Editor disposal failed:', disposeError);
-          }
-          
-          // Clear references
-          internalEditorRef.current = null;
-          if (externalEditorRef) {
-            (externalEditorRef as any).current = null;
-          }
+      // Cleanup when component unmounts
+      if (internalEditorRef.current) {
+        try {
+          // Safely detach the model first
+          safelyDetachModel(internalEditorRef.current);
+          // Clean up word highlighter
+          safelyCleanupWordHighlighter(internalEditorRef.current);
+          // Dispose the editor
+          internalEditorRef.current.dispose();
+        } catch (error) {
+          console.debug('Error during editor cleanup:', error);
         }
-      } catch (error) {
-        console.error('Error during editor cleanup:', error);
       }
     };
-  }, [externalEditorRef]);
+  }, []);
 
   return (
     <div 

@@ -66,6 +66,7 @@ export function EnhancedFileExplorer({
   const createInputRef = useRef<HTMLInputElement>(null);
   const filterInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Initialize expanded state from fileSystem
   useEffect(() => {
@@ -86,6 +87,33 @@ export function EnhancedFileExplorer({
       setExpandedItems(prev => ({...prev, ...expandedState}));
     }
   }, [fileSystem]);
+
+  // Listen for file selection reset events 
+  useEffect(() => {
+    const handleResetFileSelection = (event: Event) => {
+      // When a file is saved or closed, this will help us reset the selection state
+      console.log('File explorer handling selection reset');
+      
+      // Check what type of reset action this is
+      const customEvent = event as CustomEvent;
+      const { action, path } = customEvent.detail || {};
+      
+      if (action === 'close') {
+        // For file close events, refresh the UI to ensure proper state
+        if (onRefresh) {
+          onRefresh().catch(error => {
+            console.error('Error refreshing after file close:', error);
+          });
+        }
+      }
+    };
+    
+    window.addEventListener('reset-file-selection', handleResetFileSelection);
+    
+    return () => {
+      window.removeEventListener('reset-file-selection', handleResetFileSelection);
+    };
+  }, [onRefresh]);
 
   // Close context menu when clicking outside
   useEffect(() => {
