@@ -1,11 +1,15 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Check, X } from "lucide-react";
+import { Check, X, Menu, ArrowRight } from "lucide-react";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ResizeHandle } from "@/components/ui/resize-handle";
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function PricingPage() {
+  const router = useRouter();
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [sectionHeights, setSectionHeights] = useState({
     pricing: 400,
@@ -133,6 +137,92 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {/* Navigation Bar */}
+      <nav className="border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center flex-1">
+              {/* Logo/Brand */}
+              <div className="flex-shrink-0">
+                <Link href="/" className="text-xl font-bold">
+                  Zirak
+                </Link>
+              </div>
+
+              {/* Desktop Navigation - Moved to the left */}
+              <div className="hidden md:flex md:items-center md:ml-8 space-x-4">
+                <Link href="/" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Home
+                </Link>
+                <Link href="/features" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                  Features
+                </Link>
+                <Link href="/pricing" className="text-white font-medium px-3 py-2 rounded-md text-sm">
+                  Pricing
+                </Link>
+                <Button 
+                  className="bg-white text-black hover:bg-gray-200"
+                  onClick={() => router.push('/chat')}
+                >
+                  Get Started
+                </Button>
+              </div>
+            </div>
+
+            {/* User Actions - Kept on the right */}
+            <div className="hidden md:flex md:items-center md:space-x-4">
+              <Button variant="ghost" className="text-gray-300 hover:text-white">
+                Sign in
+              </Button>
+              <Link href="/dashboard" className="text-gray-300 hover:text-white px-3 py-2 rounded-md text-sm">
+                Dashboard
+              </Link>
+            </div>
+
+            {/* Mobile menu button */}
+            <div className="md:hidden">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="text-gray-300 hover:text-white"
+              >
+                <Menu className="h-6 w-6" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Mobile Navigation - Updated with Features */}
+          {showMobileMenu && (
+            <div className="md:hidden py-2 space-y-1">
+              <Link href="/" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Home
+              </Link>
+              <Link href="/features" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Features
+              </Link>
+              <Link href="/pricing" className="block text-white font-medium px-3 py-2 rounded-md text-base">
+                Pricing
+              </Link>
+              <Link href="/dashboard" className="block text-gray-300 hover:text-white px-3 py-2 rounded-md text-base">
+                Dashboard
+              </Link>
+              <div className="pt-4 pb-3 border-t border-white/10">
+                <Button variant="ghost" className="w-full text-left text-gray-300 hover:text-white">
+                  Sign in
+                </Button>
+                <Button 
+                  className="w-full mt-2 bg-white text-black hover:bg-gray-200"
+                  onClick={() => router.push('/chat')}
+                >
+                  Get Started
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </nav>
+
       {/* Pricing Header */}
       <div className="py-16 text-center resize-section">
         <h1 className="text-4xl font-bold mb-3">Simple, transparent pricing</h1>

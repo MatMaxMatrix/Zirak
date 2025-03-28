@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 always use the uv package manager. 
 - make sure to activate the environment with source .venv/bin/activate

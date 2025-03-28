@@ -257,173 +257,158 @@ export function Workspace({
     return isInFileSystem(Array.isArray(fileSystem) ? fileSystem : []);
   };
 
+  // Helper function to fetch file content
+  const fetchFileContent = async (filePath: string): Promise<string | null> => {
+    try {
+      const normalizedPath = normalizePath(filePath);
+      
+      console.log(`Fetching content for file: ${normalizedPath}`);
+      
+      // First try to get content directly from filesystem using terminal cat command
+      // This bypasses any caching mechanism
+      try {
+        const terminalResponse = await fetch('/api/terminal', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            command: `cat "${normalizedPath}"`,
+            workingDirectory: normalizedPath.substring(0, normalizedPath.lastIndexOf('/')) || '/project',
+            userId: 'default_user'
+          }),
+        });
+        
+        if (terminalResponse.ok) {
+          const terminalData = await terminalResponse.json();
+          if (terminalData.output && !terminalData.error) {
+            console.log(`Retrieved file content via terminal, length: ${terminalData.output.length}`);
+            return terminalData.output;
+          }
+        }
+      } catch (terminalError) {
+        console.error('Error fetching via terminal:', terminalError);
+        // Fall back to regular API if terminal approach fails
+      }
+      
+      // If terminal approach failed, use the regular API with strong cache-busting
+      const timestamp = Date.now();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&fresh=true&_ts=${timestamp}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (!data.file || data.file.content === undefined) {
+        throw new Error('Invalid file data received');
+      }
+      
+      console.log(`Retrieved file content via API, length: ${data.file.content.length}`);
+      
+      return data.file.content;
+    } catch (error) {
+      console.error('Error fetching file content:', error);
+      return null;
+    }
+  };
+
   // Update selectFile to prioritize switching to already open files
   const selectFile = async (file: FileSystem) => {
-    if (file.type === 'directory') {
-      toggleDirectory(file.path);
-      return;
-    }
-    
-    // For files, check if it exists before proceeding
-    const filePathExists = isFileExists(file.path);
-    if (!filePathExists) {
-      console.error(`File not found: ${file.path}`);
-      toast.error(`The file "${file.name}" doesn't exist or can't be accessed.`);
-      return;
-    }
-
-    const normalizedPath = normalizePath(file.path);
-    console.log(`Opening/switching to file: ${normalizedPath}`);
-    
-    // Always set active tab to editor and update selectedFile
-    setActiveTab('editor');
-    setSelectedFile(file);
-    
-    // Check if this file is already open in EditorManager
-    const fileAlreadyOpen = openEditorFiles.some(f => f.path === normalizedPath);
-    
-    if (fileAlreadyOpen) {
-      console.log(`File already open: ${normalizedPath}. Switching to it.`);
-      // Important: Set this file as the active file
-      setActiveEditorFilePath(normalizedPath);
-      
-      // If using terminal's editor, also switch there
-      if (terminal && typeof terminal === 'object' && 'switchToFile' in terminal && typeof terminal.switchToFile === 'function') {
-        terminal.switchToFile(normalizedPath);
-      }
-      
-      // Set this file as active in the internal editor state too
-      if (isEditing) {
-        const fileInOpenedFiles = openedFiles.find(f => f.path === normalizedPath);
-        if (fileInOpenedFiles) {
-          setActiveFilePath(normalizedPath);
-          setCurrentFilePath(normalizedPath);
-          setCurrentFileContent(fileInOpenedFiles.content);
-        }
-      }
-      
-      // Force an event to notify editor components about the switch
-      const switchEvent = new CustomEvent('file-switch', {
-        detail: { path: normalizedPath }
-      });
-      window.dispatchEvent(switchEvent);
-      return;
-    }
-    
-    // If not already open, continue with opening the file...
-    
-    // If we have an external openFile function, use it
-    if (typeof openFile === 'function') {
-      try {
-        // First, fetch the content to ensure the file exists and is readable
-        const content = await fetchFileContent(normalizedPath);
-        if (content === null) {
-          toast.error(`Could not read file: ${getFileNameFromPath(normalizedPath)}`);
-          return;
-        }
-        
-        // Dispatch file opened event
-        const fileOpenEvent = new CustomEvent('file-opened-fresh', {
-          detail: { 
-            path: normalizedPath,
-            content
-          }
-        });
-        window.dispatchEvent(fileOpenEvent);
-        
-        // Add the new file to our open files
-        setOpenEditorFiles(prevFiles => [...prevFiles, {
-          path: normalizedPath,
-          name: file.name,
-          content: content,
-          hasUnsavedChanges: false
-        }]);
-        setActiveEditorFilePath(normalizedPath);
-        
-        // Now also call the openFile function to open it in the terminal's editor
-        const success = await openFile(normalizedPath);
-        
-        if (!success) {
-          console.error('Failed to open file using openFile function');
-          toast.error(`Could not open file: ${file.name}`);
-        }
-      } catch (error) {
-        console.error('Error opening file:', error);
-        toast.error(`Error opening file: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      
-      return;
-    }
-    
-    // If not using external openFile, use our internal implementation
     try {
-      const content = await fetchFileContent(normalizedPath);
-      if (content === null) {
-        toast.error(`Could not read file: ${getFileNameFromPath(normalizedPath)}`);
+      // Don't do anything if we're trying to select the same file that's already open
+      if (selectedFile && selectedFile.path === file.path && editingFile) {
+        console.log(`File ${file.path} is already open and being edited`);
         return;
       }
       
-      // Mark file as selected in file explorer
-      setSelectedFile(file);
-      
-      // Check if file is already open
-      const existingFileIndex = openedFiles.findIndex(f => f.path === normalizedPath);
-      
-      if (existingFileIndex >= 0) {
-        // File already exists, just switch to it
-        setActiveFilePath(normalizedPath);
-        setCurrentFilePath(normalizedPath);
-        setCurrentFileContent(openedFiles[existingFileIndex].content);
-        
-        // If content changed on disk, ask to reload
-        if (openedFiles[existingFileIndex].content !== content) {
-          const shouldUpdate = window.confirm(
-            `The file "${getFileNameFromPath(normalizedPath)}" has changed on disk. Load the new content?`
-          );
-          
-          if (shouldUpdate) {
-            // Update content
+      // If we're already editing, save the current file's state
+      if (editingFile && currentFileContent) {
+        // Update local state
             setOpenedFiles(prev => 
               prev.map(f => 
-                f.path === normalizedPath
-                  ? { ...f, content, hasUnsavedChanges: false }
+            f.path === currentFilePath
+              ? { ...f, content: currentFileContent, hasUnsavedChanges: f.content !== currentFileContent }
                   : f
               )
             );
-            setCurrentFileContent(content);
-          }
-        }
-      } else {
-        // Add new file to openedFiles
-        setOpenedFiles(prev => [
-          ...prev, 
-          { 
-            path: normalizedPath, 
-            content,
-            hasUnsavedChanges: false 
-          }
-        ]);
-        
-        setActiveFilePath(normalizedPath);
-        setCurrentFilePath(normalizedPath);
-        setCurrentFileContent(content);
       }
       
-      // Set editing mode to true
-      setIsEditing(true);
+      // Normalize the path
+      const filePath = normalizePath(file.path);
+      console.log(`Selecting file: ${filePath}`);
       
-      // Dispatch event
-      const fileOpenedEvent = new CustomEvent('file-opened-fresh', {
-        detail: {
-          path: normalizedPath,
-          content
+      if (file.type === 'file') {
+        const fileFromFileSystem = findFileInSystem(fileSystem, filePath);
+        
+        // Update selected file in state
+        setSelectedFile(fileFromFileSystem || file);
+        
+        // Try to use openFile from props but fall back to local fetchContent
+        if (openFile) {
+          await openFile(filePath);
+        } else {
+          // Fetch file content with cache busting
+          const content = await fetchFileContent(filePath);
+          if (content !== null) {
+            // Set up editing UI
+            setCurrentFilePath(filePath);
+            setCurrentFileContent(content);
+            setIsEditing(true);
+            
+            // Add to opened files if not already there
+            setOpenedFiles(prev => {
+              const exists = prev.some(f => f.path === filePath);
+              if (exists) {
+                return prev.map(f => 
+                  f.path === filePath ? { ...f, content, hasUnsavedChanges: false } : f
+                );
+              } else {
+                return [...prev, { path: filePath, content, hasUnsavedChanges: false }];
+              }
+            });
+            
+            // Set as active file
+            setActiveFilePath(filePath);
+          }
         }
-      });
-      window.dispatchEvent(fileOpenedEvent);
+      }
+      
+      // If it's a directory, just toggle it
+      if (file.type === 'directory') {
+        toggleDirectory(file.path);
+      }
     } catch (error) {
-      console.error('Error loading file:', error);
-      toast.error(`Error loading file: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error selecting file:', error);
+      toast.error(`Failed to open file: ${error instanceof Error ? error.message : String(error)}`);
     }
+  };
+
+  // Helper function to find file in file system
+  const findFileInSystem = (files: FileSystem[], path: string): FileSystem | null => {
+    for (const file of files) {
+      if (file.path === path) {
+        return file;
+      }
+      
+      if (file.children) {
+        const found = findFileInSystem(file.children, path);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    
+    return null;
   };
   
   // Close the terminal panel
@@ -512,9 +497,32 @@ export function Workspace({
 
       console.log('Saving file:', { filePath, contentLength: content.length });
 
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&_ts=${timestamp}`, {
+      // Save using both methods for robustness:
+      
+      // 1. First save using terminal API which directly writes to the filesystem
+      try {
+        await fetch('/api/terminal', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            command: `cat > "${filePath}" << 'EOF_SAVE_CONTENT'
+${content}
+EOF_SAVE_CONTENT`,
+            workingDirectory: filePath.substring(0, filePath.lastIndexOf('/')) || '/project',
+            userId: 'default_user'
+          }),
+        });
+        console.log("Saved file via terminal API");
+      } catch (terminalError) {
+        console.error('Warning: Terminal save approach failed:', terminalError);
+        // Continue with regular API if terminal approach fails
+      }
+      
+      // 2. Also save using the regular API with cache busting
+      const timestamp = Date.now();
+      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&noCache=true&_ts=${timestamp}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -524,7 +532,8 @@ export function Workspace({
         },
         body: JSON.stringify({ 
           content,
-          path: filePath
+          path: filePath,
+          forceOverwrite: true
         }),
       });
       
@@ -533,41 +542,113 @@ export function Workspace({
         throw new Error(`Error ${response.status}: ${errorData.message || response.statusText}`);
       }
 
-      // After successful save, fetch the latest file content with cache busting
-      const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&_ts=${new Date().getTime()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-      });
+      // Wait briefly to ensure file is written to disk
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-      if (!getResponse.ok) {
-        throw new Error(`Error refreshing file content: ${getResponse.status}`);
+      // After successful save, verify the file content using the terminal API
+      let verifiedContent = '';
+      try {
+        const verifyResponse = await fetch('/api/terminal', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            command: `cat "${filePath}"`,
+            workingDirectory: filePath.substring(0, filePath.lastIndexOf('/')) || '/project',
+            userId: 'default_user'
+          }),
+        });
+        
+        if (verifyResponse.ok) {
+          const verifyData = await verifyResponse.json();
+          if (verifyData.output && !verifyData.error) {
+            verifiedContent = verifyData.output;
+            console.log(`Verified file content via terminal, length: ${verifiedContent.length}`);
+          }
+        }
+      } catch (verifyError) {
+        console.error('Error verifying file content:', verifyError);
       }
+      
+      // If we succeeded in getting verified content, use that
+      // Otherwise, fetch using API as fallback
+      if (!verifiedContent) {
+        const getResponse = await fetch(`/api/filesystem?path=${encodeURIComponent(filePath)}&fresh=true&_ts=${Date.now()}`, {
+          method: 'GET',
+          cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          },
+        });
 
-      const data = await getResponse.json();
-      if (data.file) {
-        setCurrentFileContent(data.file.content);
+        if (getResponse.ok) {
+          const data = await getResponse.json();
+          if (data.file) {
+            verifiedContent = data.file.content;
+          }
+        }
+      }
+      
+      // Update UI state with verified content if we got it
+      if (verifiedContent) {
+        setCurrentFileContent(verifiedContent);
+        
         // Update the selected file's content
         if (selectedFile) {
-          selectedFile.content = data.file.content;
+          selectedFile.content = verifiedContent;
         }
         
         // Also update the file in openedFiles if it's there
         setOpenedFiles(prev => 
           prev.map(f => 
             f.path === filePath
-              ? { ...f, content: data.file.content, hasUnsavedChanges: false }
+              ? { ...f, content: verifiedContent, hasUnsavedChanges: false }
               : f
           )
         );
       }
       
-      // Refresh the file system to show updated content
+      // Try to clear any server caches
+      try {
+        await fetch(`/api/clear-cache?path=${encodeURIComponent(filePath)}&_ts=${Date.now()}`, {
+          method: 'GET',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          },
+          cache: 'no-store'
+        }).catch(() => {}); // Ignore errors if this endpoint doesn't exist
+      } catch (clearError) {
+        console.error('Error clearing cache:', clearError);
+      }
+      
+      // Force refresh the file system
       await refreshFileSystem();
+      
+      // Notify other components that file has been saved
+      const saveEvent = new CustomEvent('file-saved', {
+        detail: { 
+          path: filePath,
+          content: verifiedContent || content
+        }
+      });
+      window.dispatchEvent(saveEvent);
+      
+      // Temporarily clear the selected file to fix navigation issues
+      setSelectedFile(null);
+      
+      // After a short delay, allow selecting the file again
+      setTimeout(() => {
+        // Force UI to reset file selection state
+        const resetEvent = new CustomEvent('reset-file-selection', {
+          detail: { path: filePath, action: 'save' }
+        });
+        window.dispatchEvent(resetEvent);
+      }, 100);
       
       console.log('File saved successfully');
       toast.success('File saved successfully');
@@ -965,43 +1046,6 @@ export function Workspace({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  // Add the missing fetchFileContent function
-  const fetchFileContent = async (filePath: string): Promise<string | null> => {
-    try {
-      const normalizedPath = filePath
-        .startsWith('/project/') 
-        ? filePath.replace(/\/+/g, '/') 
-        : `/project/${filePath.replace(/^\/+/, '')}`;
-
-      // Add timestamp to prevent caching
-      const timestamp = new Date().getTime();
-      const response = await fetch(`/api/filesystem?path=${encodeURIComponent(normalizedPath)}&_ts=${timestamp}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      if (!response.ok) {
-        console.error('Failed to fetch file content:', response.statusText);
-        return null;
-      }
-      
-      const data = await response.json();
-      if (data && data.file && data.file.content !== undefined) {
-        return data.file.content;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error fetching file content:', error);
-      return null;
-    }
-  };
 
   // Use keyboard shortcuts for file operations
   useKeyboardShortcuts({

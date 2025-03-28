@@ -77,6 +77,7 @@ export function useFileSystem() {
   // Refresh the file system with cache-busting
   const refreshFileSystem = async () => {
     try {
+      console.log("Starting file system refresh");
       // Add a timestamp to prevent browser/Next.js caching
       const timestamp = new Date().getTime();
       const result = await fetch(`/api/filesystem?_ts=${timestamp}`, {
@@ -100,6 +101,27 @@ export function useFileSystem() {
           expanded: item.type === 'directory' ? true : undefined,
           children: item.children || []
         }));
+        
+        // Preserve expanded state from current file system
+        const transferExpandedState = (newItems: FileSystem[], currentItems: FileSystem[]) => {
+          for (const newItem of newItems) {
+            // Find matching item in current file system
+            const currentItem = currentItems.find(item => item.path === newItem.path);
+            
+            // Transfer expanded state if it exists
+            if (currentItem && newItem.type === 'directory') {
+              newItem.expanded = currentItem.expanded;
+            }
+            
+            // Recursively process children
+            if (newItem.children && currentItem && currentItem.children) {
+              transferExpandedState(newItem.children, currentItem.children);
+            }
+          }
+        };
+        
+        // Update the expanded state based on the current file system
+        transferExpandedState(validFileSystem, fileSystem);
         
         // Deep comparison to avoid unnecessary re-renders
         const stringifiedCurrent = JSON.stringify(fileSystem);
@@ -476,14 +498,75 @@ export function useFileSystem() {
       });
     };
     
-    // Add event listener for filesystem changes
+    // Handle file selection reset after save
+    const handleResetFileSelection = (event: Event) => {
+      console.log('Reset file selection after save/close');
+      const customEvent = event as CustomEvent;
+      const { action } = customEvent.detail || {};
+      
+      // Clear the selected file to enable navigation to other files
+      setSelectedFile(null);
+      
+      // For close action, also refresh file system to ensure file list is up to date
+      if (action === 'close') {
+        console.log('File closed, refreshing file system');
+        refreshFileSystem().catch(error => {
+          console.error('Error refreshing after file close:', error);
+        });
+      }
+    };
+    
+    // Handle file refresh needed events
+    const handleFileRefreshNeeded = (event: Event) => {
+      console.log('File refresh needed event received');
+      const customEvent = event as CustomEvent;
+      const { path, action, content } = customEvent.detail || {};
+      
+      if (path && action === 'save' && content !== undefined) {
+        console.log(`Updating content for file: ${path}`);
+        // Update the content of the specific file in the file system
+        setFileSystem(prevState => {
+          // Helper function to update the file content in the tree
+          const updateFileContent = (items: FileSystem[]): FileSystem[] => {
+            return items.map(item => {
+              // If this is the file we need to update
+              if (item.path === path && item.type === 'file') {
+                return {
+                  ...item,
+                  content: content
+                };
+              }
+              
+              // If it's a directory, check its children
+              if (item.children && item.children.length > 0) {
+                return {
+                  ...item,
+                  children: updateFileContent(item.children)
+                };
+              }
+              
+              // Otherwise return the item unchanged
+              return item;
+            });
+          };
+          
+          return updateFileContent([...prevState]);
+        });
+      }
+    };
+    
+    // Add event listeners
     window.addEventListener('filesystem-changed', handleExternalRefresh);
+    window.addEventListener('reset-file-selection', handleResetFileSelection);
+    window.addEventListener('file-refresh-needed', handleFileRefreshNeeded);
     
     // Cleanup when component unmounts
     return () => {
       window.removeEventListener('filesystem-changed', handleExternalRefresh);
+      window.removeEventListener('reset-file-selection', handleResetFileSelection);
+      window.removeEventListener('file-refresh-needed', handleFileRefreshNeeded);
     };
-  }, [selectedFile]);
+  }, [selectedFile, refreshFileSystem]);
 
   return {
     fileSystem,
