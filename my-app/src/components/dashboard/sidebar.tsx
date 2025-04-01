@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import {
   LayoutDashboard,
   Users,
@@ -13,16 +14,6 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState } from "react";
-
-// Function to get cookie value
-function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-  return null;
-}
 
 // Logout function
 function handleLogout() {
@@ -32,15 +23,11 @@ function handleLogout() {
 
 export function Sidebar() {
   const pathname = usePathname();
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Get user email from cookie
-    setUserEmail(getCookie("auth_user"));
-  }, []);
+  const { user } = useUser();
 
   // Determine if user is admin
-  const isAdmin = userEmail === "admin@example.com";
+  const isAdmin = user?.email === "admin@example.com";
+  const userEmail = user?.email;
 
   // Define navigation items
   const navItems = [
