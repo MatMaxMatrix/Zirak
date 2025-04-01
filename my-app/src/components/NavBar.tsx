@@ -62,7 +62,7 @@ const NavBar = () => {
           <div className="hidden sm:ml-6 sm:flex sm:items-center">
             {!isLoading && !user && (
               <Button asChild variant="default">
-                <Link href="/auth/login">
+                <Link href="/api/auth/login?prompt=login">
                   Login
                 </Link>
               </Button>
@@ -96,7 +96,7 @@ const NavBar = () => {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/auth/logout" className="cursor-pointer">
+                    <Link href="/api/auth/logout" className="cursor-pointer">
                       <LogOut className="mr-2 h-4 w-4" />
                       <span>Log out</span>
                     </Link>
@@ -157,7 +157,7 @@ const NavBar = () => {
             {!isLoading && !user && (
               <div className="mt-3 px-2 space-y-1">
                 <Button asChild className="w-full" variant="default">
-                  <Link href="/auth/login">
+                  <Link href="/api/auth/login?prompt=login">
                     Login
                   </Link>
                 </Button>
@@ -182,7 +182,7 @@ const NavBar = () => {
                   <Link href="/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
                     Profile
                   </Link>
-                  <Link href="/auth/logout" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
+                  <Link href="/api/auth/logout" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
                     Log out
                   </Link>
                 </div>
