@@ -1,19 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { notification } from "@/lib/notification";
-
-// Simple function to get cookie value
-function getCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
-  return null;
-}
 
 export default function DashboardLayout({
   children,
@@ -21,29 +13,27 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
-  const [user, setUser] = useState<{ email: string } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, error, isLoading } = useUser();
 
-  useEffect(() => {
-    // Check if user is authenticated
-    const userEmail = getCookie("auth_user");
+  // Redirect to login if not authenticated
+  if (!isLoading && !user) {
+    notification.error("Please log in to access the dashboard");
+    router.push("/api/auth/login");
+    return null;
+  }
 
-    if (!userEmail) {
-      notification.error("Please log in to access the dashboard");
-      router.push("/login");
-      return;
-    }
-
-    setUser({ email: userEmail });
-    setLoading(false);
-  }, [router]);
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
+  }
+
+  if (error) {
+    notification.error("Authentication error");
+    console.error(error);
+    return null;
   }
 
   return (

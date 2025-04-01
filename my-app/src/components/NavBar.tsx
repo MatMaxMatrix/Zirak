@@ -51,7 +51,7 @@ const NavBar = () => {
                   <Link href="/dashboard" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                     Dashboard
                   </Link>
-                  <Link href="/profile" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                  <Link href="/dashboard/profile" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                     Profile
                   </Link>
                 </>
@@ -90,7 +90,7 @@ const NavBar = () => {
                     </div>
                   </div>
                   <DropdownMenuItem asChild>
-                    <Link href="/profile" className="cursor-pointer">
+                    <Link href="/dashboard/profile" className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       <span>Profile</span>
                     </Link>
@@ -146,7 +146,7 @@ const NavBar = () => {
                 <Link href="/dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
                   Dashboard
                 </Link>
-                <Link href="/profile" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                <Link href="/dashboard/profile" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
                   Profile
                 </Link>
               </>
@@ -179,7 +179,7 @@ const NavBar = () => {
                   </div>
                 </div>
                 <div className="mt-3 px-2 space-y-1">
-                  <Link href="/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
+                  <Link href="/dashboard/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
                     Profile
                   </Link>
                   <Link href="/api/auth/logout" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
