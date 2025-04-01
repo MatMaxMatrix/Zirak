@@ -29,6 +29,25 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 252 59% 48%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 11%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 253 82% 67%;
   }
 
   .dark {
@@ -155,13 +174,30 @@
   overflow: hidden;
 }
 
-/* Chat container and input positioning */
+/* Chat container properly positioned with main navbar */
 .chat-workspace-container {
   display: flex;
   width: 100%;
   height: 100%;
   overflow: hidden;
   font-size: 0.875rem; /* Base font size reduction */
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* Project selector styling in main navbar */
+.flex-shrink-0.flex.items-center {
+  min-width: fit-content;
+}
+
+.flex-shrink-0.flex.items-center .bg-\[\#262626\] {
+  height: 30px;
+  min-width: fit-content;
+}
+
+/* Chat-specific navbar styling */
+.bg-background.border-b a.text-xl.font-bold + div {
+  height: 100%;
 }
 
 .chat-workspace-container > div {
@@ -169,6 +205,36 @@
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+/* Project selector in navbar styling */
+.flex-none.h-12 {
+  min-height: 3rem;
+  border-bottom: 1px solid #2A2A2A;
+  z-index: 30;
+  background: linear-gradient(to right, #1A1A1A, #232323);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Brand styling in navbar */
+.flex-none.h-12 a.text-white {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Arrow styling */
+.flex-none.h-12 .text-gray-400 {
+  font-size: 1rem;
+  margin: 0 0.5rem;
+}
+
+/* Workspace container properly positioned below navbar */
+.chat-workspace-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-size: 0.875rem; /* Base font size reduction */
 }
 
 /* Ensure the chat area container takes full height and scrolls properly */
@@ -241,45 +307,25 @@ html {
   height: 2.5rem !important;
 }
 
-/* Adjust workspace height to account for smaller navbar */
-.h-\[calc\(100vh-48px\)\] {
-  height: calc(100vh - 40px) !important;
+/* Remove navbar padding as it's no longer needed in chat page */
+.chat-workspace-container .pt-12 {
+  padding-top: 0 !important;
 }
 
-/* Reduced padding for the main content */
-.pt-12 {
-  padding-top: 2.5rem !important;
+/* Set proper height for the chat layout with the top navbar */
+.h-\[calc\(100vh-48px\)\] {
+  height: calc(100vh - 3rem) !important;
+}
+
+/* Ensure proper height for the chat container with the top navigation */
+.flex.flex-col.h-screen > .flex-1 {
+  height: calc(100vh - 3rem);
 }
 
 /* Compact workflow display */
 .space-y-3 > * {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
-}
-
-/* Additional global styles */
-@layer base {
-  :root {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-  }
 }
 
 /* Animation keyframes */
@@ -331,4 +377,94 @@ html {
 
 .delay-400 {
   animation-delay: 0.4s;
+}
+
+/* Navbar maximized spacing */
+nav.bg-background.border-b {
+  width: 100%;
+  position: relative;
+}
+
+nav.bg-background.border-b > div {
+  max-width: 100% !important;
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+}
+
+@media (min-width: 1024px) {
+  nav.bg-background.border-b > div {
+    padding-left: 2.5rem !important;
+    padding-right: 2.5rem !important;
+  }
+}
+
+/* Push the project selector away from the title */
+.flex-shrink-0.flex.items-center {
+  min-width: fit-content;
+}
+
+/* Ensure proper spacing between nav elements */
+.flex.justify-between.h-16 {
+  justify-content: space-between !important;
+  width: 100%;
+}
+
+/* Project selector styling in main navbar */
+.flex-shrink-0.flex.items-center .flex.items-center {
+  height: 100%;
+  margin-left: 0.5rem;
+}
+
+.flex-shrink-0.flex.items-center .bg-\[\#262626\] {
+  height: 30px;
+  min-width: fit-content;
+}
+
+/* Chat-specific navbar styling */
+.bg-background.border-b a.text-xl.font-bold + div {
+  height: 100%;
+}
+
+/* Increase space between middle menu options */
+.hidden.sm\:ml-6.sm\:flex.sm\:space-x-8 {
+  margin-left: 2rem !important;
+}
+
+/* Mobile menu positioning */
+.flex.items-center.sm\:hidden {
+  position: absolute;
+  right: 1rem;
+  top: 0.75rem;
+}
+
+/* Add custom breakpoint for xs */
+@media (max-width: 639px) {
+  .hidden.xs\:inline-block {
+    display: none;
+  }
+}
+
+@media (min-width: 640px) {
+  .hidden.xs\:inline-block {
+    display: inline-block;
+  }
+}
+
+/* Additional custom styles for animations */
+@layer utilities {
+  .bg-noise {
+    background-image: url('data:image/png;base64,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');
+  }
+
+  .animate-shine {
+    animation: shine 1.5s infinite;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .bg-radial-gradient {
+    background: radial-gradient(var(--tw-gradient-stops));
+  }
 }

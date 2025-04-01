@@ -7,6 +7,9 @@ const publicRoutes = ['/', '/about', '/pricing', '/features'];
 // API routes to bypass
 const apiRoutes = ['/api/auth'];
 
+// Protected routes that require authentication and should redirect to login with returnTo
+const protectedRoutes = ['/chat', '/user-dashboard', '/dashboard'];
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   
@@ -20,14 +23,21 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
   
-  // Check for session cookie
-  const sessionCookie = req.cookies.get('appSession');
+  // Check if the route is protected and requires authentication
+  const isProtectedRoute = protectedRoutes.some(route => 
+    pathname === route || pathname.startsWith(`${route}/`)
+  );
   
-  // If no session cookie, redirect to login
-  if (!sessionCookie) {
-    const url = new URL('/api/auth/login', req.url);
-    url.searchParams.set('returnTo', pathname);
-    return NextResponse.redirect(url);
+  if (isProtectedRoute) {
+    // Check for session cookie
+    const sessionCookie = req.cookies.get('appSession');
+    
+    // If no session cookie, redirect to login with returnTo parameter
+    if (!sessionCookie) {
+      const url = new URL('/api/auth/login', req.url);
+      url.searchParams.set('returnTo', pathname);
+      return NextResponse.redirect(url);
+    }
   }
   
   // Allow authenticated requests

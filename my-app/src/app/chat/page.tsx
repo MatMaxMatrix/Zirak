@@ -1,6 +1,5 @@
 "use client";
 
-import { Navbar, NavbarWithProject } from "@/components/landing/navbar";
 import { useEffect, useRef, useState } from "react";
 import { useWebSocket } from "@/app/contexts/WebSocketContext";
 import { useRouter } from 'next/navigation';
@@ -11,7 +10,9 @@ import { useTerminal } from "@/hooks/useTerminal";
 import { useFileSystem } from "@/hooks/useFileSystem";
 import { useResizing } from "@/hooks/useResizing";
 import { v4 as uuidv4 } from 'uuid';
-import { ChevronRight, Terminal as TerminalIcon } from "lucide-react";
+import { ChevronRight, Terminal as TerminalIcon, Home } from "lucide-react";
+import { ProjectSelector } from "@/components/chat/ProjectSelector";
+import Link from "next/link";
 
 export default function ChatPage() {
   const router = useRouter();
@@ -256,18 +257,9 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col h-screen bg-[#0C0C0C] text-white">
-      <div className="flex-none z-10">
-        <NavbarWithProject 
-          currentProject={fileSystem.currentProject} 
-          onSelectProject={fileSystem.handleProjectSelect}
-          onCreateProject={fileSystem.handleCreateProject}
-          onConfigureProject={() => {}}
-        />
-      </div>
-      
-      <div className="flex-1 overflow-hidden pt-12">
+      <div className="flex-1 overflow-hidden">
         {/* Main Workspace Layout */}
-        <div className="flex flex-row w-full h-[calc(100vh-48px)] chat-workspace-container">
+        <div className="flex flex-row w-full h-full chat-workspace-container">
           {/* Workspace Section */}
           <div 
             className="flex flex-col border-r border-[#2A2A2A] transition-all duration-150 bg-[#161616] relative"
@@ -351,7 +343,7 @@ export default function ChatPage() {
           {!showWorkspace && (
             <button
               onClick={() => setShowWorkspace(true)}
-              className="h-12 flex items-center justify-center bg-[#1A1A1A] border-r border-[#2A2A2A] border-b hover:bg-[#2A2A2A] transition-colors px-1 w-6"
+              className="h-full flex items-center justify-center bg-[#1A1A1A] border-r border-[#2A2A2A] hover:bg-[#2A2A2A] transition-colors px-1 w-6"
               title="Show Workspace"
             >
               <ChevronRight className="h-4 w-4 text-gray-400" />
@@ -368,7 +360,7 @@ export default function ChatPage() {
 
           {/* Chat Section */}
           <div 
-            className="flex-1 bg-[#131314] flex flex-col overflow-hidden"
+            className="flex-1 bg-[#131314] flex flex-col overflow-hidden h-full"
             style={{ width: showWorkspace ? `${100 - resizing.workspaceWidth}%` : '100%' }}
           >
             <ChatArea 
