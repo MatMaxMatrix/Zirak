@@ -1,24 +1,17 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 
-// List of public routes that don't require authentication
+// Public routes that don't require authentication
 const publicRoutes = ['/', '/about', '/pricing', '/features'];
 
-// List of API and static routes that should not be checked
-const bypassRoutes = [
-  '/api/auth',
-  '/auth',
-  '/_next',
-  '/favicon.ico',
-  '/sitemap.xml',
-  '/robots.txt'
-];
+// API routes to bypass
+const apiRoutes = ['/api/auth'];
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
   
-  // Skip middleware for bypass routes
-  if (bypassRoutes.some(route => pathname.startsWith(route))) {
+  // Skip middleware for API routes
+  if (apiRoutes.some(route => pathname.startsWith(route))) {
     return NextResponse.next();
   }
   
@@ -27,17 +20,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Get the Auth0 session cookie
-  const sessionCookie = request.cookies.get('appSession');
+  // Check for session cookie
+  const sessionCookie = req.cookies.get('appSession');
   
-  // If no session cookie is present, redirect to login
+  // If no session cookie, redirect to login
   if (!sessionCookie) {
-    const url = new URL('/api/auth/login', request.url);
+    const url = new URL('/api/auth/login', req.url);
     url.searchParams.set('returnTo', pathname);
     return NextResponse.redirect(url);
   }
   
-  // User has a session cookie, allow access
+  // Allow authenticated requests
   return NextResponse.next();
 }
 
