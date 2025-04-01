@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { WebSocketProvider } from "./contexts/WebSocketContext";
+import NavBar from "@/components/NavBar";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -25,9 +27,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <WebSocketProvider>
-            {children}
-          </WebSocketProvider>
+          <AuthProvider>
+            <WebSocketProvider>
+              <div className="flex flex-col min-h-screen">
+                <NavBar />
+                <main className="flex-grow">
+                  {children}
+                </main>
+              </div>
+            </WebSocketProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
