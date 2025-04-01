@@ -37,10 +37,10 @@ export default function UserDashboardLayout({
   }
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div className="flex h-[calc(100vh-64px)]">
       <UserSidebar />
-      <div className="ml-64 flex h-full flex-col">
-        <header className="flex h-14 items-center justify-between border-b px-6">
+      <div className="flex-1 ml-64">
+        <div className="flex h-14 items-center justify-between border-b px-6">
           <h1 className="text-lg font-semibold">User Dashboard</h1>
           <div className="flex items-center gap-4">
             <div className="text-sm text-muted-foreground">
@@ -48,8 +48,8 @@ export default function UserDashboardLayout({
             </div>
             <ThemeToggle />
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-6">
+        </div>
+        <main className="overflow-y-auto p-6 h-[calc(100vh-64px-56px)]">
           {children}
         </main>
       </div>

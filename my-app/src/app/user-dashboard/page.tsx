@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { 
   Card, 
@@ -21,11 +21,25 @@ import {
   ChevronRight,
   BarChart,
   MessageSquare,
-  Check
+  Check,
+  Key,
+  X
 } from "lucide-react";
+import { getStoredApiKey, getStoredAnthropicApiKey } from "@/utils/apiKey";
 
 export default function UserDashboardPage() {
   const { user } = useUser();
+  const [hasOpenAIKey, setHasOpenAIKey] = useState(false);
+  const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
+
+  // Check if API keys exist
+  useEffect(() => {
+    const openaiKey = getStoredApiKey();
+    setHasOpenAIKey(!!openaiKey);
+    
+    const anthropicKey = getStoredAnthropicApiKey();
+    setHasAnthropicKey(!!anthropicKey);
+  }, []);
 
   // Mock subscription data
   const subscription = {
@@ -101,6 +115,61 @@ export default function UserDashboardPage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* API Key Settings Card */}
+      <Card className="border border-amber-500/30">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle>API Key Settings</CardTitle>
+            <CardDescription>Manage your AI model API keys</CardDescription>
+          </div>
+          <Key className="h-5 w-5 text-amber-500" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between">
+              <div className="mb-2 md:mb-0">
+                <div className="flex items-center">
+                  <div className="w-28 font-medium">OpenAI:</div>
+                  {hasOpenAIKey ? (
+                    <span className="flex items-center text-green-600">
+                      <Check className="h-4 w-4 mr-1" />
+                      Configured
+                    </span>
+                  ) : (
+                    <span className="flex items-center text-amber-600">
+                      <X className="h-4 w-4 mr-1" />
+                      Not configured
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center mt-1">
+                  <div className="w-28 font-medium">Anthropic:</div>
+                  {hasAnthropicKey ? (
+                    <span className="flex items-center text-green-600">
+                      <Check className="h-4 w-4 mr-1" />
+                      Configured
+                    </span>
+                  ) : (
+                    <span className="flex items-center text-amber-600">
+                      <X className="h-4 w-4 mr-1" />
+                      Not configured
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Link href="/user-dashboard/profile/api-settings">
+                <Button variant="outline">
+                  Manage API Keys
+                </Button>
+              </Link>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              All API keys are stored locally in your browser and are only used to communicate with AI services.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* User Profile Quick View */}
       <Card>

@@ -7,12 +7,12 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import Link from 'next/link';
-import { ApiKeyInput } from '@/components/chat/ApiKeyInput';
-import { getStoredApiKey, storeApiKey } from '@/utils/apiKey';
+import { hasAnyApiKey, getPreferredApiKey } from '@/utils/apiKey';
 import { Chat } from '@/components/chat/Chat';
 import React from 'react';
 import { motion } from 'framer-motion';
 import { cn } from "@/lib/utils";
+import { toast } from 'sonner';
 
 // Add these new animations
 const containerVariants = {
@@ -33,14 +33,13 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [activeDemo, setActiveDemo] = useState<number>(0);
   const [isVideoPaused, setIsVideoPaused] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    const apiKey = getStoredApiKey();
-    setHasApiKey(!!apiKey);
+    // Check if the user has any API key configured
+    setHasApiKey(hasAnyApiKey());
   }, []);
 
   useEffect(() => {
@@ -65,15 +64,21 @@ export default function Home() {
     e.preventDefault();
     if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isLoading) return;
     
-    const apiKey = getStoredApiKey();
-    if (!apiKey) {
-      setShowApiKeyInput(true);
+    // Check for preferred API key
+    const { key, provider } = getPreferredApiKey();
+    if (!key) {
+      toast.error("No API key configured. Redirecting to settings...");
+      setTimeout(() => {
+        router.push("/user-dashboard/profile/api-settings");
+      }, 1500);
       return;
     }
     
     setIsLoading(true);
     try {
       localStorage.setItem('initial_prompt', input);
+      localStorage.setItem('api_provider', provider || 'openai'); // Store the preferred provider
+      
       if (uploadedFiles.length > 0) {
         const formData = new FormData();
         uploadedFiles.forEach(file => {
@@ -95,12 +100,6 @@ export default function Home() {
       console.error('Error processing request:', error);
       setIsLoading(false);
     }
-  };
-
-  const handleApiKeySubmit = (apiKey: string) => {
-    storeApiKey(apiKey);
-    setShowApiKeyInput(false);
-    handleInitialPrompt(new Event('submit') as any);
   };
 
   const quickActions = [
@@ -226,16 +225,6 @@ export default function Home() {
       setActiveDemo((prev) => (prev - 1 + demoItems.length) % demoItems.length);
     }
   };
-
-  if (showApiKeyInput) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className="w-full max-w-[600px] m-4">
-          <ApiKeyInput onSubmit={handleApiKeySubmit} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
