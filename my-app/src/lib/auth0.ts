@@ -14,5 +14,6 @@ export const auth0 = initAuth0({
   authorizationParams: {
     scope: process.env.AUTH0_SCOPE || 'openid profile email',
     audience: process.env.AUTH0_AUDIENCE,
+    prompt: 'login',
   }
 }); 

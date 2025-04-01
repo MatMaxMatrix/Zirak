@@ -26,11 +26,8 @@ function getCookie(name: string): string | null {
 
 // Logout function
 function handleLogout() {
-  // Clear the auth cookie
-  document.cookie = "auth_user=; path=/; max-age=0";
-
-  // Redirect to login page with success message
-  window.location.href = "/login?success=logout";
+  // Redirect to Auth0 logout endpoint with returnTo parameter and federated flag
+  window.location.href = "/api/auth/logout?returnTo=" + encodeURIComponent(window.location.origin) + "&federated";
 }
 
 export function Sidebar() {
