@@ -50,7 +50,7 @@ export function UserSidebar() {
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-10 flex h-full w-64 flex-col border-r bg-background">
+    <aside className="fixed top-16 left-0 z-10 flex h-[calc(100vh-64px)] w-64 flex-col border-r bg-background">
       <div className="flex h-14 items-center border-b px-4">
         <Link
           href="/"
