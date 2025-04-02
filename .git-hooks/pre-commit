@@ -1,0 +1,48 @@
+#!/bin/sh
+
+# Simple pre-commit hook to check for common patterns that might indicate secrets
+
+echo "Running pre-commit checks for secrets..."
+
+# Patterns to search for
+PATTERNS=(
+  'api_key|apikey|api-key|API_KEY|APIKEY|API-KEY'
+  'secret|SECRET'
+  'password|PASSWORD'
+  'token|TOKEN'
+  'BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY'
+  'auth|AUTH'
+  'credential|CREDENTIAL'
+  'access_key|ACCESS_KEY'
+)
+
+# Files to check
+FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Function to check for patterns
+check_for_patterns() {
+  for FILE in $FILES; do
+    # Skip binary files
+    if [[ $(file --mime "$FILE" | grep -c "charset=binary") -gt 0 ]]; then
+      continue
+    fi
+    
+    for PATTERN in "${PATTERNS[@]}"; do
+      MATCH=$(git diff --cached --patch "$FILE" | grep -E "^\+" | grep -iE "$PATTERN")
+      if [[ ! -z "$MATCH" ]]; then
+        echo "⚠️  Potential secret found in $FILE:"
+        echo "$MATCH"
+        echo "If this is a false positive, use --no-verify to bypass this check"
+        echo "Otherwise, please remove the secret and try again"
+        exit 1
+      fi
+    done
+  done
+}
+
+# Run the check
+check_for_patterns
+
+# If we get here, no secrets were found
+echo "✅ No obvious secrets detected"
+exit 0 
