@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useUser } from "@auth0/nextjs-auth0/client";
 import { hasPermission, UserRole, hasRouteAccess } from "@/lib/roles";
 import { notification } from "@/lib/notification";
 
@@ -35,25 +35,56 @@ export function RoleGate({
   requiredPermission,
   fallback
 }: RoleGateProps) {
-  const { data: session, status } = useSession();
+  const { user, isLoading, error } = useUser();
   const router = useRouter();
   const pathname = usePathname();
 
-  const userRole = session?.user?.role || '';
+  // Get user role from Auth0 user metadata or default to 'user'
+  const getUserRole = (): UserRole => {
+    // Check for namespace roles (Auth0 custom claims)
+    if (user?.['https://example.com/roles'] && 
+        Array.isArray(user['https://example.com/roles']) && 
+        user['https://example.com/roles'].length > 0) {
+      const role = user['https://example.com/roles'][0] as string;
+      return isValidRole(role) ? role as UserRole : UserRole.USER;
+    }
+    
+    // Check for role directly on user object
+    if (user?.role && typeof user.role === 'string') {
+      return isValidRole(user.role) ? user.role as UserRole : UserRole.USER;
+    }
+    
+    return UserRole.USER;
+  };
+
+  // Helper to validate if a role is valid
+  const isValidRole = (role: string): boolean => {
+    return Object.values(UserRole).includes(role as UserRole);
+  };
+
+  const userRole = getUserRole();
+
   const isAllowed =
-    (!allowedRoles || allowedRoles.includes(userRole as UserRole)) &&
+    (!allowedRoles || allowedRoles.includes(userRole)) &&
     (!requiredPermission || hasPermission(userRole, requiredPermission));
 
   useEffect(() => {
-    // Check route access
-    if (status === "authenticated" && !hasRouteAccess(userRole, pathname)) {
-      notification.error("You don't have access to this page");
-      router.push("/dashboard");
+    // Check route access if user is logged in
+    if (user && pathname) {
+      const currentPath = pathname as string;
+      if (!hasRouteAccess(userRole, currentPath)) {
+        notification.error("You don't have access to this page");
+        router.push("/dashboard");
+      }
     }
-  }, [userRole, pathname, status, router]);
+  }, [userRole, pathname, user, router]);
 
-  if (status === "loading") {
+  if (isLoading) {
     return <div className="p-8 flex justify-center">Checking permissions...</div>;
+  }
+
+  if (error) {
+    return <div className="p-8 text-center">Authentication error: {error.message}</div>;
   }
 
   if (!isAllowed) {
@@ -72,4 +103,4 @@ export function RoleGate({
   }
 
   return <>{children}</>;
-}
+} 
