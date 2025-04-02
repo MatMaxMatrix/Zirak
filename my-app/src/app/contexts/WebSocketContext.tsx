@@ -136,8 +136,8 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     
     if (!backendUrl) {
       // Fallback to a URL derived from the current domain
-      const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
-      const hostname = window.location.hostname;
+      const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
       
       // If running on localhost, use the default port
       if (hostname === 'localhost' || hostname === '127.0.0.1') {
@@ -187,7 +187,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     // Setup the socket connection
     function setupSocket(url: string) {
       // Test for browser WebSocket support and set appropriate default transport
-      const defaultTransports = 'WebSocket' in window ? ['websocket', 'polling'] : ['polling'];
+      const defaultTransports = typeof window !== 'undefined' && 'WebSocket' in window ? ['websocket', 'polling'] : ['polling'];
       
       // Configure Socket.IO with additional options for better transport handling
       const socketInstance = io(url, {

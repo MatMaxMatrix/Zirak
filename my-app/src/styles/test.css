@@ -1,0 +1,11 @@
+.test-nesting {
+  color: black;
+  
+  &:hover {
+    color: blue;
+  }
+  
+  & .child {
+    color: red;
+  }
+}
