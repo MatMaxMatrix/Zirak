@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { auth } from "@/auth";
 import { usePathname } from "next/navigation";
 import React from "react";
 
@@ -204,7 +203,7 @@ export function NavbarWithProject({
           </Link>
           
           {/* Add ProjectSelector here */}
-          {pathname.includes('/chat') && (
+          {pathname?.includes('/chat') && (
             <div>
               <div className="flex items-center">
                 <span className="text-gray-400 text-sm mx-0.5">&gt;</span>

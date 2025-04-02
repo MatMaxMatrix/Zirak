@@ -114,7 +114,7 @@ function LoginForm() {
   // Check for error or success in query parameters
   useEffect(() => {
     // Check for error message
-    const errorParam = searchParams.get("error");
+    const errorParam = searchParams?.get("error");
     if (errorParam === "CredentialsSignin") {
       setError("Invalid email or password. Please try again.");
     } else if (errorParam) {
@@ -122,7 +122,7 @@ function LoginForm() {
     }
 
     // Check for success message
-    const successParam = searchParams.get("success");
+    const successParam = searchParams?.get("success");
     if (successParam) {
       notification.success("You have been successfully logged out.");
     }

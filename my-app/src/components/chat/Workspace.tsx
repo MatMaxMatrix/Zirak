@@ -111,7 +111,8 @@ export function Workspace({
   const handleTerminalMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     const startY = e.clientY;
-    const workspaceHeight = document.querySelector('.workspace-container')?.clientHeight || window.innerHeight;
+    const workspaceHeight = document.querySelector('.workspace-container')?.clientHeight || 
+      (typeof window !== 'undefined' ? window.innerHeight : 0);
     const terminalContainer = document.querySelector('.terminal-container') as HTMLElement;
     const startHeight = terminalContainer?.clientHeight || 0;
     
