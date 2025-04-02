@@ -124,5 +124,5 @@ module.exports = {
     'text-green-300',
     'group-hover:text-purple-300',
   ],
-  plugins: [require("tailwindcss-animate"), require("postcss-nesting")],
+  plugins: [require("tailwindcss-animate")],
 } 
