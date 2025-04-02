@@ -7,3 +7,4 @@ my-app/virtual_projects
 # GPG test
 .gpg-test
 .vercel
+my-app/.env.local
