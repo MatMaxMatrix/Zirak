@@ -70,6 +70,27 @@ The project consists of two main components:
    http://localhost:3000
    ```
 
+## Secrets Management
+
+We follow strict security practices to protect sensitive information:
+
+1. **Environment Variables**:
+   - Never commit `.env` files to the repository
+   - Use `.env.example` as a template with dummy values
+   - Store actual secrets in `.env.local` or other gitignored files
+
+2. **Git Hooks**:
+   - Run `./install-hooks.sh` to install pre-commit hooks that scan for secrets
+   - These hooks prevent accidental commits of sensitive information
+
+3. **Best Practices**:
+   - Never use `git add .` or `git add *` - add files individually
+   - Always check what you're committing with `git diff --staged`
+   - Rotate API keys regularly
+   - Use minimal permissions for all API keys
+
+For more detailed information, see `SECRETS_MANAGEMENT.md`.
+
 ## How It Works
 
 1. The frontend connects to the backend via WebSockets.
