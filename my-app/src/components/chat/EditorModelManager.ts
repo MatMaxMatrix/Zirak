@@ -77,7 +77,7 @@ export class EditorModelManager {
           model = existingModel;
           // For safety, update in a try/catch
           try {
-            model.setValue(content);
+            this.safeSetModelValue(existingModel, content);
           } catch (error) {
             console.error('Error updating existing model:', error);
           }
@@ -91,7 +91,7 @@ export class EditorModelManager {
             Promise.resolve().then(() => {
               if (model) {
                 try {
-                  model.setValue(content);
+                  this.safeSetModelValue(model, content);
                 } catch (error) {
                   console.error('Error setting model content:', error);
                 }
@@ -105,7 +105,7 @@ export class EditorModelManager {
         // Update existing model with new content
         // Use safer setValue method instead of edit operations for reliability
         try {
-          model.setValue(content);
+          this.safeSetModelValue(model, content);
         } catch (error) {
           console.error('Error updating model content:', error);
         }
@@ -122,6 +122,49 @@ export class EditorModelManager {
       } catch (fallbackError) {
         console.error('Failed to create fallback model:', fallbackError);
         throw new Error('Unable to create editor model');
+      }
+    }
+  }
+  
+  /**
+   * Safely set the value of a model, avoiding common errors
+   */
+  private safeSetModelValue(model: monaco.editor.ITextModel, content: string): void {
+    if (!model || model.isDisposed()) return;
+    
+    try {
+      // Prefer the safer model.setValue() over pushEditOperations
+      model.setValue(content);
+    } catch (error) {
+      console.error('Error in standard setValue, trying alternate approach:', error);
+      
+      try {
+        // Fallback to fully replacing the entire content
+        // This avoids the "V is not iterable" error that can occur with complex edits
+        const fullRange = model.getFullModelRange();
+        
+        // Use editor.executeEdits with most basic edit operations
+        const basicEditOperation = {
+          range: fullRange,
+          text: content,
+          forceMoveMarkers: true
+        };
+        
+        // @ts-ignore - Using internal method as fallback
+        model.pushEditOperations([], [basicEditOperation], () => null);
+      } catch (fallbackError) {
+        console.error('Error in fallback edit operation:', fallbackError);
+        
+        // Try one more approach with direct setting using setTimeout
+        setTimeout(() => {
+          try {
+            if (model && !model.isDisposed()) {
+              model.setValue(content);
+            }
+          } catch (finalError) {
+            console.error('All setValue approaches failed:', finalError);
+          }
+        }, 0);
       }
     }
   }
@@ -185,24 +228,8 @@ export class EditorModelManager {
       if (!model) return;
       
       if (model.getValue() !== content) {
-        // Use simple setValue instead of edit operations for reliability
-        // This reduces the chance of "V is not iterable" errors
-        try {
-          model.setValue(content);
-        } catch (error) {
-          console.error('Error updating model content:', error);
-          
-          // Try one more time after a small delay
-          setTimeout(() => {
-            try {
-              if (model && !model.isDisposed()) {
-                model.setValue(content);
-              }
-            } catch (retryError) {
-              console.error('Retry updating model content failed:', retryError);
-            }
-          }, 0);
-        }
+        // Use our safe method for setting values
+        this.safeSetModelValue(model, content);
       }
     } catch (error) {
       console.error('Error in updateTabContent:', error);
