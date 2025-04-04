@@ -255,206 +255,155 @@ function MonacoEditor({ value, language, onChange, onSave, height, editorDidMoun
     }
   }, [handleGlobalSave]);
   
-  // Initialize the editor
+  // Setup the editor instance after the DOM is ready
   useEffect(() => {
     isMountedRef.current = true;
     
-    // Function to initialize Monaco
     const initMonaco = async () => {
-      if (!containerRef.current || editorRef.current || !isMountedRef.current) return;
-      
-      // Completely recreate the container element to avoid context conflicts
-      // This is based on the fix from kubeshop/monokle
-      const parentElement = containerRef.current.parentElement;
-      if (!parentElement) return;
-      
-      const oldContainer = containerRef.current;
-      const newContainer = document.createElement('div');
-      newContainer.className = oldContainer.className;
-      newContainer.style.cssText = 'width: 100%; height: 100%';
-      
-      // Replace the container
-      parentElement.replaceChild(newContainer, oldContainer);
-      // Update the ref using proper React method instead of direct assignment
-      const currentRef = containerRef as React.MutableRefObject<HTMLDivElement>;
-      currentRef.current = newContainer;
-      
       try {
-        // Find and dispose any orphaned models to prevent memory leaks
-        monaco.editor.getModels().forEach(model => {
-          try {
-            const editors = monaco.editor.getEditors();
-            const isOrphaned = !editors.some(editor => editor.getModel() === model);
-            
-            if (isOrphaned && !model.isDisposed()) {
-              model.dispose();
-            }
-          } catch (e) {
-            // Ignore errors
-          }
+        // Make sure the container exists
+        if (!containerRef.current) {
+          console.warn('Editor container not found');
+          return;
+        }
+        
+        // Create Monaco editor with enhanced options
+        const editor = monaco.editor.create(containerRef.current, {
+          value,
+          language: language || 'text',
+          automaticLayout: true, // Automatically resize the editor
+          minimap: { enabled: false }, // Disable minimap
+          scrollBeyondLastLine: false, // Don't scroll beyond the last line
+          lineNumbers: 'on',
+          roundedSelection: true,
+          wordWrap: 'on',
+          // Fix for "Cannot read properties of undefined (reading 'isVisible')" errors
+          // Disable features that directly rely on line visibility computations
+          renderLineHighlight: 'none',
+          renderControlCharacters: false, 
+          ...options, // Include any additional options
         });
         
-        // Create editor with minimal options and NO model initially
-        const safeOptions: monaco.editor.IStandaloneEditorConstructionOptions = {
-          ...options,
-          theme: 'vs-dark',
-          value: undefined, // No initial value
-          language: undefined, // No initial language
-          model: null, // No initial model
-          minimap: { enabled: false },
-          folding: false,
-          lineNumbers: 'on' as monaco.editor.LineNumbersType,
-          renderWhitespace: 'none',
-          parameterHints: { enabled: false },
-          suggest: { 
-            showIcons: false,
-            showStatusBar: false,
-            preview: false,
-            showInlineDetails: false
-          },
-          automaticLayout: true,
-        };
+        // Apply patches to prevent common errors
+        patchEditorInstance(editor);
         
-        // Create editor
-        const editor = monaco.editor.create(containerRef.current, safeOptions);
+        // Set reference and trigger callback
         editorRef.current = editor;
         
-        // Create model separately (AFTER editor is created)
-        const uri = Uri.parse(`file:///${editorId}`);
+        // Pass editor instance to parent if needed
+        if (editorDidMount) {
+          editorDidMount(editor);
+        }
         
-        // Check if a model with this URI already exists
-        let model: monaco.editor.ITextModel;
-        
-        // Look for existing models with the same URI
-        const existingModels = monaco.editor.getModels().filter(m => 
-          m.uri.toString() === uri.toString()
-        );
-        
-        // Dispose any existing models with the same URI
-        existingModels.forEach(m => {
-          try {
-            if (m && !m.isDisposed()) {
-              m.dispose();
-            }
-          } catch (err) {
-            console.warn('Error disposing existing model:', err);
-          }
-        });
-        
-        // Now create a new model
-        model = monaco.editor.createModel(value || '', language || 'plaintext', uri);
-        modelRef.current = model;
-        
-        // Add disposables
-        const modelDisposeListener = model.onWillDispose(() => {
-          if (modelRef.current === model) {
-            modelRef.current = null;
-          }
-        });
-        disposablesRef.current.push(modelDisposeListener);
-        
-        const editorDisposeListener = editor.onDidDispose(() => {
-          if (editorRef.current === editor) {
-            editorRef.current = null;
-          }
-        });
-        disposablesRef.current.push(editorDisposeListener);
-        
-        // Set up content change listener
-        const changeDisposable = model.onDidChangeContent(() => {
-          if (!isMountedRef.current || !modelRef.current || modelRef.current.isDisposed()) return;
+        // Track editor changes
+        const changeModelDisposable = editor.onDidChangeModelContent(() => {
+          if (!isMountedRef.current) return;
           
-          try {
-            const newValue = model.getValue();
+          const newValue = editor.getValue();
+          if (onChange) {
             onChange(newValue);
-          } catch (e) {
-            // Ignore errors
           }
         });
-        disposablesRef.current.push(changeDisposable);
         
-        // Wait until BOTH editor and model are ready before connecting them
-        setTimeout(() => {
-          if (!isMountedRef.current || !editorRef.current || !modelRef.current) return;
-          
-          try {
-            // Now set the model on the editor
-            editor.setModel(model);
-            
-            // Add save action
-            editor.addAction({
-              id: 'save-action',
-              label: 'Save',
-              keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-              run: () => {
-                if (isMountedRef.current) {
-                  onSave();
-                }
-              }
-            });
-            
-            // Add global save handler
-            document.addEventListener('keydown', handleGlobalSave, true);
-            
-            // Mark editor as ready
-            setIsEditorReady(true);
-            
-            // Call editorDidMount callback
-            if (editorDidMount) {
-              try {
-                editorDidMount(editor);
-              } catch (e) {
-                console.error('Error in editorDidMount callback:', e);
-              }
-            }
-          } catch (e) {
-            console.error('Error setting up editor:', e);
-          }
-        }, 50);
+        // Track disposables for cleanup
+        disposablesRef.current.push(changeModelDisposable);
+        
+        // Handle editor focus change
+        const focusDisposable = editor.onDidFocusEditorText(() => {
+          // ... existing code ...
+        });
+        
+        // Track disposables for cleanup
+        disposablesRef.current.push(focusDisposable);
+        
+        // Set editor as ready
+        setIsEditorReady(true);
       } catch (error) {
         console.error('Error initializing Monaco editor:', error);
-        cleanupResources();
       }
     };
     
-    // Use timeout to ensure DOM is ready
-    const timer = setTimeout(initMonaco, 10);
+    // Initialize Monaco
+    initMonaco();
     
-    // Cleanup function
+    // Attach save shortcut handler
+    document.addEventListener('keydown', handleGlobalSave, true);
+    
+    // Cleanup when unmounting
     return () => {
-      clearTimeout(timer);
-      
-      // Mark as unmounted before cleanup
+      // Set mounted flag to false first to prevent async operations
       isMountedRef.current = false;
       
-      // Use setTimeout to ensure we're not in a React render cycle
-      setTimeout(cleanupResources, 0);
+      // Remove event listeners
+      document.removeEventListener('keydown', handleGlobalSave, true);
+      
+      // Clean up editor resources
+      cleanupResources();
     };
-  }, [cleanupResources, editorDidMount, handleGlobalSave, language, onChange, onSave, options, value]);
+  }, [handleGlobalSave]);
   
   // Update content when value prop changes
   useEffect(() => {
-    if (!isEditorReady || !modelRef.current || modelRef.current.isDisposed()) return;
+    if (!isEditorReady || !editorRef.current) return;
     
-    const model = modelRef.current;
-    const currentValue = model.getValue();
-    
-    if (value !== currentValue) {
-      try {
-        // Add a subtle transition effect to make content changes smoother
-        if (containerRef.current) {
-          containerRef.current.classList.add('switching');
-          setTimeout(() => {
-            if (containerRef.current) {
-              containerRef.current.classList.remove('switching');
+    try {
+      const editor = editorRef.current;
+      const model = editor.getModel();
+      if (!model || model.isDisposed()) return;
+      
+      const currentValue = model.getValue();
+      
+      if (value !== currentValue) {
+        try {
+          // Add a subtle transition effect to make content changes smoother
+          if (containerRef.current) {
+            containerRef.current.classList.add('switching');
+            setTimeout(() => {
+              if (containerRef.current) {
+                containerRef.current.classList.remove('switching');
+              }
+            }, 200);
+          }
+          
+          // Use safe value setting pattern
+          const safeSetValue = () => {
+            try {
+              // Try direct setValue first
+              model.setValue(value);
+            } catch (e) {
+              console.warn('Error in setValue, trying alternative approach:', e);
+              try {
+                // Try using pushEditOperations as fallback
+                const fullRange = model.getFullModelRange();
+                const editOperation = {
+                  range: fullRange,
+                  text: value,
+                  forceMoveMarkers: true
+                };
+                
+                // @ts-ignore - Using internal method
+                model.pushEditOperations([], [editOperation], () => null);
+              } catch (editError) {
+                console.warn('Error in edit operation fallback:', editError);
+                
+                // Last resort: Set editor value directly
+                try {
+                  editor.setValue(value);
+                } catch (finalError) {
+                  console.error('All setValue approaches failed:', finalError);
+                }
+              }
             }
-          }, 200);
+          };
+          
+          // Use setTimeout to detach from the current execution context
+          setTimeout(safeSetValue, 0);
+        } catch (e) {
+          console.warn('Error updating editor content:', e);
         }
-        
-        model.setValue(value);
-      } catch (e) {
-        // Ignore errors
       }
+    } catch (e) {
+      console.warn('Error in content update effect:', e);
     }
   }, [value, isEditorReady]);
   
@@ -517,6 +466,66 @@ function MonacoEditor({ value, language, onChange, onSave, height, editorDidMoun
       `}</style>
     </div>
   );
+}
+
+/**
+ * Apply patches to specific editor instance to prevent common errors
+ */
+function patchEditorInstance(editor: monaco.editor.IStandaloneCodeEditor) {
+  try {
+    // Add editor-specific options that help prevent errors
+    editor.updateOptions({
+      renderWhitespace: 'none', // Reduce tokenization complexity
+      // Ensure the following options don't get overridden
+      renderLineHighlight: 'none', 
+      renderControlCharacters: false,
+    });
+
+    // Register a newline handler that helps with common enter key errors
+    editor.addCommand(monaco.KeyCode.Enter, () => {
+      try {
+        // Get cursor position
+        const position = editor.getPosition();
+        if (!position) return false;
+        
+        // Get model
+        const model = editor.getModel();
+        if (!model) return false;
+        
+        // Insert newline text directly using a safe approach
+        try {
+          const range = new monaco.Range(
+            position.lineNumber, 
+            position.column, 
+            position.lineNumber, 
+            position.column
+          );
+          
+          model.pushEditOperations(
+            [],
+            [{
+              range,
+              text: '\n',
+              forceMoveMarkers: true
+            }],
+            () => [new monaco.Selection(
+              position.lineNumber + 1, 1,
+              position.lineNumber + 1, 1
+            )]
+          );
+          return true;
+        } catch (e) {
+          console.warn('Custom enter handler failed:', e);
+          return false;
+        }
+      } catch (e) {
+        console.warn('Error in custom enter handler:', e);
+        return false;
+      }
+    });
+  } catch (e) {
+    console.warn('Error applying editor instance patches:', e);
+  }
 }
 
 export default MonacoEditor; 

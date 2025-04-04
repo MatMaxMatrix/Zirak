@@ -12,6 +12,7 @@ import {
   LogOut,
   User,
   ClipboardList,
+  CheckSquare
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -42,6 +43,11 @@ export function Sidebar() {
       icon: "BarChart",
     },
     {
+      title: "Todos",
+      href: "/todos",
+      icon: "CheckSquare",
+    },
+    {
       title: "Profile",
       href: "/dashboard/profile",
       icon: "User",
@@ -67,6 +73,7 @@ export function Sidebar() {
     BarChart: <BarChart className="h-4 w-4" />,
     Users: <Users className="h-4 w-4" />,
     User: <User className="h-4 w-4" />,
+    CheckSquare: <CheckSquare className="h-4 w-4" />,
     ClipboardList: <ClipboardList className="h-4 w-4" />,
     Settings: <Settings className="h-4 w-4" />,
   };
