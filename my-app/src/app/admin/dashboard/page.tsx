@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useSupabaseClient } from '@/lib/supabase';
+import { isAdmin } from '@/lib/auth';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,6 +62,7 @@ export default function AdminDashboard() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchData() {
@@ -68,7 +70,12 @@ export default function AdminDashboard() {
       
       try {
         setLoading(true);
+        setError(null);
         const supabaseClient = await supabase;
+        
+        // For debugging - log some info about the user
+        console.log('Fetching data as user:', user?.email);
+        console.log('Admin status:', isAdmin(user));
         
         // Fetch profiles
         const { data: profilesData, error: profilesError } = await supabaseClient
@@ -76,7 +83,12 @@ export default function AdminDashboard() {
           .select('*')
           .order('created_at', { ascending: false });
           
-        if (profilesError) throw profilesError;
+        if (profilesError) {
+          console.error('Error fetching profiles:', profilesError);
+          throw profilesError;
+        }
+        
+        console.log(`Found ${profilesData?.length || 0} profiles`);
         setProfiles(profilesData || []);
         
         // Fetch subscriptions
@@ -96,15 +108,16 @@ export default function AdminDashboard() {
           
         if (paymentsError) throw paymentsError;
         setPayments(paymentsData || []);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching admin data:', error);
+        setError(error.message || 'Failed to fetch data');
       } finally {
         setLoading(false);
       }
     }
     
     fetchData();
-  }, [supabase, isAuth0Loading, isSupabaseLoading]);
+  }, [supabase, isAuth0Loading, isSupabaseLoading, user]);
   
   if (isAuth0Loading || isSupabaseLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
@@ -122,11 +135,7 @@ export default function AdminDashboard() {
     );
   }
   
-  // Check for admin role in user metadata
-  const userRoles = user['https://example.com/roles'] as string[] | undefined;
-  const isAdmin = userRoles?.includes('admin');
-  
-  if (!isAdmin) {
+  if (!isAdmin(user)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-4">
         <h1 className="text-2xl font-bold">Access Denied</h1>
@@ -141,6 +150,13 @@ export default function AdminDashboard() {
   return (
     <div className="container py-10">
       <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <strong className="font-bold">Error:</strong>
+          <span className="block sm:inline"> {error}</span>
+        </div>
+      )}
       
       <Tabs defaultValue="users">
         <TabsList className="mb-6">
