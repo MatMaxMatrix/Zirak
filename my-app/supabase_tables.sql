@@ -90,3 +90,35 @@ FOR UPDATE USING (user_id = auth.user_id());
 CREATE POLICY "Users can delete their own todos" 
 ON public.todos
 FOR DELETE USING (user_id = auth.user_id());
+
+-- Create login history table to track user logins
+CREATE TABLE IF NOT EXISTS public.login_history (
+    id SERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    login_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ip_address TEXT,
+    device TEXT,
+    location TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Add indexes for better performance
+CREATE INDEX IF NOT EXISTS login_history_user_id_idx ON public.login_history(user_id);
+CREATE INDEX IF NOT EXISTS login_history_login_at_idx ON public.login_history(login_at);
+
+-- Enable Row Level Security
+ALTER TABLE public.login_history ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for users to view their own login history
+CREATE POLICY "Users can view their own login history"
+ON public.login_history
+FOR SELECT USING (
+    user_id = auth.user_id()
+);
+
+-- Create policy for service to insert login history for any user
+CREATE POLICY "Service role can insert login history"
+ON public.login_history
+FOR INSERT
+TO service_role
+WITH CHECK (true);

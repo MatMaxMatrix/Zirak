@@ -70,4 +70,76 @@ USING (auth.is_admin());
 CREATE POLICY "Admins can manage all todos"
 ON public.todos
 FOR ALL
-USING (auth.is_admin()); 
+USING (auth.is_admin());
+
+-- Admin policy to allow admins to view all profiles
+-- This resolves the issue where admin dashboard only shows admin user
+
+-- Check if the policy already exists before creating it
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM pg_policies 
+        WHERE tablename = 'profiles' 
+        AND policyname = 'Admins can view all profiles'
+    ) THEN
+        CREATE POLICY "Admins can view all profiles"
+        ON public.profiles
+        FOR SELECT
+        USING (
+            auth.jwt() ->> 'email' = 'admin@example.com' OR 
+            EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(auth.jwt() -> 'roles') AS role
+                WHERE role = 'admin'
+            )
+        );
+        
+        RAISE NOTICE 'Created admin policy for profiles table';
+    ELSE
+        RAISE NOTICE 'Admin policy for profiles table already exists';
+    END IF;
+END $$;
+
+-- Similar policy for login_history table to allow admins to view all login history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT FROM pg_policies 
+        WHERE tablename = 'login_history' 
+        AND policyname = 'Admins can view all login history'
+    ) THEN
+        CREATE POLICY "Admins can view all login history"
+        ON public.login_history
+        FOR SELECT
+        USING (
+            auth.jwt() ->> 'email' = 'admin@example.com' OR 
+            EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(auth.jwt() -> 'roles') AS role
+                WHERE role = 'admin'
+            )
+        );
+        
+        RAISE NOTICE 'Created admin policy for login_history table';
+    ELSE
+        RAISE NOTICE 'Admin policy for login_history table already exists';
+    END IF;
+END $$;
+
+-- Create a function to check admin status from JWT
+CREATE OR REPLACE FUNCTION auth.is_admin()
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    RETURN (
+        auth.jwt() ->> 'email' = 'admin@example.com' OR 
+        EXISTS (
+            SELECT 1 FROM jsonb_array_elements_text(auth.jwt() -> 'roles') AS role
+            WHERE role = 'admin'
+        )
+    );
+EXCEPTION
+    WHEN OTHERS THEN RETURN FALSE;
+END;
+$$; 
