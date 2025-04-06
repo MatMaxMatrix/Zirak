@@ -20,6 +20,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 const afterCallback = async (req, res, session) => {
+  console.log("[Auth0 Callback] Processing authentication callback");
   // Get the user's Auth0 roles and permissions
   const roles = session.user['https://example.com/roles'] || [];
   const permissions = session.user['https://example.com/permissions'] || [];
@@ -90,13 +91,31 @@ const afterCallback = async (req, res, session) => {
     console.error('Failed to record login history:', error);
   }
 
+  console.log("[Auth0 Callback] User authenticated successfully, returning session");
   return session;
 };
 
+// Define Auth0 handler with custom cookie options
 export default handleAuth({
   async callback(req, res) {
     try {
-      await handleCallback(req, res, { afterCallback });
+      console.log("[Auth0 Route] Processing callback request");
+      
+      // Custom cookie options for more secure cross-site behavior
+      const cookieOptions = {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        sameSite: 'lax', // 'strict' can cause issues with redirects, 'lax' is a good balance
+        maxAge: 60 * 60 * 24 * 7, // 7 days in seconds
+      };
+      
+      await handleCallback(req, res, { 
+        afterCallback,
+        session: { cookieOptions }
+      });
+      
+      console.log("[Auth0 Route] Callback processed successfully");
     } catch (error) {
       console.error('Error in Auth0 callback:', error);
       res.status(error.status || 500).end(error.message);
