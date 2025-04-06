@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { UserSidebar } from "@/components/user-dashboard/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
@@ -15,13 +15,22 @@ export default function UserDashboardLayout({
   const router = useRouter();
   const { user, error, isLoading } = useUser();
 
-  // Redirect to login if not authenticated
-  if (!isLoading && !user) {
-    notification.error("Please log in to access your dashboard");
-    router.push("/api/auth/login");
-    return null;
-  }
+  // Use effect for navigation to handle client-side transitions properly
+  useEffect(() => {
+    // Only redirect after we know for sure the user is not logged in
+    if (!isLoading && !user) {
+      console.log("User not authenticated, redirecting to login...");
+      notification.error("Please log in to access your dashboard");
+      // Add a delay to prevent immediate redirect that can cause redirect loops
+      const redirectTimer = setTimeout(() => {
+        router.push("/api/auth/login?returnTo=/user-dashboard");
+      }, 100);
+      
+      return () => clearTimeout(redirectTimer);
+    }
+  }, [user, isLoading, router]);
 
+  // Show loading state while authenticating
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
@@ -30,12 +39,49 @@ export default function UserDashboardLayout({
     );
   }
 
+  // Handle authentication errors
   if (error) {
+    console.error("Auth error:", error);
     notification.error("Authentication error");
-    console.error(error);
-    return null;
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center max-w-md p-6 bg-red-50 rounded-lg border border-red-200">
+          <h2 className="text-xl font-bold text-red-700 mb-2">Authentication Error</h2>
+          <p className="text-red-600">{error.message}</p>
+          <div className="mt-4">
+            <a 
+              href="/api/auth/login?returnTo=/user-dashboard" 
+              className="inline-block px-4 py-2 bg-primary text-white rounded-md"
+            >
+              Try Logging In Again
+            </a>
+          </div>
+        </div>
+      </div>
+    );
   }
 
+  // Handle not authenticated state
+  if (!user) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <div className="text-center max-w-md p-6 bg-yellow-50 rounded-lg border border-yellow-200">
+          <h2 className="text-xl font-bold text-yellow-700 mb-2">Authentication Required</h2>
+          <p className="text-yellow-600">Please log in to access your dashboard</p>
+          <div className="mt-4">
+            <a 
+              href="/api/auth/login?returnTo=/user-dashboard" 
+              className="inline-block px-4 py-2 bg-primary text-white rounded-md"
+            >
+              Log In
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Only render the dashboard when fully authenticated
   return (
     <div className="flex h-[calc(100vh-64px)]">
       <UserSidebar />
