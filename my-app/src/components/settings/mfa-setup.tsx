@@ -67,16 +67,18 @@ export function MfaSetup({ userId, userEmail, onComplete }: MfaSetupProps) {
     sms: false,
   });
 
-  const verifyForm = useForm<{ code: string }>({
-    resolver: zodResolver(
-      z.object({
-        code: z
-          .string()
-          .min(6, { message: "Verification code must be 6 digits." })
-          .max(6, { message: "Verification code must be 6 digits." })
-          .regex(/^\d+$/, { message: "Verification code must contain only digits." }),
-      })
-    ),
+  const schema = z.object({
+    code: z
+      .string()
+      .min(6, { message: "Verification code must be 6 digits." })
+      .max(6, { message: "Verification code must be 6 digits." })
+      .regex(/^\d+$/, { message: "Verification code must contain only digits." })
+  });
+
+  type VerifyFormValues = z.infer<typeof schema>;
+
+  const verifyForm = useForm<VerifyFormValues>({
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       code: '',
     },
