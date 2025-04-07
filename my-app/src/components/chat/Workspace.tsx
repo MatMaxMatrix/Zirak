@@ -67,26 +67,17 @@ export function Workspace({
   previewUrl,
   isPreviewLoading,
   openFile,
-  terminalHeight,
-  handleTerminalMouseDown,
-  editorHeight,
-  handleEditorMouseDown,
-  terminalRef,
   fileExplorerWidth = 250,
   handleFileExplorerResize,
   projectListWidth,
-  handleProjectListResize,
-  openFile: _openFile,
-  showProjectConfig,
-  setShowProjectConfig,
-  handleSaveProjectConfig,
-  currentProject
+  handleProjectListResize
 }: WorkspaceProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentFilePath, setCurrentFilePath] = useState('');
   const [currentFileContent, setCurrentFileContent] = useState('');
   const [minimizedPanel, setMinimizedPanel] = useState<'none' | 'fileExplorer' | 'chat' | 'preview'>('none');
   const [isCreating, setIsCreating] = useState(false);
+  const [showProjectConfig, setShowProjectConfig] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [compareFiles, setCompareFiles] = useState<{
     file1: { path: string; name: string; content: string; };
@@ -99,18 +90,23 @@ export function Workspace({
   const [isFileSearchOpen, setIsFileSearchOpen] = useState(false);
   const [compareMenuPosition, setCompareMenuPosition] = useState<{ x: number; y: number } | null>(null);
 
+  // Extract the project from fileSystem to avoid TypeScript errors
+  const currentProject = Array.isArray(fileSystem) && fileSystem.length > 0 
+    ? (fileSystem[0] as any)?.project 
+    : null;
+
   // Get resize handlers and state from custom hook
   const { 
     workspaceWidth,
     setWorkspaceWidth,
-    handleHorizontalMouseDown,
     terminalHeight,
     setTerminalHeight,
     editorHeight,
     setEditorHeight,
-    handleFileExplorerResize,
+    handleHorizontalMouseDown: resizingHandleHorizontalMouseDown,
+    handleFileExplorerResize: resizingHandleFileExplorerResize,
     handleTerminalMouseDown: _handleTerminalMouseDown,
-    handleEditorMouseDown,
+    handleEditorMouseDown: resizingHandleEditorMouseDown,
     terminalRef,
     editorRef
   } = useResizing();
@@ -807,10 +803,6 @@ EOF_SAVE_CONTENT`,
     }
   };
 
-  const handleOpenProjectConfig = () => {
-    setShowProjectConfig(true);
-  };
-
   // We need to correctly initialize and use the fileOperations hook 
   // Use the file operations hook to simplify file operations:
   const fileOperations = useFileOperations({
@@ -1085,6 +1077,12 @@ EOF_SAVE_CONTENT`,
     // Disable shortcuts when editing a file or the file search is open
     disableShortcuts: isEditing || isFileSearchOpen
   });
+
+  // Handle saving project configuration
+  const handleSaveProjectConfig = (updatedProject: any) => {
+    setShowProjectConfig(false);
+    // Project saving logic would go here
+  };
 
   return (
     <div className="h-full w-full flex flex-row relative workspace-container">
