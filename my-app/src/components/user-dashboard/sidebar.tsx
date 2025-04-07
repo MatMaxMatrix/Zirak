@@ -11,6 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isAdmin } from "@/lib/auth"; // Import the isAdmin utility function
 
 // Logout function
 function handleLogout() {
@@ -22,6 +23,8 @@ export function UserSidebar() {
   const pathname = usePathname();
   const { user } = useUser();
   const userEmail = user?.email;
+  // Check if user is admin
+  const userIsAdmin = isAdmin(user);
 
   // Define navigation items for regular users
   const navItems = [
@@ -64,7 +67,7 @@ export function UserSidebar() {
         <div className="text-sm mb-1">Welcome back!</div>
         <div className="font-medium">{userEmail}</div>
         <div className="mt-1 text-xs px-2 py-1 rounded bg-primary/10 text-primary">
-          Regular User
+          {userIsAdmin ? "Administrator" : "Regular User"}
         </div>
       </div>
 

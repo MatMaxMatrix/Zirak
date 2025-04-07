@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "@auth0/nextjs-auth0/client";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { getSupabase } from "@/utils/supabase";
 
 import {
   Card,
@@ -36,6 +37,7 @@ import {
   MapPin,
   Upload,
   Save,
+  Loader2
 } from "lucide-react";
 
 // Profile form schema
@@ -55,14 +57,62 @@ const profileFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
+// Add Auth0 user type definition with accessToken
+interface Auth0User {
+  sub: string;
+  name?: string;
+  email?: string;
+  picture?: string;
+  accessToken?: string;
+}
+
 export default function ProfilePage() {
   const { user } = useUser();
   const [isUploading, setIsUploading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [profileData, setProfileData] = useState<any>(null);
+  
+  // Type cast user to include accessToken
+  const auth0User = user as Auth0User;
+  
+  useEffect(() => {
+    async function fetchProfileData() {
+      if (!auth0User) return;
+      
+      try {
+        const supabase = getSupabase(auth0User.accessToken);
+        
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', auth0User.sub)
+          .single();
+          
+        if (error) throw error;
+        
+        if (data) {
+          setProfileData(data);
+          form.reset({
+            name: data.full_name || auth0User.name || "",
+            email: auth0User.email || "",
+            phone: data.phone_number || "",
+            location: data.location || "",
+            bio: data.metadata?.bio || "",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error);
+        toast.error("Failed to load profile data");
+      }
+    }
+    
+    fetchProfileData();
+  }, [auth0User]);
 
   // Set default form values from Auth0 user profile
   const defaultValues: Partial<ProfileFormValues> = {
-    name: user?.name || "",
-    email: user?.email || "",
+    name: auth0User?.name || "",
+    email: auth0User?.email || "",
     phone: "",
     location: "",
     bio: "",
@@ -74,10 +124,40 @@ export default function ProfilePage() {
     mode: "onChange",
   });
 
-  function onSubmit(data: ProfileFormValues) {
-    // In a real app, you would save this data to your backend
-    console.log(data);
-    toast.success("Profile updated successfully!");
+  async function onSubmit(data: ProfileFormValues) {
+    if (!auth0User) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const supabase = getSupabase(auth0User.accessToken);
+      
+      // Create a metadata object to store bio since it's not a direct column
+      const metadata = {
+        ...(profileData?.metadata || {}),
+        bio: data.bio
+      };
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: data.name,
+          phone_number: data.phone,
+          location: data.location,
+          metadata: metadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', auth0User.sub);
+        
+      if (error) throw error;
+      
+      toast.success("Profile updated successfully!");
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error("Failed to update profile");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function simulateImageUpload() {
@@ -107,8 +187,8 @@ export default function ProfilePage() {
           <CardContent className="flex flex-col items-center justify-center space-y-4">
             <div className="relative">
               <Avatar className="h-32 w-32">
-                <AvatarImage src={user?.picture || ""} alt={user?.name || "Profile"} />
-                <AvatarFallback className="text-4xl">{user?.name?.charAt(0) || "U"}</AvatarFallback>
+                <AvatarImage src={auth0User?.picture || ""} alt={auth0User?.name || "Profile"} />
+                <AvatarFallback className="text-4xl">{auth0User?.name?.charAt(0) || "U"}</AvatarFallback>
               </Avatar>
               <Button
                 variant="secondary"
@@ -130,7 +210,7 @@ export default function ProfilePage() {
             <div className="w-full space-y-2 text-sm">
               <div className="flex items-center">
                 <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span>{user?.email}</span>
+                <span>{auth0User?.email}</span>
               </div>
               {form.watch("phone") && (
                 <div className="flex items-center">
@@ -185,7 +265,7 @@ export default function ProfilePage() {
                               placeholder="Your email" 
                               {...field} 
                               disabled 
-                              value={user?.email || ""}
+                              value={auth0User?.email || ""}
                             />
                           </FormControl>
                           <FormDescription>
@@ -253,9 +333,18 @@ export default function ProfilePage() {
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button type="submit">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </form>
