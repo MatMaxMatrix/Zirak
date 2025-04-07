@@ -18,7 +18,7 @@ export default function PricingPage() {
   });
   const [isResizing, setIsResizing] = useState(false);
   const lastMousePos = useRef<number>(0);
-  const rafId = useRef<number>();
+  const rafId = useRef<number | undefined>(undefined);
 
   const handleResizeStart = useCallback((section: keyof typeof sectionHeights) => (e: React.MouseEvent) => {
     e.preventDefault();
