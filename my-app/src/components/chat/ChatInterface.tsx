@@ -14,6 +14,11 @@ import { ChevronRight, Terminal as TerminalIcon, Home } from "lucide-react";
 import { ProjectSelector } from "@/components/chat/ProjectSelector";
 import Link from "next/link";
 
+// Helper function to force type cast when TypeScript doesn't agree
+function forceRef<T>(ref: any): React.RefObject<T> {
+  return ref as any;
+}
+
 export default function ChatInterface() {
   const router = useRouter();
   const webSocket = useWebSocket();
@@ -312,11 +317,11 @@ export default function ChatInterface() {
                   copyTerminalContent={terminal.copyTerminalContent}
                   clearTerminal={terminal.clearTerminal}
                   refreshFileSystem={terminal.refreshFileSystem}
-                  terminalInputRef={terminal.terminalInputRef as React.RefObject<HTMLTextAreaElement>}
-                  terminalEndRef={terminal.terminalEndRef as React.RefObject<HTMLDivElement>}
-                  fileEditorRef={resizing.editorRef}
+                  terminalInputRef={forceRef<HTMLTextAreaElement>(terminal.terminalInputRef)}
+                  terminalEndRef={forceRef<HTMLDivElement>(terminal.terminalEndRef)}
+                  fileEditorRef={forceRef<HTMLDivElement>(resizing.editorRef)}
                   terminalRef={resizing.terminalRef}
-                  workflowEndRef={workflowEndRef}
+                  workflowEndRef={forceRef<HTMLDivElement>(workflowEndRef)}
                   fileExplorerWidth={resizing.fileExplorerWidth}
                   handleFileExplorerResize={resizing.handleFileExplorerResize}
                   projectListWidth={resizing.projectListWidth}
@@ -376,7 +381,7 @@ export default function ChatInterface() {
               needsClarification={needsClarification}
               inputPrompt={webSocket.inputPrompt || ""}
               inputRequired={webSocket.inputRequired || false}
-              messagesEndRef={messagesEndRef}
+              messagesEndRef={forceRef<HTMLDivElement>(messagesEndRef)}
             />
           </div>
         </div>

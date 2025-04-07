@@ -66,14 +66,27 @@ export function Workspace({
   workflowEndRef,
   previewUrl,
   isPreviewLoading,
-  openFile
+  openFile,
+  terminalHeight,
+  handleTerminalMouseDown,
+  editorHeight,
+  handleEditorMouseDown,
+  terminalRef,
+  fileExplorerWidth = 250,
+  handleFileExplorerResize,
+  projectListWidth,
+  handleProjectListResize,
+  openFile: _openFile,
+  showProjectConfig,
+  setShowProjectConfig,
+  handleSaveProjectConfig,
+  currentProject
 }: WorkspaceProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [currentFilePath, setCurrentFilePath] = useState('');
   const [currentFileContent, setCurrentFileContent] = useState('');
   const [minimizedPanel, setMinimizedPanel] = useState<'none' | 'fileExplorer' | 'chat' | 'preview'>('none');
   const [isCreating, setIsCreating] = useState(false);
-  const [showProjectConfig, setShowProjectConfig] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [compareFiles, setCompareFiles] = useState<{
     file1: { path: string; name: string; content: string; };
@@ -90,16 +103,11 @@ export function Workspace({
   const { 
     workspaceWidth,
     setWorkspaceWidth,
-    fileExplorerWidth,
-    setFileExplorerWidth,
-    projectListWidth,
-    setProjectListWidth,
-    handleProjectListResize,
+    handleHorizontalMouseDown,
     terminalHeight,
     setTerminalHeight,
     editorHeight,
     setEditorHeight,
-    handleHorizontalMouseDown,
     handleFileExplorerResize,
     handleTerminalMouseDown: _handleTerminalMouseDown,
     handleEditorMouseDown,
@@ -149,11 +157,6 @@ export function Workspace({
   // Get the file operations from the useFileSystem hook
   const fileSystemHook = useFileSystem();
   const { deleteFileOrDirectory, setFileSystem } = fileSystemHook;
-
-  // Extract the project from fileSystem to avoid TypeScript errors
-  const currentProject = Array.isArray(fileSystem) && fileSystem.length > 0 
-    ? (fileSystem[0] as any)?.project 
-    : null;
 
   // Track open editor files with a more robust structure
   const [openEditorFiles, setOpenEditorFiles] = useState<EditorFile[]>([]);
@@ -806,10 +809,6 @@ EOF_SAVE_CONTENT`,
 
   const handleOpenProjectConfig = () => {
     setShowProjectConfig(true);
-  };
-
-  const handleSaveProjectConfig = (updatedProject: Project) => {
-    setShowProjectConfig(false);
   };
 
   // We need to correctly initialize and use the fileOperations hook 
