@@ -189,10 +189,10 @@ export interface WorkspaceProps {
   copyTerminalContent: () => void;
   clearTerminal: () => void;
   refreshFileSystem: () => Promise<void>;
-  terminalInputRef: React.RefObject<HTMLTextAreaElement>;
-  terminalEndRef: React.RefObject<HTMLDivElement>;
-  fileEditorRef?: React.RefObject<any>;
-  workflowEndRef: React.RefObject<HTMLDivElement>;
+  terminalInputRef: React.RefObject<HTMLTextAreaElement> | null;
+  terminalEndRef: React.RefObject<HTMLDivElement> | null;
+  fileEditorRef?: React.RefObject<any> | null;
+  workflowEndRef: React.RefObject<HTMLDivElement> | null;
   terminalRef?: React.RefObject<HTMLDivElement>;
   fileExplorerWidth?: number;
   handleFileExplorerResize?: (e: React.MouseEvent) => void;

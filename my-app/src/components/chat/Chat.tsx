@@ -1,42 +1,42 @@
-import { useState } from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import { Workspace } from './Workspace';
 
 export function Chat() {
-  const [showWorkspace, setShowWorkspace] = useState(true);
-  const [activeTab, setActiveTab] = useState<'workflow' | 'editor' | 'preview'>('workflow');
-  const [workspaceWidth, setWorkspaceWidth] = useState(70);
-  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [fileExplorerWidth, setFileExplorerWidth] = useState(250);
+  const [previewUrl, setPreviewUrl] = useState<string | undefined>(undefined);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   const handleHorizontalMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
-    const startX = e.pageX;
-    const startWidth = workspaceWidth;
-
+    
+    const startX = e.clientX;
+    const startWidth = fileExplorerWidth;
+    
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.pageX - startX;
-      const newWidth = Math.min(Math.max(startWidth + (deltaX / window.innerWidth) * 100, 30), 90);
-      setWorkspaceWidth(newWidth);
+      const newWidth = Math.max(200, startWidth + (e.clientX - startX));
+      setFileExplorerWidth(newWidth);
     };
-
+    
     const handleMouseUp = () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-
+    
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
-
+  
   return (
-    <div className="flex h-screen bg-[#0C0C0C]">
+    <div className="flex h-full">
       <Workspace
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        showWorkspace={showWorkspace}
-        setShowWorkspace={setShowWorkspace}
-        width={workspaceWidth}
-        handleHorizontalMouseDown={handleHorizontalMouseDown}
+        activeTab="editor"
+        setActiveTab={() => {}}
+        showWorkspace={true}
+        setShowWorkspace={() => {}}
+        width={700}
+        handleHorizontalMouseDown={() => {}}
         fileSystem={[]}
         selectedFile={null}
         workflowSteps={[]}
@@ -44,19 +44,15 @@ export function Chat() {
         toggleDirectory={() => {}}
         terminal={[]}
         showWelcomeMessage={false}
-        workingDirectory=""
+        workingDirectory="/"
         showTerminal={false}
         setShowTerminal={() => {}}
-        terminalHeight={300}
-        handleTerminalMouseDown={() => {}}
         editingFile={false}
         fileContent=""
         filePath=""
         setFileContent={() => {}}
-        saveFileContent={async () => {}}
+        saveFileContent={() => {}}
         cancelFileEditing={() => {}}
-        editorHeight={300}
-        handleEditorMouseDown={() => {}}
         terminalInput=""
         setTerminalInput={() => {}}
         terminalProcessing={false}
@@ -71,10 +67,10 @@ export function Chat() {
         copyTerminalContent={() => {}}
         clearTerminal={() => {}}
         refreshFileSystem={async () => {}}
-        terminalInputRef={{ current: null }}
-        terminalEndRef={{ current: null }}
-        fileEditorRef={{ current: null }}
-        workflowEndRef={{ current: null }}
+        terminalInputRef={null}
+        terminalEndRef={null}
+        fileEditorRef={null}
+        workflowEndRef={null}
         fileExplorerWidth={250}
         handleFileExplorerResize={() => {}}
         previewUrl={previewUrl}
