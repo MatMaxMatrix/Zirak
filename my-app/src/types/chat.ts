@@ -69,8 +69,8 @@ export interface TerminalProps {
   clearTerminal?: () => void;
   refreshFileSystem?: () => Promise<void>;
   closeTerminal?: () => void;
-  terminalInputRef: React.RefObject<HTMLTextAreaElement>;
-  terminalEndRef: React.RefObject<HTMLDivElement>;
+  terminalInputRef: React.RefObject<HTMLTextAreaElement> | null;
+  terminalEndRef: React.RefObject<HTMLDivElement> | null;
 }
 
 // Define OpenedFile interface
@@ -87,7 +87,7 @@ export interface FileEditorProps {
   saveFileContent: () => Promise<void>;
   cancelFileEditing: () => void;
   handleEditorMouseDown?: (e: React.MouseEvent) => void;
-  fileEditorRef: React.RefObject<HTMLDivElement>;
+  fileEditorRef: React.RefObject<HTMLDivElement> | null;
   editorHeight?: number;
   // Optional properties for multi-tab support
   openFiles?: OpenedFile[];
@@ -212,12 +212,12 @@ export interface ChatAreaProps {
   needsClarification: boolean;
   inputPrompt?: string;
   inputRequired: boolean;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement> | null;
 }
 
 export interface WorkflowDisplayProps {
   workflowSteps: any[];
-  workflowEndRef: React.RefObject<HTMLDivElement>;
+  workflowEndRef: React.RefObject<HTMLDivElement> | null;
 }
 
 export interface FileViewerProps {

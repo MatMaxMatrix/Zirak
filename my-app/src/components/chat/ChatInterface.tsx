@@ -312,8 +312,8 @@ export default function ChatInterface() {
                   copyTerminalContent={terminal.copyTerminalContent}
                   clearTerminal={terminal.clearTerminal}
                   refreshFileSystem={terminal.refreshFileSystem}
-                  terminalInputRef={terminal.terminalInputRef}
-                  terminalEndRef={terminal.terminalEndRef}
+                  terminalInputRef={terminal.terminalInputRef as React.RefObject<HTMLTextAreaElement>}
+                  terminalEndRef={terminal.terminalEndRef as React.RefObject<HTMLDivElement>}
                   fileEditorRef={resizing.editorRef}
                   terminalRef={resizing.terminalRef}
                   workflowEndRef={workflowEndRef}
