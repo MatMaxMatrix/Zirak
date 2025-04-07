@@ -143,13 +143,24 @@ export default function UserDashboardPage() {
           
         if (subscriptionData) {
           // Convert from Supabase format to our interface - handle nested objects correctly
-          const plan = subscriptionData.subscription_plans 
-            ? {
-                name: subscriptionData.subscription_plans.name,
-                price_monthly: subscriptionData.subscription_plans.price_monthly
-              }
-            : undefined;
-            
+          let planName: string | undefined;
+          let planPrice: number | undefined;
+          
+          if (subscriptionData.subscription_plans) {
+            // Handle the case when it's an array
+            if (Array.isArray(subscriptionData.subscription_plans) && subscriptionData.subscription_plans.length > 0) {
+              planName = subscriptionData.subscription_plans[0]?.name;
+              planPrice = subscriptionData.subscription_plans[0]?.price_monthly ?? 0;
+            } 
+            // Handle the case when it's an object
+            else if (typeof subscriptionData.subscription_plans === 'object') {
+              planName = (subscriptionData.subscription_plans as any).name;
+              planPrice = (subscriptionData.subscription_plans as any).price_monthly ?? 0;
+            }
+          }
+          
+          const plan = planName ? { name: planName, price_monthly: planPrice ?? 0 } : undefined;
+          
           setSubscription({
             id: subscriptionData.id,
             status: subscriptionData.status,
