@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useUser } from '@auth0/nextjs-auth0/client';
+import { useState, useEffect } from 'react';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
+  throw new Error('Missing Supabase environment variables');
 }
 
 // Create an anonymous Supabase client
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: false
   }
@@ -23,7 +23,7 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
  */
 export function useSupabaseClient() {
   const { user, isLoading } = useUser();
-  const [supabaseClient, setSupabaseClient] = useState<any>(null);
+  const [supabaseClient, setSupabaseClient] = useState(supabase);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,12 +34,10 @@ export function useSupabaseClient() {
         setLoading(true);
         
         if (!user) {
-          // If not authenticated, use anonymous client
           setSupabaseClient(supabase);
           return;
         }
 
-        // Get custom Auth0 JWT token for Supabase
         const response = await fetch('/api/auth/token');
         if (!response.ok) {
           throw new Error('Failed to get authentication token');
@@ -47,8 +45,7 @@ export function useSupabaseClient() {
 
         const { accessToken } = await response.json();
         
-        // Create a Supabase client with the Auth0 token
-        const authenticatedClient = createClient(supabaseUrl || '', supabaseAnonKey || '', {
+        const authenticatedClient = createClient(supabaseUrl, supabaseAnonKey, {
           global: {
             headers: {
               Authorization: `Bearer ${accessToken}`,
@@ -62,7 +59,6 @@ export function useSupabaseClient() {
         setSupabaseClient(authenticatedClient);
       } catch (error) {
         console.error('Error setting up Supabase client:', error);
-        // Fallback to anonymous client on error
         setSupabaseClient(supabase);
       } finally {
         setLoading(false);
