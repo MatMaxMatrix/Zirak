@@ -15,7 +15,7 @@ export function ProfileSync() {
         console.log('Starting profile sync for user:', user.sub);
         
         // Create Supabase client with Auth0 token
-        const supabase = getSupabase(user.accessToken);
+        const supabase = getSupabase(user.accessToken as string | undefined);
         
         // Check if profile exists
         console.log('Checking for existing profile with ID:', user.sub);
