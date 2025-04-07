@@ -99,15 +99,33 @@ export default function UserSubscription() {
       
       if (subscriptionData) {
         // Format the subscription data
+        const planData = Array.isArray(subscriptionData.subscription_plans) 
+          ? subscriptionData.subscription_plans[0] 
+          : subscriptionData.subscription_plans;
+        
+        let planFeatures: string[] = [];
+        
+        if (planData) {
+          if (typeof planData.features === 'string') {
+            try {
+              planFeatures = JSON.parse(planData.features);
+            } catch (e) {
+              console.error('Error parsing features:', e);
+              planFeatures = [];
+            }
+          } else if (Array.isArray(planData.features)) {
+            planFeatures = planData.features;
+          }
+        }
+        
         const formattedSubscription = {
           ...subscriptionData,
           plan: {
-            ...subscriptionData.subscription_plans,
-            features: typeof subscriptionData.subscription_plans.features === 'string'
-              ? JSON.parse(subscriptionData.subscription_plans.features)
-              : subscriptionData.subscription_plans.features
+            ...(planData as any),
+            features: planFeatures
           }
         };
+        
         delete formattedSubscription.subscription_plans;
         
         setSubscription(formattedSubscription);
