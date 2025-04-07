@@ -14,6 +14,8 @@ const nextConfig = {
   experimental: {
     optimizeCss: true,
   },
+  distDir: '.next',
+  trailingSlash: true,
   webpack: (config) => {
     config.devtool = false;
     // Cache webpack in memory
@@ -23,6 +25,18 @@ const nextConfig = {
     };
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: '/:path*',
+        destination: '/:path*',
+      },
+      {
+        source: '/api/:path*',
+        destination: '/api/:path*',
+      }
+    ];
+  }
 }
 
 module.exports = nextConfig;
