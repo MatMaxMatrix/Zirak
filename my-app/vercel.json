@@ -2,12 +2,5 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "outputDirectory": ".next",
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
-    }
-  ],
-  "ignoreCommand": "if [ -z \"$VERCEL_IGNORE_COMMAND_ERROR\" ]; then ! grep -r --include=\"*.{ts,tsx,js,jsx}\" -l \"^\\s*console\\.\\(\" | grep -v node_modules; else true; fi"
+  "outputDirectory": ".next"
 } 
