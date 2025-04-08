@@ -42,42 +42,55 @@ import {
 // Subscription plans available to purchase
 const plans = [
   {
-    id: "basic",
-    name: "Basic",
-    price: "$9.99",
+    id: "free",
+    name: "Free",
+    price: "$0",
     features: [
-      "5,000 API calls per month",
-      "Standard support",
-      "1 project",
-      "Basic analytics"
+      "5 workflow completions per month",
+      "Basic code generation",
+      "Community support",
+      "Basic file management",
+      "Standard response time"
+    ],
+    nonFeatures: [
+      "Priority support",
+      "Advanced AI features",
+      "Custom templates",
+      "Team collaboration",
+      "API access"
     ],
     popular: false
   },
   {
     id: "pro",
     name: "Pro",
-    price: "$29.99",
+    price: "$19",
+    period: "/month",
     features: [
-      "50,000 API calls per month",
+      "Up to 500 workflow completions per month",
+      "Advanced code generation",
       "Priority support",
-      "5 projects",
-      "Advanced analytics",
-      "Custom integrations"
+      "Advanced file management",
+      "Faster response time",
+      "Custom templates",
+      "API access (100k requests/month)",
+      "Basic team collaboration"
     ],
     popular: true
   },
   {
     id: "enterprise",
     name: "Enterprise",
-    price: "$99.99",
+    price: "Custom",
     features: [
-      "Unlimited API calls",
-      "24/7 dedicated support",
-      "Unlimited projects",
-      "Enterprise analytics",
-      "Custom integrations",
-      "Single sign-on (SSO)",
-      "Dedicated account manager"
+      "Everything in Pro",
+      "Unlimited API access",
+      "24/7 priority support",
+      "Advanced team collaboration",
+      "Custom AI model training",
+      "SSO & advanced security",
+      "Dedicated account manager",
+      "Custom integrations"
     ],
     popular: false
   }

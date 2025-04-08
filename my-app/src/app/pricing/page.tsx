@@ -74,7 +74,7 @@ export default function PricingPage() {
       price: "$0",
       description: "Perfect for trying out Zirak",
       features: [
-        "5 projects per month",
+        "5 workflow completions per month",
         "Basic code generation",
         "Community support",
         "Basic file management",
@@ -96,7 +96,7 @@ export default function PricingPage() {
       period: "/month",
       description: "For professional developers",
       features: [
-        "Unlimited projects",
+        "Up to 500 workflow completions per month",
         "Advanced code generation",
         "Priority support",
         "Advanced file management",
