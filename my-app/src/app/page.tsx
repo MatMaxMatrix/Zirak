@@ -613,49 +613,6 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Dashboard Access Section */}
-      <motion.section 
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        className="py-12 bg-gradient-to-b from-black to-purple-900/20"
-      >
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Access Your Dashboard</h2>
-            <p className="text-gray-400 mt-2">
-              Manage your account, check your usage, and more
-            </p>
-          </div>
-          
-          <motion.div 
-            initial={{ y: 20, opacity: 0 }}
-            whileInView={{ y: 0, opacity: 1 }}
-            className="flex flex-col md:flex-row gap-4 md:gap-6 justify-center"
-          >
-            <Button 
-              size="lg" 
-              className="bg-gradient-to-r from-blue-500 to-purple-500 text-white border-0 hover:opacity-90 shadow-lg shadow-purple-500/20"
-              asChild
-            >
-              <Link href="/user-dashboard">
-                Go to My Dashboard
-              </Link>
-            </Button>
-            
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="border-2 border-purple-500/50 hover:bg-purple-500/10"
-              asChild
-            >
-              <Link href="/dashboard">
-                Admin Dashboard
-              </Link>
-            </Button>
-          </motion.div>
-        </div>
-      </motion.section>
-
       {/* Footer */}
       <footer className="border-t border-white/10 py-12">
         <div className="max-w-6xl mx-auto px-4">
