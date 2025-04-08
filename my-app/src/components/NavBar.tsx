@@ -104,9 +104,9 @@ const NavBar = () => {
             <div className="hidden sm:flex sm:items-center">
               {!isLoading && (
                 <Button asChild variant="default" className="bg-blue-600 hover:bg-blue-700 mr-4">
-                  <Link href="/chat">
+                  <Link href="/waitlist">
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Chat with AI
+                    Join Waitlist
                   </Link>
                 </Button>
               )}
@@ -227,9 +227,9 @@ const NavBar = () => {
             {!isLoading && !user && (
               <div className="mt-3 px-2 space-y-1">
                 <Button asChild className="w-full mb-2 bg-blue-600 hover:bg-blue-700">
-                  <Link href="/chat">
+                  <Link href="/waitlist">
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Chat with AI
+                    Join Waitlist
                   </Link>
                 </Button>
                 <Button asChild className="w-full" variant="outline">
@@ -256,9 +256,9 @@ const NavBar = () => {
                 </div>
                 <div className="mt-3 px-2 space-y-1">
                   <Button asChild className="w-full mb-2 bg-blue-600 hover:bg-blue-700">
-                    <Link href="/chat">
+                    <Link href="/waitlist">
                       <MessageSquare className="h-4 w-4 mr-2" />
-                      Chat with AI
+                      Join Waitlist
                     </Link>
                   </Button>
                   <Link href="/user-dashboard/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
