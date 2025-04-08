@@ -410,14 +410,14 @@ export default function UserDashboardPage() {
                   AI Chat Assistant
                 </CardTitle>
                 <CardDescription className="text-base">
-                  Get help with your projects using our AI assistant
+                  Join the waitlist to be among the first to experience our AI assistant
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col md:flex-row md:items-center">
                   <div className="md:flex-1">
                     <p className="mb-4 text-base">
-                      Our AI chat assistant can help you with:
+                      Our AI chat assistant will help you with:
                     </p>
                     <ul className="space-y-2 mb-6">
                       <li className="flex items-start">
@@ -444,10 +444,10 @@ export default function UserDashboardPage() {
                     <Button 
                       size="lg" 
                       className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-6 text-lg shadow-md rounded-xl"
-                      onClick={() => window.location.href = "/chat"}
+                      onClick={() => window.location.href = "/waitlist"}
                     >
                       <MessageSquare className="mr-2 h-5 w-5" />
-                      Start Chatting Now
+                      Join Waitlist
                     </Button>
                   </div>
                 </div>

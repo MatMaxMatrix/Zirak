@@ -4905,10 +4905,10 @@ export default function Home() {
         <Button 
           size="lg" 
           className="bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90 text-white rounded-full h-16 w-16 shadow-lg shadow-purple-600/30 p-0 flex items-center justify-center"
-          onClick={() => router.push('/chat')}
+          onClick={() => router.push('/waitlist')}
         >
           <MessageSquare className="h-8 w-8" />
-          <span className="sr-only">Start Chat</span>
+          <span className="sr-only">Join Waitlist</span>
         </Button>
       </motion.div>
     </div>

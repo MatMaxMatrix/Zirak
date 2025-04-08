@@ -1,0 +1,15 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+**Rule: Understand the Project Before Making Code Changes**
+
+Before executing any modifications to the code, you must first take the time to fully understand the project’s structure, including how files and modules interconnect, and the relationships between them. If there is any uncertainty regarding the core issue or the potential impact of changes, refrain from making modifications until the context is completely clarified.
+
+Steps to follow:
+- **Examine the Project Structure:** Review the overall architecture, file organization, and module dependencies.
+- **Establish Context:** Identify which parts of the code are directly related to the main issue to avoid unintended side effects.
+- **Seek Clarification:** If the relationships between components or the objective of the change is unclear, request further details or additional context before proceeding.
+- **Proceed Only When Confident:** Make any changes only after confirming a thorough understanding of how the proposed edits will integrate with the broader project.
