@@ -11,7 +11,6 @@ export const auth0 = initAuth0({
     callback: '/api/auth/callback',
     postLogoutRedirect: '/',
     login: '/api/auth/login',
-    loginError: '/api/auth/error-handler',
   },
   authorizationParams: {
     scope: process.env.AUTH0_SCOPE || 'openid profile email',
