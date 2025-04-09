@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from 'next/dynamic';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useUser } from "@auth0/nextjs-auth0/client";
+import { useRouter } from 'next/navigation';
 
 // Loading component
 function Loading() {
@@ -25,6 +27,28 @@ const ChatInterface = dynamic(
 
 // Simple wrapper for the chat page
 export default function ChatPage() {
+  const router = useRouter();
+  const { user, isLoading } = useUser();
+  
+  // Redirect to waitlist if user is authenticated
+  useEffect(() => {
+    if (!isLoading) {
+      if (user) {
+        // Redirect authenticated users to the waitlist
+        router.push('/waitlist');
+      } else {
+        // Redirect unauthenticated users to login
+        router.push('/api/auth/login?returnTo=/waitlist');
+      }
+    }
+  }, [user, isLoading, router]);
+
+  // Show loading while authentication state is being determined
+  if (isLoading) {
+    return <Loading />;
+  }
+  
+  // This will only briefly show before redirection happens
   return (
     <Suspense fallback={<Loading />}>
       <ChatInterface />

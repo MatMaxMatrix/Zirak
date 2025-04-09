@@ -277,30 +277,12 @@ export default function FeaturesPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-20 px-4">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold mb-6">Ready to supercharge your development?</h2>
-          <p className="text-xl text-gray-400 mb-8">
-            Join thousands of developers who are building better software, faster with Zirak.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button className="bg-white text-black hover:bg-gray-200 px-8 py-6 text-lg w-full sm:w-auto">
-              Get Started Free
-            </Button>
-            <Button variant="outline" className="border-white/20 hover:bg-white/10 px-8 py-6 text-lg w-full sm:w-auto">
-              Schedule a Demo
-            </Button>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="py-12 px-4 border-t border-white/10">
         <div className="max-w-6xl mx-auto">
           <div className="flex justify-between items-center">
             <div className="text-xl font-bold">Zirak</div>
-            <div className="text-sm text-gray-400">© 2023 Zirak. All rights reserved.</div>
+            <div className="text-sm text-gray-400">© 2025 Zirak. All rights reserved.</div>
           </div>
         </div>
       </footer>

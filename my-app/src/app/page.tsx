@@ -13,6 +13,7 @@ import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
+import { useUser } from "@auth0/nextjs-auth0/client";
 
 // Add these new animations
 const containerVariants = {
@@ -27,6 +28,7 @@ const itemVariants = {
 
 export default function Home() {
   const router = useRouter();
+  const { user } = useUser();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
@@ -95,7 +97,15 @@ export default function Home() {
       if (githubUrl) {
         localStorage.setItem('github_url', githubUrl);
       }
-      router.push('/chat');
+      
+      // Check if user is authenticated before redirecting
+      if (user) {
+        // If authenticated, redirect to waitlist
+        router.push('/waitlist');
+      } else {
+        // If not authenticated, redirect to login page
+        router.push('/api/auth/login?returnTo=/waitlist');
+      }
     } catch (error) {
       console.error('Error processing request:', error);
       setIsLoading(false);
@@ -238,511 +248,516 @@ export default function Home() {
       {/* Main Content */}
       <main className="w-full pt-16">
         <div className="flex flex-col items-center justify-center py-16 px-4 relative w-full">
-          <div className="w-full max-w-4xl mx-auto">
+          <motion.h1 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="text-4xl md:text-6xl font-bold text-center mb-6 text-white"
+          >
+            Welcome to <span className="text-red-500">Zirak</span>
+          </motion.h1>
+          
+          <motion.p 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-xl md:text-2xl text-center mb-8 text-yellow-400 max-w-3xl"
+          >
+            Your AI-powered development platform
+          </motion.p>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="w-full max-w-3xl"
+          >
+            <div className="flex flex-col gap-4">
+              <div className="bg-gradient-to-r from-black/70 to-gray-900/50 p-6 rounded-xl border-2 border-purple-500/30 shadow-lg shadow-purple-500/10 backdrop-blur-md">
+                <h3 className="text-xl font-semibold mb-4 text-white">Tell me what you want to build</h3>
+                <div className="flex gap-3">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Describe your project or ask a question..."
+                    className="flex-1 bg-black/70 border-gray-700 text-white placeholder-gray-400 py-6 text-lg"
+                  />
+                  <Button 
+                    onClick={handleInitialPrompt}
+                    disabled={isLoading}
+                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-6 text-lg"
+                  >
+                    {isLoading ? "Processing..." : "Start"}
+                  </Button>
+                </div>
+                <p className="mt-3 text-sm text-gray-400">Build AI applications, websites, games, and more with our intelligent assistants</p>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Quick Actions */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-wrap gap-2 mt-6 justify-center"
+          >
+            {quickActions.map((action, index) => (
+              <motion.div
+                key={index}
+                variants={itemVariants}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button
+                  variant="outline"
+                  className="bg-[#111111] border-2 border-gray-800/50 hover:border-purple-500/50 hover:bg-purple-500/10 text-white flex items-center space-x-2 rounded-full px-4 py-2 backdrop-blur-sm transition-all group"
+                  onClick={action.action}
+                >
+                  <action.icon className="h-4 w-4 text-purple-400 group-hover:text-purple-300 transition-colors" />
+                  <span>{action.label}</span>
+                </Button>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          {/* Modern Interactive Video Showcase Section */}
+          <div className="mb-32 overflow-hidden w-full max-w-[1200px] mx-auto">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-center mb-8"
+              whileInView={{ opacity: 1, y: 0 }}
+              className="text-center mb-12"
             >
               <motion.span
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-                className="inline-block px-4 py-2 rounded-full bg-purple-500/10 text-purple-400 text-sm font-medium mb-4"
+                whileInView={{ opacity: 1 }}
+                className="inline-block px-4 py-2 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-4"
               >
-                🚀 Introducing Zirak AI
+                🎥 Live Demos
               </motion.span>
-              <motion.h1 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.3 }}
-                className="text-6xl font-bold mb-6 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
-              >
-                Build Better Software with AI
-              </motion.h1>
-              <motion.p
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.4 }}
-                className="text-xl text-gray-300 mb-8"
-              >
-                Transform your development workflow with our AI-powered platform. Write, test, and deploy code faster than ever before.
-              </motion.p>
+              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                See Zirak in Action
+              </h2>
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+                Watch how our AI platform transforms the way you build software
+              </p>
             </motion.div>
             
-            <div className="relative mb-16 w-full">
-              <form onSubmit={handleInitialPrompt} className="relative w-full">
-                <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ duration: 0.5, delay: 0.5 }}
-                  className="relative flex items-center"
+            {/* Horizontal Scrolling Carousel */}
+            <div className="relative w-full max-w-[1200px] mx-auto">
+              {/* Navigation Arrows */}
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="h-12 w-12 rounded-full bg-black/50 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-lg hover:bg-purple-500/50 transition-all"
+                  onClick={() => navigateDemo('prev')}
                 >
-                  <Input
-                    id="initial-prompt"
-                    className="w-full bg-[#111111] border-2 border-gray-800/50 text-lg py-6 pl-4 pr-20 rounded-2xl placeholder:text-gray-500 focus:ring-2 focus:ring-purple-500/50 focus:border-transparent shadow-lg shadow-purple-500/10 hover:shadow-purple-500/20 transition-all"
-                    placeholder="Describe what you want to build..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                  />
-                  <div className="absolute right-4 flex items-center space-x-2">
-                    <button
-                      type="button"
-                      className="p-2 hover:bg-purple-500/20 rounded-lg transition-colors"
-                      {...getRootProps()}
-                    >
-                      <input {...getInputProps()} />
-                      <Paperclip className="h-5 w-5 text-purple-400" />
-                    </button>
-                    <button
-                      type="submit"
-                      className="p-2 hover:bg-purple-500/20 rounded-lg transition-colors"
-                      disabled={isLoading || (!input.trim() && uploadedFiles.length === 0 && !githubUrl)}
-                    >
-                      <ArrowUp className={`h-5 w-5 ${isLoading ? 'text-gray-500' : 'text-purple-400'}`} />
-                    </button>
-                  </div>
-                </motion.div>
-              </form>
-
-              {/* Quick Actions */}
-              <motion.div
-                variants={containerVariants}
-                initial="hidden"
-                animate="visible"
-                className="flex flex-wrap gap-2 mt-6 justify-center"
+                  <ChevronLeft className="w-6 h-6" />
+                </motion.button>
+              </div>
+              
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30">
+                <motion.button
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="h-12 w-12 rounded-full bg-black/50 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-lg hover:bg-purple-500/50 transition-all"
+                  onClick={() => navigateDemo('next')}
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </motion.button>
+              </div>
+              
+              {/* Full-width Carousel Container */}
+              <motion.div 
+                className="flex w-full overflow-hidden"
+                animate={{ 
+                  x: `-${activeDemo * 100}%`,
+                }}
+                transition={{ 
+                  type: "spring",
+                  stiffness: 100,
+                  damping: 20
+                }}
               >
-                {quickActions.map((action, index) => (
-                  <motion.div
+                {demoItems.map((item, index) => (
+                  <motion.div 
                     key={index}
-                    variants={itemVariants}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
+                    className="w-full flex-shrink-0"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.5 }}
                   >
-                    <Button
-                      variant="outline"
-                      className="bg-[#111111] border-2 border-gray-800/50 hover:border-purple-500/50 hover:bg-purple-500/10 text-white flex items-center space-x-2 rounded-full px-4 py-2 backdrop-blur-sm transition-all group"
-                      onClick={action.action}
-                    >
-                      <action.icon className="h-4 w-4 text-purple-400 group-hover:text-purple-300 transition-colors" />
-                      <span>{action.label}</span>
-                    </Button>
+                    <div className="rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/20 border-2 border-gray-800/50 hover:shadow-purple-500/30 transition-all duration-300 h-[500px] w-full">
+                      <div className={`bg-gradient-to-br ${item.backgroundColor} h-full w-full relative overflow-hidden`}>
+                        <video 
+                          key={item.videoSrc}
+                          className="w-full h-full object-cover"
+                          src={item.videoSrc}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                        
+                        {/* Enhanced Video Overlay */}
+                        <div className="absolute inset-0 flex flex-col justify-between p-8 bg-gradient-to-b from-black/70 via-transparent to-black/90">
+                          {/* Top Section */}
+                          <motion.div
+                            initial={{ y: -20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.2 }}
+                            className="flex items-center space-x-4"
+                          >
+                            <div className={`h-16 w-16 rounded-2xl bg-${item.accentColor}-500/80 backdrop-blur-sm flex items-center justify-center shadow-lg animate-pulse-slow`}>
+                              {React.createElement(item.icon, { className: "h-8 w-8 text-white" })}
+                            </div>
+                            <div>
+                              <h3 className="text-3xl font-bold text-white">{item.title}</h3>
+                              <div className="flex items-center mt-2 space-x-2">
+                                <span className={`inline-block h-2 w-2 rounded-full bg-${item.accentColor}-400 animate-pulse`}></span>
+                                <span className="text-sm text-gray-200 font-mono">Live Demo</span>
+                              </div>
+                            </div>
+                          </motion.div>
+
+                          {/* Bottom Section */}
+                          <motion.div
+                            initial={{ y: 20, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.4 }}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="max-w-2xl">
+                              <p className="text-base text-gray-300 mb-4">{item.description}</p>
+                              <div className="flex flex-wrap gap-2">
+                                {item.features.map((feature, featureIndex) => (
+                                  <span
+                                    key={featureIndex}
+                                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-white/5 text-gray-300"
+                                  >
+                                    <feature.icon className="h-4 w-4 mr-2 text-purple-400" />
+                                    {feature.title}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                            
+                            <motion.div
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <Button 
+                                variant="outline"
+                                className="border-2 border-white/20 hover:border-white/40 text-white text-base px-6 py-4 rounded-xl backdrop-blur-sm"
+                                onClick={togglePlayPause}
+                              >
+                                {isVideoPaused ? 
+                                  <Play className="mr-2 h-4 w-4" /> : 
+                                  <Pause className="mr-2 h-4 w-4" />
+                                }
+                                {isVideoPaused ? "Play" : "Pause"}
+                              </Button>
+                            </motion.div>
+                          </motion.div>
+                        </div>
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </motion.div>
             </div>
-
-            {/* Modern Interactive Video Showcase Section */}
-            <div className="mb-32 overflow-hidden w-full max-w-[1200px] mx-auto">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                className="text-center mb-12"
-              >
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  className="inline-block px-4 py-2 rounded-full bg-blue-500/10 text-blue-400 text-sm font-medium mb-4"
-                >
-                  🎥 Live Demos
-                </motion.span>
-                <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                  See Zirak in Action
-                </h2>
-                <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-                  Watch how our AI platform transforms the way you build software
-                </p>
-              </motion.div>
-              
-              {/* Horizontal Scrolling Carousel */}
-              <div className="relative w-full max-w-[1200px] mx-auto">
-                {/* Navigation Arrows */}
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 z-30">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="h-12 w-12 rounded-full bg-black/50 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-lg hover:bg-purple-500/50 transition-all"
-                    onClick={() => navigateDemo('prev')}
-                  >
-                    <ChevronLeft className="w-6 h-6" />
-                  </motion.button>
-                </div>
-                
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 z-30">
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    className="h-12 w-12 rounded-full bg-black/50 border border-white/20 backdrop-blur-sm flex items-center justify-center text-white shadow-lg hover:bg-purple-500/50 transition-all"
-                    onClick={() => navigateDemo('next')}
-                  >
-                    <ChevronRight className="w-6 h-6" />
-                  </motion.button>
-                </div>
-                
-                {/* Full-width Carousel Container */}
-                <motion.div 
-                  className="flex w-full overflow-hidden"
-                  animate={{ 
-                    x: `-${activeDemo * 100}%`,
-                  }}
-                  transition={{ 
-                    type: "spring",
-                    stiffness: 100,
-                    damping: 20
-                  }}
-                >
-                  {demoItems.map((item, index) => (
-                    <motion.div 
-                      key={index}
-                      className="w-full flex-shrink-0"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <div className="rounded-2xl overflow-hidden shadow-2xl shadow-purple-500/20 border-2 border-gray-800/50 hover:shadow-purple-500/30 transition-all duration-300 h-[500px] w-full">
-                        <div className={`bg-gradient-to-br ${item.backgroundColor} h-full w-full relative overflow-hidden`}>
-                          <video 
-                            key={item.videoSrc}
-                            className="w-full h-full object-cover"
-                            src={item.videoSrc}
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                          />
-                          
-                          {/* Enhanced Video Overlay */}
-                          <div className="absolute inset-0 flex flex-col justify-between p-8 bg-gradient-to-b from-black/70 via-transparent to-black/90">
-                            {/* Top Section */}
-                            <motion.div
-                              initial={{ y: -20, opacity: 0 }}
-                              animate={{ y: 0, opacity: 1 }}
-                              transition={{ delay: 0.2 }}
-                              className="flex items-center space-x-4"
-                            >
-                              <div className={`h-16 w-16 rounded-2xl bg-${item.accentColor}-500/80 backdrop-blur-sm flex items-center justify-center shadow-lg animate-pulse-slow`}>
-                                {React.createElement(item.icon, { className: "h-8 w-8 text-white" })}
-                              </div>
-                              <div>
-                                <h3 className="text-3xl font-bold text-white">{item.title}</h3>
-                                <div className="flex items-center mt-2 space-x-2">
-                                  <span className={`inline-block h-2 w-2 rounded-full bg-${item.accentColor}-400 animate-pulse`}></span>
-                                  <span className="text-sm text-gray-200 font-mono">Live Demo</span>
-                                </div>
-                              </div>
-                            </motion.div>
-
-                            {/* Bottom Section */}
-                            <motion.div
-                              initial={{ y: 20, opacity: 0 }}
-                              animate={{ y: 0, opacity: 1 }}
-                              transition={{ delay: 0.4 }}
-                              className="flex items-center justify-between"
-                            >
-                              <div className="max-w-2xl">
-                                <p className="text-base text-gray-300 mb-4">{item.description}</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {item.features.map((feature, featureIndex) => (
-                                    <span
-                                      key={featureIndex}
-                                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-white/5 text-gray-300"
-                                    >
-                                      <feature.icon className="h-4 w-4 mr-2 text-purple-400" />
-                                      {feature.title}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                              
-                              <motion.div
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                              >
-                                <Button 
-                                  variant="outline"
-                                  className="border-2 border-white/20 hover:border-white/40 text-white text-base px-6 py-4 rounded-xl backdrop-blur-sm"
-                                  onClick={togglePlayPause}
-                                >
-                                  {isVideoPaused ? 
-                                    <Play className="mr-2 h-4 w-4" /> : 
-                                    <Pause className="mr-2 h-4 w-4" />
-                                  }
-                                  {isVideoPaused ? "Play" : "Pause"}
-                                </Button>
-                              </motion.div>
-                            </motion.div>
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </motion.div>
-              </div>
-              
-              {/* Navigation Dots */}
-              <div className="flex justify-center mt-8 space-x-4">
-                {demoItems.map((item, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setActiveDemo(index)}
-                    className={`h-4 transition-all duration-500 ${
-                      activeDemo === index 
-                        ? `w-12 bg-gradient-to-r from-${item.accentColor}-400 to-${item.accentColor}-600 rounded-full`
-                        : 'w-4 bg-gray-700 hover:bg-gray-500 rounded-full'
-                    }`}
-                    aria-label={`Go to slide ${index + 1}`}
-                  />
-                ))}
-              </div>
+            
+            {/* Navigation Dots */}
+            <div className="flex justify-center mt-8 space-x-4">
+              {demoItems.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => setActiveDemo(index)}
+                  className={`h-4 transition-all duration-500 ${
+                    activeDemo === index 
+                      ? `w-12 bg-gradient-to-r from-${item.accentColor}-400 to-${item.accentColor}-600 rounded-full`
+                      : 'w-4 bg-gray-700 hover:bg-gray-500 rounded-full'
+                  }`}
+                  aria-label={`Go to slide ${index + 1}`}
+                />
+              ))}
             </div>
+          </div>
 
-            {/* Features Illustration Section */}
-            <div className="mb-32">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                className="text-center mb-16"
-              >
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  whileInView={{ opacity: 1 }}
-                  className="inline-block px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-4"
-                >
-                  ✨ Features
-                </motion.span>
-                <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
-                  Everything You Need to Build Better Software
-                </h2>
-                <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-                  Our AI-powered platform combines multiple specialized agents to help you develop faster and smarter
-                </p>
-              </motion.div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {/* Feature 1: Chat Interface */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-6">
-                      <MessageSquare className="h-6 w-6 text-blue-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">Intelligent Chat Interface</h3>
-                    <p className="text-gray-400 mb-4">
-                      Communicate with multiple AI agents through a streamlined chat interface. Ask questions, request features, and get real-time responses.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Natural Language</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Real-time Responses</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Multi-agent Support</span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Feature 2: Code Generation */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center mb-6">
-                      <Code className="h-6 w-6 text-green-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">Smart Code Generation</h3>
-                    <p className="text-gray-400 mb-4">
-                      Generate production-ready code based on your requirements. Our AI understands context and produces optimized, secure implementations.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Context-aware</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Optimized Code</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Security Focused</span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Feature 3: Terminal Integration */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center mb-6">
-                      <Terminal className="h-6 w-6 text-amber-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">Integrated Terminal</h3>
-                    <p className="text-gray-400 mb-4">
-                      Execute commands directly within the application. Run, test, and debug your code without switching between different tools.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Command Execution</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Real-time Output</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Debug Support</span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Feature 4: GitHub Integration */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-red-500/20 flex items-center justify-center mb-6">
-                      <GitBranch className="h-6 w-6 text-red-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">GitHub Integration</h3>
-                    <p className="text-gray-400 mb-4">
-                      Connect directly to GitHub repositories. Import, modify, and contribute to your projects with intelligent assistance.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Repository Access</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Version Control</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Collaboration</span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Feature 5: Web Preview */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center mb-6">
-                      <Globe className="h-6 w-6 text-cyan-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">Web Preview</h3>
-                    <p className="text-gray-400 mb-4">
-                      Instantly preview your web applications within the platform. See changes in real-time as you develop.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Live Preview</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Real-time Updates</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Responsive Design</span>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Feature 6: Security */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  whileHover={{ y: -5 }}
-                  className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-6">
-                      <Shield className="h-6 w-6 text-emerald-400" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-3">Security-First Development</h3>
-                    <p className="text-gray-400 mb-4">
-                      Our AI constantly monitors for security vulnerabilities and suggests secure coding practices to protect your applications.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Vulnerability Detection</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Secure Coding</span>
-                      <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Compliance</span>
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-            </div>
-
-            {/* Call to Action Section */}
-            <motion.div 
+          {/* Features Illustration Section */}
+          <div className="mb-32">
+            <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              className="mb-16 text-center relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600/30 to-blue-600/20 border border-purple-500/30 p-12 backdrop-blur-sm"
+              className="text-center mb-16"
             >
-              <div className="absolute inset-0 bg-noise opacity-10" />
               <motion.span
                 initial={{ opacity: 0 }}
                 whileInView={{ opacity: 1 }}
-                className="inline-block px-4 py-2 rounded-full bg-white/10 text-white text-sm font-medium mb-4"
+                className="inline-block px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-400 text-sm font-medium mb-4"
               >
-                🚀 Get Started Today
+                ✨ Features
               </motion.span>
-              <h2 className="text-3xl font-bold mb-4 text-white">Ready to transform your development workflow?</h2>
-              <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-                Join the early access program and experience the future of software development.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button 
-                  className="relative overflow-hidden bg-gradient-to-r from-purple-500 to-blue-500 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg shadow-purple-500/20"
-                  onClick={() => router.push('/chat')}
-                >
-                  <span className="relative z-10">Join Early Access</span>
-                  <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
-                </Button>
-              </div>
-              <p className="text-sm text-gray-400 mt-4">
-                Limited spots available • Free during beta • Help shape the future
+              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
+                Everything You Need to Build Better Software
+              </h2>
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+                Our AI-powered platform combines multiple specialized agents to help you develop faster and smarter
               </p>
             </motion.div>
 
-            {/* Footer */}
-            <footer className="border-t border-white/10 py-12">
-              <div className="max-w-6xl mx-auto px-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                  <div>
-                    <div className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-4">Zirak</div>
-                    <p className="text-sm text-gray-400">Building the future of AI-powered development</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Feature 1: Chat Interface */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-6">
+                    <MessageSquare className="h-6 w-6 text-blue-400" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white mb-4">Product</h3>
-                    <ul className="space-y-2">
-                      <li><Link href="/features" className="text-sm text-gray-400 hover:text-white transition-colors">Features</Link></li>
-                      <li><Link href="/pricing" className="text-sm text-gray-400 hover:text-white transition-colors">Pricing</Link></li>
-                      <li><Link href="/chat" className="text-sm text-gray-400 hover:text-white transition-colors">Chat Interface</Link></li>
-                      <li><Link href="/dashboard" className="text-sm text-gray-400 hover:text-white transition-colors">Dashboard</Link></li>
-                    </ul>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-white mb-4">Resources</h3>
-                    <ul className="space-y-2">
-                      <li><Link href="/about" className="text-sm text-gray-400 hover:text-white transition-colors">About</Link></li>
-                      <li><Link href="/profile" className="text-sm text-gray-400 hover:text-white transition-colors">Profile</Link></li>
-                    </ul>
+                  <h3 className="text-xl font-semibold mb-3">Intelligent Chat Interface</h3>
+                  <p className="text-gray-400 mb-4">
+                    Communicate with multiple AI agents through a streamlined chat interface. Ask questions, request features, and get real-time responses.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Natural Language</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Real-time Responses</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-blue-500/10 text-blue-400">Multi-agent Support</span>
                   </div>
                 </div>
-                <div className="mt-12 pt-8 border-t border-white/10">
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-                    <div className="text-sm text-gray-500">
-                      © 2024 Zirak. All rights reserved.
-                    </div>
-                    <div className="flex items-center space-x-6">
-                      <Link href="https://github.com" className="text-gray-400 hover:text-white transition-colors">
-                        <Github className="h-5 w-5" />
-                      </Link>
-                    </div>
+              </motion.div>
+
+              {/* Feature 2: Code Generation */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center mb-6">
+                    <Code className="h-6 w-6 text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Smart Code Generation</h3>
+                  <p className="text-gray-400 mb-4">
+                    Generate production-ready code based on your requirements. Our AI understands context and produces optimized, secure implementations.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Context-aware</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Optimized Code</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 text-green-400">Security Focused</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Feature 3: Terminal Integration */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center mb-6">
+                    <Terminal className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Integrated Terminal</h3>
+                  <p className="text-gray-400 mb-4">
+                    Execute commands directly within the application. Run, test, and debug your code without switching between different tools.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Command Execution</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Real-time Output</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-amber-500/10 text-amber-400">Debug Support</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Feature 4: GitHub Integration */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-red-500/20 flex items-center justify-center mb-6">
+                    <GitBranch className="h-6 w-6 text-red-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">GitHub Integration</h3>
+                  <p className="text-gray-400 mb-4">
+                    Connect directly to GitHub repositories. Import, modify, and contribute to your projects with intelligent assistance.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Repository Access</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Version Control</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-400">Collaboration</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Feature 5: Web Preview */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center mb-6">
+                    <Globe className="h-6 w-6 text-cyan-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Web Preview</h3>
+                  <p className="text-gray-400 mb-4">
+                    Instantly preview your web applications within the platform. See changes in real-time as you develop.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Live Preview</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Real-time Updates</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-cyan-500/10 text-cyan-400">Responsive Design</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Feature 6: Security */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                whileHover={{ y: -5 }}
+                className="relative bg-gray-900/50 rounded-2xl border border-gray-800/50 p-8 backdrop-blur-sm hover:border-purple-500/30 transition-all group overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative">
+                  <div className="h-12 w-12 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-6">
+                    <Shield className="h-6 w-6 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Security-First Development</h3>
+                  <p className="text-gray-400 mb-4">
+                    Our AI constantly monitors for security vulnerabilities and suggests secure coding practices to protect your applications.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Vulnerability Detection</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Secure Coding</span>
+                    <span className="px-3 py-1 rounded-full text-xs bg-emerald-500/10 text-emerald-400">Compliance</span>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+
+          {/* Call to Action Section */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            className="mb-16 text-center relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-600/30 to-blue-600/20 border border-purple-500/30 p-12 backdrop-blur-sm"
+          >
+            <div className="absolute inset-0 bg-noise opacity-10" />
+            <motion.span
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              className="inline-block px-4 py-2 rounded-full bg-white/10 text-white text-sm font-medium mb-4"
+            >
+              🚀 Get Started Today
+            </motion.span>
+            <h2 className="text-3xl font-bold mb-4 text-white">Ready to transform your development workflow?</h2>
+            <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
+              Join the early access program and experience the future of software development.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button 
+                className="relative overflow-hidden bg-gradient-to-r from-purple-500 to-blue-500 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg shadow-purple-500/20"
+                onClick={() => user ? router.push('/waitlist') : router.push('/api/auth/login?returnTo=/waitlist')}
+              >
+                <span className="relative z-10">Join Early Access</span>
+                <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
+              </Button>
+              
+              <Button 
+                className="relative overflow-hidden bg-transparent border-2 border-white/20 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg group"
+                onClick={() => router.push('/api/auth/login?prompt=signup')}
+              >
+                <span className="relative z-10">Sign Up</span>
+                <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
+                <div className="opacity-0 group-hover:opacity-100 absolute -top-14 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-sm p-2 rounded-md text-sm text-white min-w-[200px] transition-all duration-200 border border-gray-700">
+                  Email verification required after signup
+                </div>
+              </Button>
+            </div>
+            <p className="text-sm text-gray-400 mt-4">
+              Limited spots available • Free during beta • Help shape the future
+            </p>
+          </motion.div>
+
+          {/* Footer */}
+          <footer className="w-screen border-t border-white/20 py-12 bg-black/50 backdrop-blur-sm">
+            <div className="w-full px-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 max-w-6xl mx-auto">
+                <div>
+                  <div className="text-2xl font-bold text-white mb-4">Zirak</div>
+                  <p className="text-sm text-yellow-400">Building the future of AI-powered development</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-4">Product</h3>
+                  <ul className="space-y-2">
+                    <li><Link href="/features" className="text-sm text-gray-300 hover:text-red-500 transition-colors">Features</Link></li>
+                    <li><Link href="/pricing" className="text-sm text-gray-300 hover:text-red-500 transition-colors">Pricing</Link></li>
+                    <li><Link href="/waitlist" className="text-sm text-gray-300 hover:text-red-500 transition-colors">Chat Interface</Link></li>
+                    <li><Link href="/user-dashboard" className="text-sm text-gray-300 hover:text-red-500 transition-colors">Dashboard</Link></li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-4">Resources</h3>
+                  <ul className="space-y-2">
+                    <li><Link href="/profile" className="text-sm text-gray-300 hover:text-red-500 transition-colors">Profile</Link></li>
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white mb-4">Contact Us</h3>
+                  <ul className="space-y-2">
+                    <li>
+                      <button 
+                        onClick={() => {
+                          const subject = "Inquiry about Zirak";
+                          const body = "Hello,\n\nI am interested in learning more about Zirak. Please provide more information about:\n\n";
+                          const mailtoLink = `mailto:azimipanah.mobin@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                          window.location.href = mailtoLink;
+                        }}
+                        className="text-sm text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        Email Support
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-12 pt-8 border-t border-white/20 max-w-6xl mx-auto">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="text-sm text-white">
+                    © 2025 Zirak. All rights reserved.
+                  </div>
+                  <div className="flex items-center space-x-6">
+                    <Link href="https://github.com" className="text-gray-300 hover:text-red-500 transition-colors">
+                      <Github className="h-5 w-5" />
+                    </Link>
                   </div>
                 </div>
               </div>
-            </footer>
-          </div>
+            </div>
+          </footer>
         </div>
       </main>
     </div>

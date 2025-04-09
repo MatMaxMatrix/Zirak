@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { getSession } from "@auth0/nextjs-auth0/edge";
 
 // Public routes that don't require authentication
-const publicRoutes = ['/', '/about', '/pricing', '/features'];
+const publicRoutes = ['/', '/about', '/pricing', '/features', '/verify-email'];
 
 // API routes to bypass
 const apiRoutes = ['/api/auth', '/api/debug-token', '/api/admin/debug-profiles'];
@@ -13,9 +14,16 @@ const bypassAuthRoutes = ['/user-dashboard-simple', '/user-dashboard', '/auth-de
 // Protected routes that require authentication and should redirect to login with returnTo
 const protectedRoutes = ['/chat', '/dashboard', '/debug', '/test-auth'];
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+export async function middleware(req: NextRequest) {
+  const { pathname, search } = req.nextUrl;
   console.log(`[Middleware] Pathname: ${pathname}`); // Log the pathname
+  
+  // Handle Auth0 callback errors (particularly for unverified emails)
+  if (pathname === '/api/auth/callback' && search.includes('error=access_denied')) {
+    console.log('[Middleware] Auth0 access_denied error detected');
+    // Redirect to the verify-email page
+    return NextResponse.redirect(new URL('/verify-email', req.url));
+  }
   
   // Skip middleware for API routes
   if (apiRoutes.some(route => pathname.startsWith(route))) {
@@ -40,6 +48,25 @@ export function middleware(req: NextRequest) {
     pathname === route || pathname.startsWith(`${route}/`)
   );
   console.log(`[Middleware] Is protected route (${pathname})? ${isProtectedRoute}`);
+  
+  // For all routes except verify-email, check if email is verified
+  if (pathname !== '/verify-email') {
+    try {
+      // Get the session to check email verification status
+      const session = await getSession(req, NextResponse.next());
+      
+      // If there's a session and the user's email is not verified
+      if (session?.user && session.user.needsVerification === true) {
+        console.log(`[Middleware] User email not verified. Redirecting to verification page.`);
+        // Store original path if needed
+        const returnPath = isProtectedRoute ? `?returnTo=${encodeURIComponent(pathname)}` : '';
+        const url = new URL(`/verify-email${returnPath}`, req.url);
+        return NextResponse.redirect(url);
+      }
+    } catch (error) {
+      console.error('[Middleware] Error checking session:', error);
+    }
+  }
   
   if (isProtectedRoute) {
     // Check for session cookie
