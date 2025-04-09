@@ -21,6 +21,20 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 
 const afterCallback = async (req, res, session) => {
   console.log("[Auth0 Callback] Processing authentication callback");
+  
+  // Check if the user's email is verified
+  if (session.user && session.user.email_verified === false) {
+    console.log("[Auth0 Callback] User email not verified, redirecting to verification page");
+    // Store the original return path if any
+    const returnTo = req.query?.returnTo ? `?returnTo=${encodeURIComponent(req.query.returnTo)}` : '';
+    
+    // Set a flag in the session to indicate unverified email
+    session.user.needsVerification = true;
+    
+    // After Auth0 login completes, the middleware will check this flag and redirect
+    return session;
+  }
+  
   // Get the user's Auth0 roles and permissions
   const roles = session.user['https://example.com/roles'] || [];
   const permissions = session.user['https://example.com/permissions'] || [];
