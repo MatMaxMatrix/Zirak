@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
-import { useUser } from "@auth0/nextjs-auth0/client";
+import React, { useState, useEffect } from "react";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
+import { z } from "zod";
 import { 
   Card, 
   CardContent, 
@@ -97,9 +99,84 @@ const plans = [
 ];
 
 export default function BillingPage() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState("pro");
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [subscription, setSubscription] = useState<any>(null);
+  const [payments, setPayments] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch user's subscription data
+  useEffect(() => {
+    async function getSubscription() {
+      if (!user) return;
+      
+      setIsLoading(true);
+      try {
+        const supabase = createClient();
+        
+        const { data, error } = await supabase
+          .from('subscriptions')
+          .select(`
+            id, 
+            status, 
+            current_period_ends_at,
+            subscription_plans:plan_id(name, price_monthly)
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+          
+        if (!error && data) {
+          // Convert from Supabase format to our interface
+          let planName: string | undefined;
+          let planPrice: number | undefined;
+          
+          if (data.subscription_plans) {
+            // Handle when it's an array
+            if (Array.isArray(data.subscription_plans) && data.subscription_plans.length > 0) {
+              planName = data.subscription_plans[0]?.name;
+              planPrice = data.subscription_plans[0]?.price_monthly ?? 0;
+            } 
+            // Handle when it's an object
+            else if (typeof data.subscription_plans === 'object') {
+              planName = (data.subscription_plans as any).name;
+              planPrice = (data.subscription_plans as any).price_monthly ?? 0;
+            }
+          }
+          
+          const plan = planName ? { name: planName, price_monthly: planPrice ?? 0 } : undefined;
+          
+          setSubscription({
+            id: data.id,
+            status: data.status,
+            current_period_ends_at: data.current_period_ends_at,
+            plan: plan
+          });
+        }
+        
+        // Fetch payment history
+        const { data: paymentData, error: paymentError } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('payment_date', { ascending: false });
+          
+        if (!paymentError && paymentData) {
+          setPayments(paymentData);
+        }
+      } catch (error) {
+        console.error("Error fetching subscription:", error);
+        setError("Failed to fetch your subscription details");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    getSubscription();
+  }, [user]);
 
   // Handle subscription initiation
   const handleSubscribe = () => {

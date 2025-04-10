@@ -1,85 +1,65 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
-import { getSupabase } from '@/utils/supabase';
+import { useAuth } from '../AuthProvider';
+import { createClient } from '@/utils/supabase/client';
 
 export function ProfileSync() {
-  const { user, isLoading: isAuth0Loading } = useUser();
+  const { user } = useAuth();
 
   useEffect(() => {
-    async function syncProfile() {
-      if (!user || isAuth0Loading) return;
-      
+    if (!user) return;
+
+    const syncProfile = async () => {
       try {
-        console.log('Starting profile sync for user:', user.sub);
+        const supabase = createClient();
         
-        // Create Supabase client with Auth0 token
-        const supabase = getSupabase(user.accessToken as string | undefined);
-        
-        // Check if profile exists
-        console.log('Checking for existing profile with ID:', user.sub);
-        const { data: existingProfile, error: fetchError } = await supabase
+        // Get the user's profile from the profiles table
+        const { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
-          .eq('id', user.sub)
+          .eq('id', user.id)
           .single();
-          
-        if (fetchError && fetchError.code !== 'PGRST116') {
-          console.error('Error checking for existing profile:', fetchError);
-          return;
-        }
 
-        // Prepare user data with more fields
-        const userData = {
-          id: user.sub,
-          email: user.email,
-          username: user.nickname || user.email?.split('@')[0] || user.sub,
-          full_name: user.name,
-          avatar_url: user.picture,
-          updated_at: new Date().toISOString(),
-        };
-
-        console.log('User data prepared:', userData);
-
-        if (!existingProfile) {
-          // Create new profile with additional fields
-          console.log('Creating new profile for user:', user.sub);
-          const { data, error } = await supabase
-            .from('profiles')
-            .insert([{
-              ...userData,
-              created_at: new Date().toISOString(),
-            }])
-            .select();
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // No profile found, this is expected for new users
+            console.log('No profile found for user, creating new profile via API');
             
-          if (error) {
-            console.error('Error creating profile:', error);
+            // Create profile via API route (with admin privileges)
+            const response = await fetch('/api/profile/create', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                userId: user.id,
+                email: user.email,
+                name: user.user_metadata?.name || '',
+                picture: user.user_metadata?.picture || '',
+              }),
+            });
+            
+            const result = await response.json();
+            
+            if (!response.ok) {
+              console.error('API Error creating profile:', result.error);
+            } else {
+              console.log('Profile creation response:', result.message);
+            }
           } else {
-            console.log('Profile created successfully:', data);
+            console.error('Error fetching profile:', JSON.stringify(error));
           }
         } else {
-          // Update existing profile with all fields
-          console.log('Updating existing profile for user:', user.sub);
-          const { data, error } = await supabase
-            .from('profiles')
-            .update(userData)
-            .eq('id', user.sub)
-            .select();
-            
-          if (error) {
-            console.error('Error updating profile:', error);
-          } else {
-            console.log('Profile updated successfully:', data);
-          }
+          console.log('User profile exists:', profile.email);
         }
       } catch (error) {
-        console.error('Error syncing profile:', error);
+        console.error('Error syncing profile:', error instanceof Error ? error.message : String(error));
       }
-    }
+    };
 
     syncProfile();
-  }, [user, isAuth0Loading]);
+  }, [user]);
 
   return null; // This component doesn't render anything
 } 

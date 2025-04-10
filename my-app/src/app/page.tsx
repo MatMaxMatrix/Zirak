@@ -13,7 +13,7 @@ import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from '@/components/AuthProvider';
 
 // Add these new animations
 const containerVariants = {
@@ -28,9 +28,9 @@ const itemVariants = {
 
 export default function Home() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -64,7 +64,7 @@ export default function Home() {
 
   const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isLoading) return;
+    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isSubmitting) return;
     
     // Check for preferred API key
     const { key, provider } = getPreferredApiKey();
@@ -76,7 +76,7 @@ export default function Home() {
       return;
     }
     
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       localStorage.setItem('initial_prompt', input);
       localStorage.setItem('api_provider', provider || 'openai'); // Store the preferred provider
@@ -108,7 +108,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error processing request:', error);
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -284,10 +284,10 @@ export default function Home() {
                   />
                   <Button 
                     onClick={handleInitialPrompt}
-                    disabled={isLoading}
+                    disabled={isSubmitting}
                     className="bg-red-500 hover:bg-red-600 text-white px-6 py-6 text-lg"
                   >
-                    {isLoading ? "Processing..." : "Start"}
+                    {isSubmitting ? "Processing..." : "Start"}
                   </Button>
                 </div>
                 <p className="mt-3 text-sm text-gray-400">Build AI applications, websites, games, and more with our intelligent assistants</p>

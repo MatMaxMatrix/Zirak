@@ -1,14 +1,14 @@
 "use client";
 
-import { useUser } from "@auth0/nextjs-auth0/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MessageSquare, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function WaitlistPage() {
-  const { user, isLoading } = useUser();
+  const { user, isLoading } = useAuth();
   const [isOnWaitlist, setIsOnWaitlist] = useState(false);
 
   useEffect(() => {
@@ -49,12 +49,12 @@ export default function WaitlistPage() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Button asChild className="bg-blue-600 hover:bg-blue-700">
-                    <Link href="/api/auth/login?prompt=login">
+                    <Link href="/sign-in">
                       Sign In
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="border-gray-600 hover:bg-gray-700">
-                    <Link href="/api/auth/login?prompt=signup">
+                    <Link href="/sign-in">
                       Create Account
                     </Link>
                   </Button>

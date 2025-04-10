@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useRouter } from "next/navigation";
-import { useUser } from "@auth0/nextjs-auth0/client";
 import { notification } from "@/lib/notification";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function DashboardLayout({
   children,
@@ -13,14 +13,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   const router = useRouter();
-  const { user, error, isLoading } = useUser();
+  const { user, isLoading } = useAuth();
 
   // Redirect to login if not authenticated
-  if (!isLoading && !user) {
-    notification.error("Please log in to access the dashboard");
-    router.push("/api/auth/login");
-    return null;
-  }
+  useEffect(() => {
+    if (!isLoading && !user) {
+      notification.error("Please log in to access the dashboard");
+      router.push("/sign-in");
+    }
+  }, [isLoading, user, router]);
 
   if (isLoading) {
     return (
@@ -30,9 +31,8 @@ export default function DashboardLayout({
     );
   }
 
-  if (error) {
-    notification.error("Authentication error");
-    console.error(error);
+  // Don't render anything if not authenticated
+  if (!user) {
     return null;
   }
 

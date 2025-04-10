@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 import {
   User,
   CreditCard,
@@ -14,17 +15,18 @@ import { Button } from "@/components/ui/button";
 import { isAdmin } from "@/lib/auth"; // Import the isAdmin utility function
 
 // Logout function
-function handleLogout() {
-  // Redirect to Auth0 logout endpoint with returnTo parameter and federated flag
-  window.location.href = "/api/auth/logout?returnTo=" + encodeURIComponent(window.location.origin) + "&federated";
+async function handleLogout() {
+  const supabase = createClient();
+  await supabase.auth.signOut();
+  window.location.href = "/";
 }
 
 export function UserSidebar() {
   const pathname = usePathname();
-  const { user } = useUser();
+  const { user } = useAuth();
   const userEmail = user?.email;
   // Check if user is admin
-  const userIsAdmin = isAdmin(user);
+  const userIsAdmin = user ? isAdmin(user) : false;
 
   // Define navigation items for regular users
   const navItems = [

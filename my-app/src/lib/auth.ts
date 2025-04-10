@@ -2,105 +2,67 @@
  * Auth utility functions for checking user roles and permissions
  */
 
-// The namespace used for Auth0 custom claims
-const ROLES_NAMESPACE = 'https://example.com/roles';
-// Alternative namespace from your Auth0 action
-const ALT_ROLES_NAMESPACE = 'https://your-app-domain.com/roles';
+import { createClient } from '@/utils/supabase/client';
+import { User } from '@supabase/supabase-js';
 
 /**
  * Check if a user has admin role
- * This is a centralized function to consistently check admin status
  * 
- * @param user The Auth0 user object
+ * @param user The user object from Supabase
  * @returns boolean True if user has admin role
  */
-export function isAdmin(user: any): boolean {
+export async function fetchUserRole(userId: string): Promise<string> {
+  try {
+    const supabase = createClient();
+    
+    // Check the user_roles table for the user's role
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .single();
+    
+    if (error) {
+      console.error('Error fetching user role:', error);
+      return 'user'; // Default to regular user if there's an error
+    }
+    
+    return data?.role || 'user';
+  } catch (error) {
+    console.error('Error in fetchUserRole:', error);
+    return 'user'; // Default to regular user
+  }
+}
+
+// Synchronous helper for UI components that can't use async functions directly
+export function isAdmin(user: User | null): boolean {
+  // Admin emails - define your admin emails here
+  const adminEmails = [
+    'admin@example.com', 
+    'support@zirak.ai',
+    // Add more admin emails as needed
+  ];
+  
   if (!user) return false;
   
-  console.log("Checking admin status for user:", user.email);
-  
-  // Method 1: Check for roles in the main namespace
-  const roles = user[ROLES_NAMESPACE];
-  if (Array.isArray(roles) && roles.includes('admin')) {
-    console.log("Admin found in main namespace");
-    return true;
-  }
-  
-  // Method 2: Check for roles in the alternative namespace
-  const altRoles = user[ALT_ROLES_NAMESPACE];
-  if (Array.isArray(altRoles) && altRoles.includes('admin')) {
-    console.log("Admin found in alt namespace");
-    return true;
-  }
-  
-  // Method 3: Check for Hasura-specific role claim
-  if (user['x-hasura-default-role'] === 'admin') {
-    console.log("Admin found in x-hasura-default-role");
-    return true;
-  }
-  
-  // Method 4: Check for roles directly (some Auth0 configurations)
-  if (Array.isArray(user.roles) && user.roles.includes('admin')) {
-    console.log("Admin found in user.roles");
-    return true;
-  }
-  
-  // Method 5: Check for direct is_admin flag
-  if (user.is_admin === true) {
-    console.log("Admin found via is_admin flag");
-    return true;
-  }
-  
-  // Method 6: Fallback to checking email (temporary until proper roles are set up)
-  // Remove this in production when roles are properly configured
-  if (user.email === 'admin@example.com' || user.email === 'azimipanah.mobin@gmail.com') {
-    console.log("Admin found via email");
-    return true;
-  }
-  
-  console.log("No admin role found");
-  return false;
+  // Check if user's email is in the admin list
+  return adminEmails.includes(user.email || '');
 }
 
 /**
- * Get user roles from Auth0 user
+ * Get user role
  * 
- * @param user The Auth0 user object 
- * @returns string[] Array of role names
+ * @param user The user object from Supabase
+ * @returns string User's role
  */
-export function getUserRoles(user: any): string[] {
-  if (!user) return [];
+export function getUserRole(user: any): string {
+  if (!user) return 'user';
   
-  // Collect all possible roles from different sources
-  const allRoles = new Set<string>();
-  
-  // Try to get roles from main namespace
-  const namespacedRoles = user[ROLES_NAMESPACE];
-  if (Array.isArray(namespacedRoles)) {
-    namespacedRoles.forEach((role: string) => allRoles.add(role));
+  // Check for role in user_roles table
+  if (user.role) {
+    return user.role;
   }
   
-  // Try to get roles from alternative namespace
-  const altNamespacedRoles = user[ALT_ROLES_NAMESPACE];
-  if (Array.isArray(altNamespacedRoles)) {
-    altNamespacedRoles.forEach((role: string) => allRoles.add(role));
-  }
-  
-  // Try to get roles from Hasura claims
-  const hasuraRoles = user['x-hasura-allowed-roles'];
-  if (Array.isArray(hasuraRoles)) {
-    hasuraRoles.forEach((role: string) => allRoles.add(role));
-  }
-  
-  // Try to get roles directly
-  if (Array.isArray(user.roles)) {
-    user.roles.forEach((role: string) => allRoles.add(role));
-  }
-  
-  // Fallback for development
-  if (user.email === 'admin@example.com' || user.email === 'azimipanah.mobin@gmail.com') {
-    allRoles.add('admin');
-  }
-  
-  return Array.from(allRoles);
+  // Default to user role
+  return 'user';
 } 

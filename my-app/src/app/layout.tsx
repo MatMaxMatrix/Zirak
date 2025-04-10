@@ -6,6 +6,7 @@ import { WebSocketProvider } from "./contexts/WebSocketContext";
 import NavBar from "@/components/NavBar";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ProfileSync } from "@/components/auth/ProfileSync";
+import { Toaster } from "@/components/ui/sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -38,6 +39,7 @@ export default function RootLayout({
               </div>
               <ProfileSync />
             </WebSocketProvider>
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>
