@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Card, 
   CardContent, 
@@ -98,6 +98,7 @@ export default function UserDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const userIsAdmin = user ? isAdmin(user) : false;
+  const fetchedRef = useRef(false);
 
   // Check if API keys exist
   useEffect(() => {
@@ -111,10 +112,11 @@ export default function UserDashboardPage() {
   // Fetch user data from Supabase
   useEffect(() => {
     async function fetchUserData() {
-      if (!user) return;
+      if (!user || fetchedRef.current) return;
       
       setLoading(true);
       try {
+        fetchedRef.current = true;
         const supabase = createClient();
         
         // Fetch user profile
@@ -222,7 +224,7 @@ export default function UserDashboardPage() {
     }
     
     fetchUserData();
-  }, [user]);
+  }, [user?.id]);
 
   // Format date for display
   const formatDate = (dateString: string) => {

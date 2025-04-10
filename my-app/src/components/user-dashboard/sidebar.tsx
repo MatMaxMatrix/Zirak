@@ -55,16 +55,7 @@ export function UserSidebar() {
   };
 
   return (
-    <aside className="fixed top-16 left-0 z-10 flex h-[calc(100vh-64px)] w-64 flex-col border-r bg-background">
-      <div className="flex h-14 items-center border-b px-4">
-        <Link
-          href="/"
-          className="flex items-center gap-2 font-bold"
-        >
-          <span className="text-primary">Zirak AI</span>
-        </Link>
-      </div>
-
+    <aside className="fixed top-16 left-0 z-20 flex h-[calc(100vh-4rem)] w-64 flex-col border-r bg-background shadow-sm">
       <div className="flex flex-col items-center p-4 border-b">
         <div className="text-sm mb-1">Welcome back!</div>
         <div className="font-medium">{userEmail}</div>
@@ -73,7 +64,7 @@ export function UserSidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
         {navItems.map((item) => (
           <Link
             key={item.href}

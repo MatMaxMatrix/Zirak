@@ -58,48 +58,13 @@ const profileFormSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [hasAttemptedProfileCreation, setHasAttemptedProfileCreation] = useState(false);
   
-  useEffect(() => {
-    async function fetchProfileData() {
-      if (!user) return;
-      
-      try {
-        const supabase = createClient();
-        
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-          
-        if (error) {
-          console.error('Error fetching profile:', error);
-          return;
-        }
-        
-        if (data) {
-          setProfileData(data);
-          form.reset({
-            name: data.name || user.user_metadata?.name || "",
-            email: user.email || "",
-            phone: data.phone_number || "",
-            location: data.location || "",
-            bio: data.metadata?.bio || "",
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        toast.error("Failed to load profile data");
-      }
-    }
-    
-    fetchProfileData();
-  }, [user]);
-
   // Set default form values from Supabase user profile
   const defaultValues: Partial<ProfileFormValues> = {
     name: user?.user_metadata?.name || "",
@@ -114,6 +79,114 @@ export default function ProfilePage() {
     defaultValues,
     mode: "onChange",
   });
+  
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchProfileData() {
+      if (!user || isCreatingProfile || hasAttemptedProfileCreation) return;
+      
+      try {
+        const supabase = createClient();
+        
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (error) {
+          // Handle specific error cases
+          if (error.code === 'PGRST116' && !hasAttemptedProfileCreation) {
+            // This is "no rows returned" error, which is normal for new users
+            console.log('No profile found, using default values');
+            // Set default values from user metadata
+            form.reset({
+              name: user.user_metadata?.name || "",
+              email: user.email || "",
+              phone: "",
+              location: "",
+              bio: "",
+            });
+            
+            // Create a new profile for the user, but only try once
+            if (isMounted) {
+              setHasAttemptedProfileCreation(true);
+              await createUserProfile(user);
+            }
+            return;
+          } else {
+            // For other errors, show error toast
+            console.error('Error fetching profile:', JSON.stringify(error));
+            toast.error("Failed to load profile data: " + error.message);
+            return;
+          }
+        }
+        
+        if (data && isMounted) {
+          setProfileData(data);
+          form.reset({
+            name: data.name || user.user_metadata?.name || "",
+            email: user.email || "",
+            phone: data.phone_number || "",
+            location: data.location || "",
+            bio: data.metadata?.bio || "",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error instanceof Error ? error.message : JSON.stringify(error));
+        if (isMounted) toast.error("Failed to load profile data");
+      }
+    }
+    
+    // Helper function to create a new profile
+    async function createUserProfile(user: any) {
+      if (isCreatingProfile) return;
+      
+      try {
+        setIsCreatingProfile(true);
+        
+        // Use the API endpoint with admin privileges instead of direct client access
+        const response = await fetch('/api/profile/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || "",
+            picture: user.user_metadata?.picture || ""
+          }),
+          // Add a cache-busting query parameter
+          cache: 'no-store',
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error('Error creating profile:', result.error);
+          if (isMounted) toast.error("Failed to create profile: " + (result.error || "Unknown error"));
+        } else {
+          console.log('Profile created successfully via API');
+          if (isMounted) toast.success("Profile created successfully");
+          // Refresh user data to get the new profile
+          if (isMounted) await refreshUser();
+        }
+      } catch (error) {
+        console.error('Error calling profile creation API:', error instanceof Error ? error.message : JSON.stringify(error));
+        if (isMounted) toast.error("Failed to create profile");
+      } finally {
+        if (isMounted) setIsCreatingProfile(false);
+      }
+    }
+    
+    fetchProfileData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user, form, hasAttemptedProfileCreation, isCreatingProfile]);
 
   async function onSubmit(data: ProfileFormValues) {
     if (!user) return;
