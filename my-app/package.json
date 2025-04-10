@@ -61,6 +61,7 @@
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
+    "ua-parser-js": "^1.0.40",
     "uuid": "^9.0.1",
     "zod": "^3.24.2"
   },
@@ -71,6 +72,7 @@
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.1",
     "@types/recharts": "^1.8.29",
+    "@types/ua-parser-js": "^0.7.39",
     "@types/uuid": "^9.0.8",
     "autoprefixer": "^10.4.21",
     "critters": "^0.0.20",

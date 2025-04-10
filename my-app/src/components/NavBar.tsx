@@ -8,7 +8,12 @@ import {
   LogOut,
   ChevronDown,
   X,
-  MessageSquare
+  MessageSquare,
+  Settings,
+  Moon,
+  Sun,
+  LaptopIcon,
+  UserIcon
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -16,7 +21,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuGroup,
 } from './ui/dropdown-menu';
 import { usePathname, useRouter } from 'next/navigation';
 import { useFileSystem } from '@/hooks/useFileSystem';
@@ -24,12 +32,112 @@ import dynamic from 'next/dynamic';
 import { isAdmin } from '@/lib/auth';
 import { createClient } from '@/utils/supabase/client';
 import { useAuth } from './AuthProvider';
+import { useTheme } from 'next-themes';
 
 // Dynamically import the ProjectSelector to avoid circular dependencies
 const DynamicProjectSelector = dynamic(
   () => import('@/components/chat/ProjectSelector').then(mod => ({ default: mod.ProjectSelector })),
   { ssr: false }
 );
+
+// User dropdown component for when the user is logged in
+const UserDropdown = ({ user, onSignOut }) => {
+  const { setTheme } = useTheme();
+  const router = useRouter();
+  
+  const goToProfile = () => {
+    router.push('/user-dashboard/profile');
+  };
+  
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
+            <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56" align="end" forceMount>
+        <DropdownMenuLabel>
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">{user.user_metadata?.name || user.email}</p>
+            <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem onClick={goToProfile}>
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Profile</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/user-dashboard')}>
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Dashboard</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+            Theme
+          </DropdownMenuLabel>
+          <DropdownMenuItem onClick={() => setTheme("light")}>
+            <Sun className="mr-2 h-4 w-4" />
+            <span>Light</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("dark")}>
+            <Moon className="mr-2 h-4 w-4" />
+            <span>Dark</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setTheme("system")}>
+            <LaptopIcon className="mr-2 h-4 w-4" />
+            <span>System</span>
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSignOut}>
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Sign out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
+// Mobile theme toggle component
+const MobileThemeToggle = () => {
+  const { setTheme } = useTheme();
+  
+  return (
+    <div className="px-3 py-2">
+      <div className="text-base font-medium text-gray-500 mb-1">Theme</div>
+      <div className="grid grid-cols-3 gap-2">
+        <button 
+          onClick={() => setTheme("light")}
+          className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-gray-50"
+        >
+          <Sun className="h-5 w-5 mb-1" />
+          <span className="text-xs">Light</span>
+        </button>
+        <button 
+          onClick={() => setTheme("dark")}
+          className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-gray-50"
+        >
+          <Moon className="h-5 w-5 mb-1" />
+          <span className="text-xs">Dark</span>
+        </button>
+        <button 
+          onClick={() => setTheme("system")}
+          className="flex flex-col items-center justify-center p-2 rounded-md hover:bg-gray-50"
+        >
+          <LaptopIcon className="h-5 w-5 mb-1" />
+          <span className="text-xs">System</span>
+        </button>
+      </div>
+    </div>
+  );
+};
 
 const NavBar = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -62,7 +170,7 @@ const NavBar = () => {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/sign-in');
+    router.push('/');
   };
 
   if (isLoading) {
@@ -146,24 +254,7 @@ const NavBar = () => {
                 </Button>
               )}
               
-              {user && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                      <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email} />
-                        <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="w-56" align="end" forceMount>
-                    <DropdownMenuItem onClick={handleSignOut}>
-                      <LogOut className="mr-2 h-4 w-4" />
-                      <span>Sign out</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              {user && <UserDropdown user={user} onSignOut={handleSignOut} />}
             </div>
           </div>
           
@@ -251,30 +342,43 @@ const NavBar = () => {
                 <div className="flex items-center px-4">
                   <div className="flex-shrink-0">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.user_metadata?.avatar_url} alt={user.email} />
+                      <AvatarImage src={user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
                       <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </div>
                   <div className="ml-3">
-                    <div className="text-base font-medium text-gray-800">{user.email}</div>
+                    <div className="text-base font-medium text-gray-800">{user.user_metadata?.name || user.email}</div>
                     <div className="text-sm font-medium text-gray-500">{user.email}</div>
                   </div>
                 </div>
-                <div className="mt-3 px-2 space-y-1">
-                  <Button asChild className="w-full mb-2 bg-blue-600 hover:bg-blue-700">
-                    <Link href="/waitlist">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      Join Waitlist
-                    </Link>
-                  </Button>
-                  <Link href="/user-dashboard/profile" className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100">
-                    Profile
+                <div className="mt-3 space-y-1 px-2">
+                  <Link 
+                    href="/user-dashboard/profile" 
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <div className="flex items-center">
+                      <UserIcon className="mr-2 h-4 w-4" />
+                      Your Profile
+                    </div>
                   </Link>
+                  <Link 
+                    href="/user-dashboard" 
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <div className="flex items-center">
+                      <Settings className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </div>
+                  </Link>
+                  <MobileThemeToggle />
                   <button
                     onClick={handleSignOut}
-                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100"
+                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   >
-                    Sign out
+                    <div className="flex items-center">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign out
+                    </div>
                   </button>
                 </div>
               </>

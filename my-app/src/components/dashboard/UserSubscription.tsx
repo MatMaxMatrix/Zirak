@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import { getSupabase } from '@/utils/supabase';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 type SubscriptionPlan = {
   id: number;
@@ -26,12 +27,32 @@ type Subscription = {
   plan: SubscriptionPlan;
 };
 
+/**
+ * This component requires the following RLS policies in Supabase:
+ * 
+ * -- Allow users to view their own subscriptions
+ * CREATE POLICY "Users can view their own subscriptions" 
+ * ON subscriptions FOR SELECT 
+ * USING (user_id = auth.user_id());
+ * 
+ * -- Allow users to view subscription plans (all users can view plans)
+ * CREATE POLICY "Anyone can view subscription plans" 
+ * ON subscription_plans FOR SELECT 
+ * USING (true);
+ * 
+ * -- Allow users to view their own payment history
+ * CREATE POLICY "Users can view their own payments" 
+ * ON payments FOR SELECT 
+ * USING (user_id = auth.user_id());
+ */
+
 export default function UserSubscription() {
-  const { user, isLoading: isUserLoading } = useUser();
+  const { user, isLoading: isUserLoading } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -47,54 +68,65 @@ export default function UserSubscription() {
   const fetchSubscriptionData = async () => {
     setIsLoading(true);
     setError(null);
-
+    
     try {
-      const supabase = getSupabase(user?.accessToken as string | undefined);
-      
-      // Get all available plans
-      const { data: plansData, error: plansError } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .order('price_monthly');
-      
-      if (plansError) {
-        throw new Error(`Error fetching plans: ${plansError.message}`);
+      if (!user) {
+        throw new Error("User not authenticated");
       }
       
-      // Format the features which are stored as JSON
-      const formattedPlans = plansData.map(plan => ({
-        ...plan,
-        features: typeof plan.features === 'string' 
-          ? JSON.parse(plan.features) 
-          : plan.features
-      }));
+      const supabase = createClient();
+      
+      // First get all available subscription plans
+      const { data: plans, error: plansError } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .order('price_monthly', { ascending: true });
+      
+      if (plansError) {
+        throw plansError;
+      }
+      
+      // Format plan features from JSONB to array
+      const formattedPlans = plans.map(plan => {
+        let features: string[] = [];
+        
+        if (plan.features) {
+          if (typeof plan.features === 'string') {
+            try {
+              features = JSON.parse(plan.features);
+            } catch (e) {
+              console.error('Error parsing features:', e);
+            }
+          } else if (Array.isArray(plan.features)) {
+            features = plan.features;
+          } else if (typeof plan.features === 'object') {
+            // Handle JSONB object
+            features = Object.values(plan.features).map(f => String(f));
+          }
+        }
+        
+        return {
+          ...plan,
+          features
+        };
+      });
       
       setAvailablePlans(formattedPlans);
       
-      // Get user's current subscription
+      // Get user's active subscription with join to subscription_plans
       const { data: subscriptionData, error: subscriptionError } = await supabase
         .from('subscriptions')
         .select(`
-          id,
-          status,
-          started_at,
-          trial_ends_at,
-          current_period_ends_at,
-          subscription_plans (
-            id,
-            name,
-            description,
-            price_monthly,
-            price_yearly,
-            features
-          )
+          *,
+          subscription_plans:plan_id (*)
         `)
-        .eq('user_id', user.sub)
+        .eq('user_id', user.id)
         .eq('status', 'active')
-        .maybeSingle();
+        .single();
       
-      if (subscriptionError) {
-        throw new Error(`Error fetching subscription: ${subscriptionError.message}`);
+      if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+        // Error other than "not found"
+        throw subscriptionError;
       }
       
       if (subscriptionData) {
@@ -115,6 +147,9 @@ export default function UserSubscription() {
             }
           } else if (Array.isArray(planData.features)) {
             planFeatures = planData.features;
+          } else if (typeof planData.features === 'object') {
+            // Handle JSONB object
+            planFeatures = Object.values(planData.features).map(f => String(f));
           }
         }
         
@@ -129,6 +164,18 @@ export default function UserSubscription() {
         delete formattedSubscription.subscription_plans;
         
         setSubscription(formattedSubscription);
+        
+        // Get latest payment for this subscription
+        const { data: paymentData } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('subscription_id', subscriptionData.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (paymentData && paymentData.length > 0) {
+          setPaymentInfo(paymentData[0]);
+        }
       } else {
         // If no active subscription, use the free plan
         const freePlan = formattedPlans.find(plan => plan.name.toLowerCase() === 'free');

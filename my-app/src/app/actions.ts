@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/utils/supabase/server";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export const signInAction = async (formData: FormData) => {
@@ -9,7 +8,7 @@ export const signInAction = async (formData: FormData) => {
   const password = formData.get("password") as string;
   const supabase = await createClient();
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -19,15 +18,43 @@ export const signInAction = async (formData: FormData) => {
     return redirect(`/sign-in?error=${encodeURIComponent(error.message)}`);
   }
 
-  return redirect("/dashboard");
+  // Record login history using the API route instead of direct database access
+  // This allows us to properly parse user agent and get IP info
+  try {    
+    if (data.user) {
+      // Send login data to the login history API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/login-history`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: data.user.id,
+          // The IP will be determined server-side in the API route
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("[SignIn] Failed to record login history:", errorData.error);
+      }
+    }
+  } catch (historyError) {
+    // Just log the error, don't prevent sign-in
+    console.error("[SignIn] Error recording login history:", historyError);
+  }
+
+  // Redirect to home page after successful sign-in
+  return redirect("/");
 };
 
 export const signUpAction = async (formData: FormData) => {
   const email = formData.get("email")?.toString();
   const password = formData.get("password")?.toString();
   const supabase = await createClient();
-  const headersList = headers();
-  const origin = headersList.get("origin");
+  
+  // Use the site URL from environment or a hardcoded default
+  const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
   if (!email || !password) {
     return redirect(`/sign-up?error=${encodeURIComponent("Email and password are required")}`);
@@ -52,5 +79,7 @@ export const signUpAction = async (formData: FormData) => {
 export const signOutAction = async () => {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return redirect("/sign-in");
+  
+  // Redirect to home page after sign out
+  return redirect("/");
 }; 

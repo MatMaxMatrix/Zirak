@@ -9,39 +9,17 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from '@/components/AuthProvider';
+import { createClient } from '@/utils/supabase/client';
+import crypto from 'crypto';
 
-// Constants for local storage
-const OPENAI_KEY_STORAGE = 'openai_api_key';
-const ANTHROPIC_KEY_STORAGE = 'anthropic_api_key';
-
-// Helper functions for each provider's API key
-const getStoredKey = (provider: string): string | null => {
-  try {
-    return localStorage.getItem(provider);
-  } catch (error) {
-    console.error(`Error reading ${provider} from storage:`, error);
-    return null;
-  }
-};
-
-const storeKey = (provider: string, apiKey: string): void => {
-  try {
-    localStorage.setItem(provider, apiKey);
-  } catch (error) {
-    console.error(`Error storing ${provider}:`, error);
-  }
-};
-
-const removeKey = (provider: string): void => {
-  try {
-    localStorage.removeItem(provider);
-  } catch (error) {
-    console.error(`Error removing ${provider}:`, error);
-  }
-};
+// Store key provider constants
+const OPENAI_KEY_PROVIDER = 'openai';
+const ANTHROPIC_KEY_PROVIDER = 'anthropic';
 
 export default function ApiSettingsPage() {
   const router = useRouter();
+  const { user } = useAuth();
   
   // State for OpenAI
   const [openaiKey, setOpenaiKey] = useState("");
@@ -54,35 +32,150 @@ export default function ApiSettingsPage() {
   const [hasAnthropicKey, setHasAnthropicKey] = useState(false);
   const [isSavingAnthropic, setIsSavingAnthropic] = useState(false);
   const [isEditingAnthropic, setIsEditingAnthropic] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Initial loading of API keys
-  useEffect(() => {
-    // Load OpenAI key
-    const storedOpenaiKey = getStoredKey(OPENAI_KEY_STORAGE);
-    if (storedOpenaiKey) {
-      const maskedKey = maskApiKey(storedOpenaiKey);
-      setOpenaiKey(maskedKey);
-      setHasOpenaiKey(true);
-    }
+  // Helper function to generate hash and prefix
+  const generateHashAndPrefix = (key) => {
+    if (!key) return { hashedKey: '', prefix: '' };
     
-    // Load Anthropic key
-    const storedAnthropicKey = getStoredKey(ANTHROPIC_KEY_STORAGE);
-    if (storedAnthropicKey) {
-      const maskedKey = maskApiKey(storedAnthropicKey);
-      setAnthropicKey(maskedKey);
-      setHasAnthropicKey(true);
-    }
-  }, []);
+    // Create a hash of the API key for secure storage
+    const hashedKey = crypto.createHash('sha256').update(key).digest('hex');
+    
+    // Get the first 8 chars of the API key to use as an identifier
+    const prefix = key.substring(0, 8);
+    
+    return { hashedKey, prefix };
+  };
 
-  // Helper function to mask API keys
-  const maskApiKey = (key: string): string => {
-    return key.length > 7 
-      ? `${key.substring(0, 3)}${'*'.repeat(key.length - 7)}${key.substring(key.length - 4)}`
-      : '********';
+  // Fetch user's API keys on component mount
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('api_keys')
+          .select('*')
+          .eq('user_id', user.id);
+
+        if (error) {
+          throw error;
+        }
+
+        // Check if user has API keys for each provider
+        const openaiKeyData = data?.find(key => key.key_name === OPENAI_KEY_PROVIDER);
+        const anthropicKeyData = data?.find(key => key.key_name === ANTHROPIC_KEY_PROVIDER);
+
+        // If keys exist, set the UI state to show masked versions
+        if (openaiKeyData) {
+          setOpenaiKey(`${openaiKeyData.key_prefix}${'*'.repeat(24)}`);
+          setHasOpenaiKey(true);
+        }
+
+        if (anthropicKeyData) {
+          setAnthropicKey(`${anthropicKeyData.key_prefix}${'*'.repeat(24)}`);
+          setHasAnthropicKey(true);
+        }
+      } catch (error) {
+        console.error('Error fetching API keys:', error);
+        toast.error('Failed to load your API keys');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchApiKeys();
+  }, [user]);
+
+  // Function to store API key in Supabase
+  const storeKey = async (provider, apiKey) => {
+    if (!user) {
+      toast.error('You must be logged in to save API keys');
+      return;
+    }
+
+    try {
+      const { hashedKey, prefix } = generateHashAndPrefix(apiKey);
+      const supabase = createClient();
+      
+      // Check if key already exists
+      const { data, error: fetchError } = await supabase
+        .from('api_keys')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('key_name', provider)
+        .single();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        throw fetchError;
+      }
+      
+      // Prepare the key data
+      const keyData = {
+        user_id: user.id,
+        key_name: provider,
+        key_prefix: prefix,
+        hashed_key: hashedKey,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        expires_at: null, // You could set an expiration if needed
+      };
+      
+      if (data) {
+        // Update existing key
+        const { error: updateError } = await supabase
+          .from('api_keys')
+          .update({
+            key_prefix: prefix,
+            hashed_key: hashedKey,
+            is_active: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', data.id);
+          
+        if (updateError) throw updateError;
+      } else {
+        // Insert new key
+        const { error: insertError } = await supabase
+          .from('api_keys')
+          .insert([keyData]);
+          
+        if (insertError) throw insertError;
+      }
+    } catch (error) {
+      console.error(`Error saving ${provider} API key:`, error);
+      toast.error(`Failed to save ${provider} API key`);
+      throw error;
+    }
+  };
+
+  // Function to remove API key from Supabase
+  const removeKey = async (provider) => {
+    if (!user) return;
+    
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('api_keys')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('key_name', provider);
+        
+      if (error) throw error;
+    } catch (error) {
+      console.error(`Error removing ${provider} API key:`, error);
+      toast.error(`Failed to remove ${provider} API key`);
+      throw error;
+    }
   };
 
   // Save OpenAI API key
-  const handleSaveOpenaiKey = () => {
+  const handleSaveOpenaiKey = async () => {
     if (!openaiKey.trim()) {
       toast.error("Please enter a valid OpenAI API key");
       return;
@@ -90,22 +183,24 @@ export default function ApiSettingsPage() {
 
     setIsSavingOpenai(true);
     
-    // Simulate a delay for better UX
-    setTimeout(() => {
-      storeKey(OPENAI_KEY_STORAGE, openaiKey);
+    try {
+      await storeKey(OPENAI_KEY_PROVIDER, openaiKey);
       toast.success("OpenAI API key saved successfully");
-      setIsSavingOpenai(false);
       setHasOpenaiKey(true);
       setIsEditingOpenai(false);
       
       // Mask the key after saving
-      const maskedKey = maskApiKey(openaiKey);
+      const maskedKey = `${openaiKey.substring(0, 8)}${'*'.repeat(24)}`;
       setOpenaiKey(maskedKey);
-    }, 800);
+    } catch (error) {
+      // Error already handled in storeKey
+    } finally {
+      setIsSavingOpenai(false);
+    }
   };
 
   // Save Anthropic API key
-  const handleSaveAnthropicKey = () => {
+  const handleSaveAnthropicKey = async () => {
     if (!anthropicKey.trim()) {
       toast.error("Please enter a valid Anthropic API key");
       return;
@@ -113,36 +208,46 @@ export default function ApiSettingsPage() {
 
     setIsSavingAnthropic(true);
     
-    // Simulate a delay for better UX
-    setTimeout(() => {
-      storeKey(ANTHROPIC_KEY_STORAGE, anthropicKey);
+    try {
+      await storeKey(ANTHROPIC_KEY_PROVIDER, anthropicKey);
       toast.success("Anthropic API key saved successfully");
-      setIsSavingAnthropic(false);
       setHasAnthropicKey(true);
       setIsEditingAnthropic(false);
       
       // Mask the key after saving
-      const maskedKey = maskApiKey(anthropicKey);
+      const maskedKey = `${anthropicKey.substring(0, 8)}${'*'.repeat(24)}`;
       setAnthropicKey(maskedKey);
-    }, 800);
+    } catch (error) {
+      // Error already handled in storeKey
+    } finally {
+      setIsSavingAnthropic(false);
+    }
   };
 
   // Remove OpenAI API key
-  const handleRemoveOpenaiKey = () => {
-    removeKey(OPENAI_KEY_STORAGE);
-    setOpenaiKey("");
-    setHasOpenaiKey(false);
-    setIsEditingOpenai(true);
-    toast.success("OpenAI API key removed");
+  const handleRemoveOpenaiKey = async () => {
+    try {
+      await removeKey(OPENAI_KEY_PROVIDER);
+      setOpenaiKey("");
+      setHasOpenaiKey(false);
+      setIsEditingOpenai(true);
+      toast.success("OpenAI API key removed");
+    } catch (error) {
+      // Error already handled in removeKey
+    }
   };
 
   // Remove Anthropic API key
-  const handleRemoveAnthropicKey = () => {
-    removeKey(ANTHROPIC_KEY_STORAGE);
-    setAnthropicKey("");
-    setHasAnthropicKey(false);
-    setIsEditingAnthropic(true);
-    toast.success("Anthropic API key removed");
+  const handleRemoveAnthropicKey = async () => {
+    try {
+      await removeKey(ANTHROPIC_KEY_PROVIDER);
+      setAnthropicKey("");
+      setHasAnthropicKey(false);
+      setIsEditingAnthropic(true);
+      toast.success("Anthropic API key removed");
+    } catch (error) {
+      // Error already handled in removeKey
+    }
   };
 
   // Handle editing OpenAI key

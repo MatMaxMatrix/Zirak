@@ -142,10 +142,10 @@ export default function PricingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Pricing Header */}
-      <div className="py-16 text-center resize-section bg-black/50 backdrop-blur-sm">
-        <h1 className="text-4xl md:text-5xl font-bold mb-3 text-white">Simple, transparent pricing</h1>
+      <div className="py-16 text-center resize-section bg-background/50 backdrop-blur-sm">
+        <h1 className="text-4xl md:text-5xl font-bold mb-3">Simple, transparent pricing</h1>
         <p className="text-lg text-yellow-400 max-w-2xl mx-auto">
           Choose the perfect plan for your needs. All plans include a 14-day free trial.
         </p>

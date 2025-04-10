@@ -237,7 +237,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
       {/* Enhanced Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-[500px] -left-[500px] w-[1000px] h-[1000px] bg-radial-gradient from-purple-500/20 to-transparent rounded-full blur-3xl opacity-30 animate-pulse-slow" />
@@ -254,7 +254,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="text-4xl md:text-6xl font-bold text-center mb-6 text-white"
           >
-            Welcome to <span className="text-red-500">Zirak</span>
+             <span className="text-red-500">Zirak</span>
           </motion.h1>
           
           <motion.p 

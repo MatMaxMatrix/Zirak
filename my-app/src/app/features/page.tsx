@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Code, Braces, Terminal, MessageSquare, Bot, GitBranch, Server, Database, Globe, Blocks, Shield, Zap, Activity, Sparkles, Menu } from "lucide-react";
+import { ArrowLeft, Code, Braces, Terminal, MessageSquare, Bot, GitBranch, Server, Database, Globe, Blocks, Shield, Zap, Activity, Sparkles, Menu, Lightbulb, Bug, Gauge } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -12,86 +12,86 @@ export default function FeaturesPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Hero Section */}
       <section className="py-20 px-4">
         <div className="max-w-5xl mx-auto text-center">
           <h1 className="text-5xl font-bold mb-6">Powerful AI-Driven Development Platform</h1>
-          <p className="text-xl text-gray-400 mb-12 max-w-3xl mx-auto">
+          <p className="text-xl text-muted-foreground mb-12 max-w-3xl mx-auto">
             Zirak combines multiple AI agents with a seamless developer experience to help you build, test, and deploy software faster than ever before.
           </p>
         </div>
       </section>
 
       {/* Main Features */}
-      <section className="py-16 px-4 bg-gray-900/50">
+      <section className="py-16 px-4 bg-muted/50">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold mb-12 text-center">Platform Features</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Feature 1 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
+            <div className="dark-card p-6 rounded-xl border">
               <div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-4">
                 <MessageSquare className="h-6 w-6 text-blue-400" />
               </div>
               <h3 className="text-xl font-semibold mb-3">Intelligent Chat Interface</h3>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 Communicate with multiple AI agents through a streamlined chat interface. Ask questions, request features, and get real-time responses.
               </p>
             </div>
             
             {/* Feature 2 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
+            <div className="dark-card p-6 rounded-xl border">
               <div className="h-12 w-12 rounded-lg bg-purple-500/20 flex items-center justify-center mb-4">
                 <Bot className="h-6 w-6 text-purple-400" />
               </div>
               <h3 className="text-xl font-semibold mb-3">Multi-Agent Workflow</h3>
-              <p className="text-gray-400">
+              <p className="text-muted-foreground">
                 Our platform utilizes multiple specialized AI agents that collaborate to solve complex development tasks and answer questions efficiently.
               </p>
             </div>
             
             {/* Feature 3 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
+            <div className="dark-card p-6 rounded-xl border">
               <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center mb-4">
                 <Code className="h-6 w-6 text-green-400" />
               </div>
               <h3 className="text-xl font-semibold mb-3">Code Generation</h3>
-              <p className="text-gray-400">
-                Generate production-ready code based on your requirements. Our AI understands context and produces optimized, secure implementations.
+              <p className="text-muted-foreground">
+                Generate high-quality, production-ready code in various programming languages based on your specifications and requirements.
               </p>
             </div>
             
             {/* Feature 4 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
-              <div className="h-12 w-12 rounded-lg bg-amber-500/20 flex items-center justify-center mb-4">
-                <Terminal className="h-6 w-6 text-amber-400" />
+            <div className="dark-card p-6 rounded-xl border">
+              <div className="h-12 w-12 rounded-lg bg-yellow-500/20 flex items-center justify-center mb-4">
+                <Lightbulb className="h-6 w-6 text-yellow-400" />
               </div>
-              <h3 className="text-xl font-semibold mb-3">Integrated Terminal</h3>
-              <p className="text-gray-400">
-                Execute commands directly within the application. Run, test, and debug your code without switching between different tools.
+              <h3 className="text-xl font-semibold mb-3">Idea Development</h3>
+              <p className="text-muted-foreground">
+                Transform rough ideas into detailed project plans with architecture diagrams, component structures, and implementation strategies.
               </p>
             </div>
             
             {/* Feature 5 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
+            <div className="dark-card p-6 rounded-xl border">
               <div className="h-12 w-12 rounded-lg bg-red-500/20 flex items-center justify-center mb-4">
-                <GitBranch className="h-6 w-6 text-red-400" />
+                <Bug className="h-6 w-6 text-red-400" />
               </div>
-              <h3 className="text-xl font-semibold mb-3">GitHub Integration</h3>
-              <p className="text-gray-400">
-                Connect directly to GitHub repositories. Import, modify, and contribute to your projects with intelligent assistance.
+              <h3 className="text-xl font-semibold mb-3">Bug Resolution</h3>
+              <p className="text-muted-foreground">
+                Identify and fix bugs in your code with automated analysis and intelligent debugging suggestions based on best practices.
               </p>
             </div>
             
             {/* Feature 6 */}
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
-              <div className="h-12 w-12 rounded-lg bg-cyan-500/20 flex items-center justify-center mb-4">
-                <Globe className="h-6 w-6 text-cyan-400" />
+            <div className="dark-card p-6 rounded-xl border">
+              <div className="h-12 w-12 rounded-lg bg-orange-500/20 flex items-center justify-center mb-4">
+                <Gauge className="h-6 w-6 text-orange-400" />
               </div>
-              <h3 className="text-xl font-semibold mb-3">Web Preview</h3>
-              <p className="text-gray-400">
-                Instantly preview your web applications within the platform. See changes in real-time as you develop.
+              <h3 className="text-xl font-semibold mb-3">Performance Optimization</h3>
+              <p className="text-muted-foreground">
+                Analyze and optimize your application's performance with targeted recommendations for improving speed and efficiency.
               </p>
             </div>
           </div>

@@ -32,7 +32,31 @@ export default function Login() {
       }
 
       console.log('[Google Sign In] Success:', data);
-      router.push('/dashboard');
+      
+      // Record login history
+      try {
+        if (data.user) {
+          const loginHistoryResponse = await fetch('/api/auth/login-history', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              userId: data.user.id,
+              ipAddress: 'Client Google sign-in',
+            }),
+          });
+          
+          if (!loginHistoryResponse.ok) {
+            console.error('[Google Sign In] Failed to record login history');
+          }
+        }
+      } catch (historyError) {
+        console.error('[Google Sign In] Error recording login history:', historyError);
+      }
+      
+      // Redirect to home page after successful sign-in
+      router.push('/');
     } catch (err) {
       console.error('[Google Sign In] Error:', err);
     }

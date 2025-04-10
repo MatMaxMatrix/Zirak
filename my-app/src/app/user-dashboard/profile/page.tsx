@@ -129,8 +129,8 @@ export default function ProfilePage() {
             name: data.name || user.user_metadata?.name || "",
             email: user.email || "",
             phone: data.phone_number || "",
-            location: data.location || "",
-            bio: data.metadata?.bio || "",
+            location: data.city || "",
+            bio: data.bio || "",
           });
         }
       } catch (error) {
@@ -194,31 +194,39 @@ export default function ProfilePage() {
     setIsSubmitting(true);
     
     try {
-      const supabase = createClient();
-      
-      // Create a metadata object to store bio since it's not a direct column
-      const metadata = {
-        ...(profileData?.metadata || {}),
-        bio: data.bio
-      };
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      // Instead of updating directly with client-side Supabase, use the API endpoint
+      const response = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
           name: data.name,
-          phone_number: data.phone,
+          bio: data.bio,
+          phone: data.phone,
           location: data.location,
-          metadata: metadata,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-        
-      if (error) throw error;
+        }),
+        cache: 'no-store',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error updating profile:', result.error);
+        throw new Error(result.error || 'Failed to update profile');
+      }
+      
+      // Update local profile data
+      if (result.data) {
+        setProfileData(result.data);
+      }
       
       toast.success("Profile updated successfully!");
     } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error("Failed to update profile");
+      console.error('Error updating profile:', error instanceof Error ? error.message : JSON.stringify(error));
+      toast.error(error instanceof Error ? error.message : "Failed to update profile");
     } finally {
       setIsSubmitting(false);
     }
