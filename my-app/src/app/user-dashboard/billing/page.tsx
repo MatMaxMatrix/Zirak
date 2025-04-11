@@ -181,9 +181,11 @@ export default function BillingPage() {
   // Handle subscription initiation
   const handleSubscribe = () => {
     setIsSubscribing(true);
+    // Redirect to waitlist page after a short delay to simulate processing
     setTimeout(() => {
       setIsSubscribing(false);
-      toast.success(`You've successfully subscribed to the ${plans.find(p => p.id === selectedPlan)?.name} plan`);
+      // Redirect to waitlist page instead of showing success toast
+      window.location.href = '/waitlist';
     }, 1500);
   };
 
@@ -211,19 +213,19 @@ export default function BillingPage() {
         {/* Subscription Tab */}
         <TabsContent value="subscription" className="space-y-6">
           {/* No Active Subscription Card */}
-          <Card>
+          <Card className="bg-black border-gray-800">
             <CardHeader>
-              <CardTitle>Current Plan</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">Current Plan</CardTitle>
+              <CardDescription className="text-yellow-400">
                 You don't have an active subscription
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center p-4 rounded-lg bg-muted">
-                <Info className="h-8 w-8 text-muted-foreground mr-4" />
+              <div className="flex items-center p-4 rounded-lg bg-black border border-gray-800">
+                <Info className="h-8 w-8 text-yellow-400 mr-4" />
                 <div>
-                  <h3 className="font-medium">No Active Subscription</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-medium text-white">No Active Subscription</h3>
+                  <p className="text-sm text-yellow-400">
                     Choose a plan below to get started with our services.
                   </p>
                 </div>
@@ -232,10 +234,10 @@ export default function BillingPage() {
           </Card>
 
           {/* Choose Plan */}
-          <Card>
+          <Card className="bg-black border-gray-800">
             <CardHeader>
-              <CardTitle>Choose a Plan</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">Choose a Plan</CardTitle>
+              <CardDescription className="text-yellow-400">
                 Select a subscription plan that works for you
               </CardDescription>
             </CardHeader>
@@ -244,31 +246,31 @@ export default function BillingPage() {
                 {plans.map((plan) => (
                   <div 
                     key={plan.id} 
-                    className={`relative rounded-lg border ${plan.id === selectedPlan ? 'border-primary' : 'border-border'} ${plan.popular ? 'border-primary' : 'border-border'} p-4 cursor-pointer`}
+                    className={`relative rounded-lg border ${plan.id === selectedPlan ? 'border-red-500' : 'border-gray-800'} ${plan.popular ? 'border-red-500' : 'border-gray-800'} p-4 cursor-pointer bg-black`}
                     onClick={() => setSelectedPlan(plan.id)}
                   >
                     {plan.popular && (
-                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded">
+                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded">
                         Popular
                       </span>
                     )}
-                    <div className="absolute right-4 top-4 h-4 w-4 rounded-full border border-primary flex items-center justify-center">
+                    <div className="absolute right-4 top-4 h-4 w-4 rounded-full border border-red-500 flex items-center justify-center">
                       {selectedPlan === plan.id && (
-                        <div className="h-2 w-2 rounded-full bg-primary" />
+                        <div className="h-2 w-2 rounded-full bg-red-500" />
                       )}
                     </div>
                     <Label 
-                      className="font-medium text-lg block mb-1 cursor-pointer"
+                      className="font-medium text-lg block mb-1 cursor-pointer text-white"
                     >
                       {plan.name}
                     </Label>
-                    <p className="text-2xl font-bold">{plan.price}</p>
-                    <p className="text-sm text-muted-foreground mb-4">per month</p>
+                    <p className="text-2xl font-bold text-white">{plan.price}</p>
+                    <p className="text-sm text-yellow-400 mb-4">per month</p>
                     <ul className="space-y-2 text-sm">
                       {plan.features.map((feature, i) => (
                         <li key={i} className="flex items-start">
-                          <Check className="h-4 w-4 mr-2 mt-0.5 text-green-500" />
-                          <span>{feature}</span>
+                          <Check className="h-4 w-4 mr-2 mt-0.5 text-red-500" />
+                          <span className="text-white">{feature}</span>
                         </li>
                       ))}
                     </ul>
@@ -280,7 +282,7 @@ export default function BillingPage() {
               <Button 
                 onClick={handleSubscribe} 
                 disabled={isSubscribing}
-                className="ml-auto"
+                className="ml-auto bg-red-500 hover:bg-red-600 text-white"
               >
                 {isSubscribing ? (
                   <>
@@ -300,21 +302,21 @@ export default function BillingPage() {
 
         {/* Payment Methods Tab */}
         <TabsContent value="payment-methods" className="space-y-6">
-          <Card>
+          <Card className="bg-black border-gray-800">
             <CardHeader>
-              <CardTitle>Payment Methods</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">Payment Methods</CardTitle>
+              <CardDescription className="text-yellow-400">
                 Add a payment method to manage your subscriptions
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-col items-center justify-center p-8 border border-dashed rounded-lg text-center">
-                <CreditCardIcon className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Payment Methods</h3>
-                <p className="text-sm text-muted-foreground mb-4">
+              <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
+                <CreditCardIcon className="h-12 w-12 text-yellow-400 mb-4" />
+                <h3 className="text-lg font-medium mb-2 text-white">No Payment Methods</h3>
+                <p className="text-sm text-yellow-400 mb-4">
                   You haven't added any payment methods yet.
                 </p>
-                <Button onClick={handleAddPaymentMethod}>
+                <Button onClick={handleAddPaymentMethod} className="bg-red-500 hover:bg-red-600 text-white">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Add Payment Method
                 </Button>
@@ -325,18 +327,18 @@ export default function BillingPage() {
 
         {/* Billing History Tab */}
         <TabsContent value="billing-history">
-          <Card>
+          <Card className="bg-black border-gray-800">
             <CardHeader>
-              <CardTitle>Billing History</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-white">Billing History</CardTitle>
+              <CardDescription className="text-yellow-400">
                 View your invoice history
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center p-8 border border-dashed rounded-lg text-center">
-                <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No Billing History</h3>
-                <p className="text-sm text-muted-foreground">
+              <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
+                <FileText className="h-12 w-12 text-yellow-400 mb-4" />
+                <h3 className="text-lg font-medium mb-2 text-white">No Billing History</h3>
+                <p className="text-sm text-yellow-400">
                   Your billing history will appear here after your first subscription.
                 </p>
               </div>

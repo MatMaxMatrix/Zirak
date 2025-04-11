@@ -199,10 +199,9 @@ export default function UserSubscription() {
   };
 
   const handleUpgrade = (planId: number) => {
-    // Redirect to checkout page or show modal
+    // Redirect to waitlist page
     console.log(`Upgrading to plan ${planId}`);
-    // Here you would redirect to a checkout page
-    // window.location.href = `/checkout?plan=${planId}`;
+    window.location.href = '/waitlist';
   };
 
   const getStatusBadge = (status: string) => {
@@ -231,23 +230,23 @@ export default function UserSubscription() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Subscription</h2>
-        <p className="text-muted-foreground">Manage your subscription and billing</p>
+        <h2 className="text-2xl font-bold tracking-tight text-white">Subscription</h2>
+        <p className="text-yellow-400">Manage your subscription and billing</p>
       </div>
 
       {subscription && (
-        <Card>
+        <Card className="bg-black border-gray-800">
           <CardHeader>
-            <CardTitle>Current Plan: {subscription.plan.name}</CardTitle>
-            <CardDescription className="flex items-center">
+            <CardTitle className="text-white">Current Plan: {subscription.plan.name}</CardTitle>
+            <CardDescription className="flex items-center text-yellow-400">
               Status: {getStatusBadge(subscription.status)}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
-                <p className="font-medium">Plan Features:</p>
-                <ul className="mt-2 list-disc pl-5">
+                <p className="font-medium text-white">Plan Features:</p>
+                <ul className="mt-2 list-disc pl-5 text-yellow-400">
                   {subscription.plan.features.map((feature, index) => (
                     <li key={index}>{feature}</li>
                   ))}
@@ -256,23 +255,23 @@ export default function UserSubscription() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Started</p>
-                  <p className="font-medium">
+                  <p className="text-sm text-yellow-400">Started</p>
+                  <p className="font-medium text-white">
                     {new Date(subscription.started_at).toLocaleDateString()}
                   </p>
                 </div>
                 {subscription.current_period_ends_at && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Renews on</p>
-                    <p className="font-medium">
+                    <p className="text-sm text-yellow-400">Renews on</p>
+                    <p className="font-medium text-white">
                       {new Date(subscription.current_period_ends_at).toLocaleDateString()}
                     </p>
                   </div>
                 )}
                 {subscription.trial_ends_at && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Trial ends on</p>
-                    <p className="font-medium">
+                    <p className="text-sm text-yellow-400">Trial ends on</p>
+                    <p className="font-medium text-white">
                       {new Date(subscription.trial_ends_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -282,11 +281,11 @@ export default function UserSubscription() {
           </CardContent>
           <CardFooter>
             {subscription.status === 'free' ? (
-              <Button className="w-full">Upgrade Now</Button>
+              <Button className="w-full bg-red-500 hover:bg-red-600 text-white" onClick={() => window.location.href = '/waitlist'}>Upgrade Now</Button>
             ) : (
               <div className="w-full space-y-2">
-                <Button className="w-full" variant="outline">Manage Billing</Button>
-                <Button className="w-full" variant="ghost">Cancel Subscription</Button>
+                <Button className="w-full bg-red-500 hover:bg-red-600 text-white" variant="outline">Manage Billing</Button>
+                <Button className="w-full border-red-500 text-red-500 hover:bg-red-500 hover:text-white" variant="ghost">Cancel Subscription</Button>
               </div>
             )}
           </CardFooter>
@@ -295,34 +294,36 @@ export default function UserSubscription() {
 
       {availablePlans.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-xl font-medium">Available Plans</h3>
+          <h3 className="text-xl font-medium text-white">Available Plans</h3>
           <div className="grid gap-6 md:grid-cols-3">
             {availablePlans.map(plan => (
-              <Card key={plan.id} className={subscription?.plan.id === plan.id ? 'border-primary' : ''}>
+              <Card key={plan.id} className={`bg-black border-gray-800 ${subscription?.plan.id === plan.id ? 'border-red-500' : ''}`}>
                 <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
+                  <CardTitle className="text-white">{plan.name}</CardTitle>
+                  <CardDescription className="text-yellow-400">{plan.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">
+                  <div className="text-3xl font-bold text-white">
                     ${plan.price_monthly}
-                    <span className="text-sm font-normal text-muted-foreground">/month</span>
+                    <span className="text-sm font-normal text-yellow-400">/month</span>
                   </div>
                   <ul className="mt-4 space-y-2">
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-center">
-                        <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
-                        <span>{feature}</span>
+                        <CheckCircle className="h-4 w-4 mr-2 text-red-500" />
+                        <span className="text-white">{feature}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 <CardFooter>
                   {subscription?.plan.id === plan.id ? (
-                    <Button className="w-full" disabled>Current Plan</Button>
+                    <Button className="w-full bg-black text-white border border-gray-800" disabled>Current Plan</Button>
                   ) : (
                     <Button 
-                      className="w-full" 
+                      className={`w-full ${plan.name.toLowerCase() === 'free' 
+                        ? 'bg-black text-yellow-400 border border-yellow-400 hover:bg-yellow-400 hover:text-black' 
+                        : 'bg-red-500 hover:bg-red-600 text-white'}`}
                       onClick={() => handleUpgrade(plan.id)}
                       variant={plan.name.toLowerCase() === 'free' ? 'outline' : 'default'}
                     >

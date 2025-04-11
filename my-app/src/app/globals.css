@@ -5,58 +5,60 @@
 
 @layer base {
   :root {
+    /* Light theme - improved contrast for better visibility */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --foreground: 0 0% 10%; /* Darker text for better visibility */
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 10%; /* Darker text for better visibility */
+    --popover: 0 0% 98%;
+    --popover-foreground: 0 0% 10%;
+    --primary: 0 80% 45%; /* Deeper red for better contrast */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 100% 45%; /* Deeper yellow for better contrast */
+    --secondary-foreground: 0 0% 10%;
+    --muted: 0 0% 90%;
+    --muted-foreground: 0 0% 25%; /* Darker muted text for better visibility */
+    --accent: 0 80% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 80% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 80%;
+    --input: 0 0% 80%;
+    --ring: 0 80% 45%;
     --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --chart-1: 0 80% 45%;
+    --chart-2: 45 100% 45%;
+    --chart-3: 0 0% 10%;
+    --chart-4: 0 80% 55%;
+    --chart-5: 45 100% 55%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Dark theme - pure black with yellow/red/white accents */
+    --background: 0 0% 0%;
+    --foreground: 60 100% 100%;
+    --card: 0 0% 3%;
+    --card-foreground: 60 100% 100%;
+    --popover: 0 0% 2%;
+    --popover-foreground: 60 100% 100%;
+    --primary: 0 100% 50%;
+    --primary-foreground: 60 100% 100%;
+    --secondary: 60 100% 50%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 60 100% 90%;
+    --accent: 0 100% 50%;
+    --accent-foreground: 60 100% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 60 100% 100%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 100% 50%;
+    --chart-1: 0 100% 50%;
+    --chart-2: 60 100% 50%;
+    --chart-3: 0 0% 100%;
+    --chart-4: 0 100% 60%;
+    --chart-5: 60 100% 60%;
   }
 }
 
@@ -71,14 +73,14 @@
 
 /* Grid Pattern Background */
 .bg-grid-pattern {
-  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.1) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 .dark .bg-grid-pattern {
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
 }
 
 /* Terminal Scrollbar */
@@ -87,16 +89,16 @@
 }
 
 .terminal-scrollbar::-webkit-scrollbar-track {
-  background: #1a1a1a;
+  background: #000000;
 }
 
 .terminal-scrollbar::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #222;
   border-radius: 4px;
 }
 
 .terminal-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: #333;
 }
 
 /* Terminal Cursor Animation */
@@ -139,9 +141,9 @@
 .terminal-container {
   width: 100%;
   height: 100%;
-  background-color: #1E1E1E;
-  border-top: 1px solid #323232;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+  background-color: #000000;
+  border-top: 1px solid #222;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.5);
   overflow: hidden;
 }
 
@@ -234,7 +236,7 @@
   left: 0;
   right: 0;
   z-index: 10;
-  background: #131314;
+  background: #000000;
 }
 
 /* Compact UI styles */
@@ -474,4 +476,107 @@ nav.bg-background.border-b > div {
   html.light .dark-bg {
     @apply bg-white text-gray-900;
   }
+}
+
+/* Add specific rules for light theme text */
+html.light .text-yellow-400 {
+  color: #B45309 !important; /* Amber-700 for better visibility in light mode */
+}
+
+html.light .text-white {
+  color: #111827 !important; /* Gray-900 for better visibility in light mode */
+}
+
+html.light .text-red-500 {
+  color: #B91C1C !important; /* Red-700 for better visibility in light mode */
+}
+
+html.light .hover\:text-white:hover {
+  color: #111827 !important; /* Gray-900 for better visibility in light mode */
+}
+
+/* Feature section text in light mode */
+html.light section h2,
+html.light section h3,
+html.light section p,
+html.light .feature-text {
+  color: #000000 !important; /* Pure black text for maximum visibility in light mode */
+}
+
+/* Specific fixes for feature section in light mode */
+html.light .text-gray-300,
+html.light .text-gray-400,
+html.light p.text-gray-300,
+html.light p.text-gray-400 {
+  color: #1F2937 !important; /* Dark gray (gray-800) for better contrast in light mode */
+}
+
+/* Ensure feature section spans and small text elements are visible */
+html.light .px-3.py-1.rounded-full.text-xs,
+html.light span.text-blue-400,
+html.light span.text-green-400,
+html.light span.text-purple-400 {
+  color: #1F2937 !important; /* Dark gray for better visibility */
+  background-color: rgba(0, 0, 0, 0.05) !important; /* Light background for contrast */
+}
+
+/* Make sure gradient text is visible in light mode */
+html.light .bg-clip-text.text-transparent {
+  -webkit-text-fill-color: #000000 !important; /* Override transparent text with black in light mode */
+  background-clip: initial !important; /* Disable background-clip in light mode */
+  background-image: none !important; /* Remove gradient in light mode */
+}
+
+/* Light mode specific enhancements for Kurdish flag container */
+html.light .kurdish-flag-container {
+  box-shadow: 0 0 20px rgba(59, 156, 65, 0.4), 0 0 40px rgba(237, 28, 36, 0.2) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+html.light .kurdish-flag-background {
+  opacity: 0.9 !important;
+}
+
+html.light .kurdish-flag-content {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+html.light .kurdish-flag-content h3,
+html.light .kurdish-flag-content p,
+html.light .kurdish-chat-bubble,
+html.light .kurdish-feature-badge {
+  color: #000000 !important;
+  text-shadow: none !important;
+}
+
+html.light .kurdish-sun-emblem {
+  opacity: 0.4 !important;
+}
+
+html.light .kurdish-chat-bubble {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+html.light .kurdish-user-bubble {
+  background-color: rgba(59, 156, 65, 0.3) !important;
+}
+
+html.light .kurdish-feature-badge {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.light .kurdish-input {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  color: #000000 !important;
+}
+
+html.light .kurdish-input::placeholder {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.light .kurdish-status-text {
+  color: rgba(0, 0, 0, 0.7) !important;
 }

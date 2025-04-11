@@ -160,8 +160,8 @@ export default function PricingPage() {
           {tiers.map((tier) => (
             <div
               key={tier.name}
-              className={`relative bg-[#111111] rounded-xl p-8 transition-all duration-300 ease-in-out hover:scale-[1.02] border border-gray-800/50 ${
-                tier.popular ? 'ring-2 ring-red-500 bg-[#1a1a1a]' : ''
+              className={`relative bg-black rounded-xl p-8 transition-all duration-300 ease-in-out hover:scale-[1.02] border border-gray-800/50 ${
+                tier.popular ? 'ring-2 ring-red-500 bg-black' : ''
               }`}
               onMouseEnter={() => setActiveSection(tier.name)}
               onMouseLeave={() => setActiveSection(null)}
@@ -190,23 +190,24 @@ export default function PricingPage() {
               <div className="space-y-3 mb-6">
                 {tier.features.map((feature) => (
                   <div key={feature} className="flex items-center text-sm transition-all duration-300 ease-in-out hover:translate-x-1">
-                    <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
+                    <Check className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
                     <span className="text-white">{feature}</span>
                   </div>
                 ))}
                 {tier.nonFeatures?.map((feature) => (
                   <div key={feature} className="flex items-center text-sm text-gray-500 transition-all duration-300 ease-in-out hover:translate-x-1">
                     <X className="h-4 w-4 text-red-500 mr-2 flex-shrink-0" />
-                    <span>{feature}</span>
+                    <span className="text-white">{feature}</span>
                   </div>
                 ))}
               </div>
 
               <Button
+                onClick={() => window.location.href = '/waitlist'}
                 className={`w-full text-sm transition-all duration-300 ease-in-out transform hover:scale-[1.02] ${
                   tier.popular
                     ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : 'bg-white text-black hover:bg-gray-200'
+                    : 'bg-yellow-400 text-black hover:bg-yellow-500'
                 }`}
               >
                 {tier.buttonText}
@@ -230,7 +231,7 @@ export default function PricingPage() {
             {['Security & Compliance', 'Team Management', 'Support & Training'].map((title, index) => (
               <div
                 key={title}
-                className="bg-[#111111] p-6 rounded-xl transition-all duration-300 ease-in-out hover:scale-[1.02] border border-gray-800/50"
+                className="bg-black p-6 rounded-xl transition-all duration-300 ease-in-out hover:scale-[1.02] border border-gray-800/50"
                 onMouseEnter={() => setActiveSection(title)}
                 onMouseLeave={() => setActiveSection(null)}
               >
@@ -252,27 +253,27 @@ export default function PricingPage() {
         <div className="mt-32">
           <h2 className="text-3xl font-bold text-center mb-8 text-white">Frequently Asked Questions</h2>
           <div className="grid gap-6 max-w-3xl mx-auto">
-            <div className="bg-black/50 p-6 rounded-lg border border-white/20">
+            <div className="bg-black p-6 rounded-lg border border-gray-800/50">
               <h3 className="text-lg font-semibold mb-2 text-white">What payment methods do you accept?</h3>
-              <p className="text-gray-300">We accept all major credit cards, PayPal, and bank transfers for annual plans.</p>
+              <p className="text-yellow-400">We accept all major credit cards, PayPal, and bank transfers for annual plans.</p>
             </div>
-            <div className="bg-black/50 p-6 rounded-lg border border-white/20">
+            <div className="bg-black p-6 rounded-lg border border-gray-800/50">
               <h3 className="text-lg font-semibold mb-2 text-white">Can I change my plan later?</h3>
-              <p className="text-gray-300">Yes, you can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.</p>
+              <p className="text-yellow-400">Yes, you can upgrade or downgrade your plan at any time. Changes will be reflected in your next billing cycle.</p>
             </div>
-            <div className="bg-black/50 p-6 rounded-lg border border-white/20">
+            <div className="bg-black p-6 rounded-lg border border-gray-800/50">
               <h3 className="text-lg font-semibold mb-2 text-white">Is there a free trial?</h3>
-              <p className="text-gray-300">Yes, we offer a 7-day free trial for all plans. No credit card required.</p>
+              <p className="text-yellow-400">Yes, we offer a 7-day free trial for all plans. No credit card required.</p>
             </div>
-            <div className="bg-black/50 p-6 rounded-lg border border-white/20">
+            <div className="bg-black p-6 rounded-lg border border-gray-800/50">
               <h3 className="text-lg font-semibold mb-2 text-white">What happens if I exceed my plan limits?</h3>
-              <p className="text-gray-300">You'll be notified when approaching your limits and can upgrade your plan or purchase additional credits as needed.</p>
+              <p className="text-yellow-400">You'll be notified when approaching your limits and can upgrade your plan or purchase additional credits as needed.</p>
             </div>
           </div>
         </div>
 
         {/* CTA Section */}
-        <div className="mt-16 mb-16 text-center bg-[#111111] p-10 rounded-xl border border-gray-800/50 max-w-4xl mx-auto">
+        <div className="mt-16 mb-16 text-center bg-black p-10 rounded-xl border border-gray-800/50 max-w-4xl mx-auto">
           <h2 className="text-2xl font-bold mb-4 text-white">Still have questions?</h2>
           <p className="text-md text-yellow-400 mb-8 max-w-2xl mx-auto">
             Contact our team for more information about our enterprise solutions or to discuss custom pricing options.

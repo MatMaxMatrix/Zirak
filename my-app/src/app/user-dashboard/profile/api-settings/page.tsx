@@ -277,8 +277,8 @@ export default function ApiSettingsPage() {
         <Shield className="h-4 w-4" />
         <AlertTitle>Security Note</AlertTitle>
         <AlertDescription>
-          Your API keys are stored locally in your browser and are only used to communicate with their respective services.
-          We never store your API keys on our servers.
+          Your API keys are securely stored with only partial information visible.
+          The full keys are never exposed in your browser.
         </AlertDescription>
       </Alert>
 

@@ -102,12 +102,35 @@ export default function UserDashboardPage() {
 
   // Check if API keys exist
   useEffect(() => {
-    const openaiKey = getStoredApiKey();
-    setHasOpenAIKey(!!openaiKey);
+    async function checkApiKeys() {
+      if (!user) return;
+      
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('api_keys')
+          .select('key_name')
+          .eq('user_id', user.id)
+          .eq('is_active', true);
+          
+        if (error) {
+          console.error('Error checking API keys:', error);
+          return;
+        }
+        
+        // Check for each provider
+        const hasOpenAI = data?.some(key => key.key_name === 'openai');
+        const hasAnthropic = data?.some(key => key.key_name === 'anthropic');
+        
+        setHasOpenAIKey(!!hasOpenAI);
+        setHasAnthropicKey(!!hasAnthropic);
+      } catch (error) {
+        console.error('Error checking API keys:', error);
+      }
+    }
     
-    const anthropicKey = getStoredAnthropicApiKey();
-    setHasAnthropicKey(!!anthropicKey);
-  }, []);
+    checkApiKeys();
+  }, [user]);
 
   // Fetch user data from Supabase
   useEffect(() => {

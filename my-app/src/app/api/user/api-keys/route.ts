@@ -2,6 +2,9 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { createClient } from '@/utils/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 // Helper to generate API key
 function generateApiKey() {
@@ -14,9 +17,44 @@ function generateApiKey() {
   };
 }
 
-// Get all API keys for the authenticated user
+// Get all API keys for the authenticated user or check for a specific provider
 export async function GET(request: NextRequest) {
   try {
+    // Check if the provider parameter is present
+    const searchParams = request.nextUrl.searchParams;
+    const provider = searchParams.get('provider');
+    
+    // If provider is specified, we're checking if a specific key exists
+    if (provider) {
+      // Use server-side client for provider checks
+      const supabase = await createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session || !session.user) {
+        return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+      }
+      
+      // Check if the user has the key for the specified provider
+      const { data, error } = await supabase
+        .from('api_keys')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .eq('key_name', provider)
+        .eq('is_active', true)
+        .limit(1);
+      
+      if (error) {
+        console.error('Error checking API key:', error);
+        return NextResponse.json({ error: 'Failed to check API key' }, { status: 500 });
+      }
+      
+      // Return response indicating if key exists
+      return NextResponse.json({
+        hasKey: data && data.length > 0
+      });
+    }
+    
+    // Otherwise, return all API keys (original behavior)
     const supabase = createRouteHandlerClient({ cookies });
     const { data: { session } } = await supabase.auth.getSession();
 
