@@ -6,6 +6,14 @@ export async function middleware(request: NextRequest) {
   // Log the pathname for debugging
   const pathname = request.nextUrl.pathname;
   
+  // Check if this is a chat route request - redirect all to waitlist
+  if (pathname === '/chat' || pathname.startsWith('/chat/')) {
+    console.log(`[Middleware] Redirecting chat route to waitlist: ${pathname}`);
+    const waitlistUrl = new URL('/waitlist', request.url);
+    waitlistUrl.searchParams.set('from', 'chat');
+    return NextResponse.redirect(waitlistUrl);
+  }
+  
   // Skip middleware for API routes completely
   if (pathname.startsWith('/api/')) {
     console.log(`[Middleware] Skipping API route: ${pathname}`);
@@ -50,6 +58,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Chat routes that should redirect to waitlist
+    '/chat',
+    '/chat/:path*',
     // Protected routes that need auth
     '/dashboard/:path*',
     '/user-dashboard/:path*',
