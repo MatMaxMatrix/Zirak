@@ -120,6 +120,7 @@ export default function UserDashboardPage() {
         const supabase = createClient();
         
         // Fetch user profile
+        console.log('Fetching profile data for dashboard:', user.id);
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -130,10 +131,38 @@ export default function UserDashboardPage() {
           if (profileError.code === 'PGRST116') {
             // No profile found, this might be normal for new users
             console.log('User profile not found, may still be creating');
+            
+            // Try to create profile if not found
+            try {
+              const response = await fetch('/api/profile/create', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId: user.id,
+                  email: user.email,
+                  name: user.user_metadata?.name || user.user_metadata?.full_name || '',
+                  picture: user.user_metadata?.picture || user.user_metadata?.avatar_url || '',
+                }),
+                cache: 'no-store',
+              });
+              
+              if (response.ok) {
+                const result = await response.json();
+                if (result.data) {
+                  setProfile(result.data);
+                  console.log('Created profile for dashboard:', result.data);
+                }
+              }
+            } catch (createError) {
+              console.error('Error creating profile in dashboard:', createError);
+            }
           } else {
             console.error('Error fetching profile:', JSON.stringify(profileError));
           }
-        } else {
+        } else if (profileData) {
+          console.log('Found existing profile for dashboard:', profileData);
           setProfile(profileData);
         }
         
@@ -404,12 +433,12 @@ export default function UserDashboardPage() {
             <CardContent>
               <div className="flex items-center space-x-4">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={profile?.picture || user?.user_metadata?.picture || ""} />
-                  <AvatarFallback>{profile?.name?.charAt(0) || user?.user_metadata?.name?.charAt(0) || "U"}</AvatarFallback>
+                  <AvatarImage src={profile?.picture || user?.user_metadata?.picture || user?.user_metadata?.avatar_url || ""} />
+                  <AvatarFallback>{profile?.name?.charAt(0) || user?.user_metadata?.name?.charAt(0) || user?.email?.charAt(0) || "U"}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="text-sm font-medium">{profile?.name || user?.user_metadata?.name}</p>
-                  <p className="text-sm text-muted-foreground">{profile?.email || user?.user_metadata?.email}</p>
+                  <p className="text-sm font-medium">{profile?.name || user?.user_metadata?.name || user?.user_metadata?.full_name || user?.email}</p>
+                  <p className="text-sm text-muted-foreground">{profile?.email || user?.email}</p>
                 </div>
               </div>
             </CardContent>

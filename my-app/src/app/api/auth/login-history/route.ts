@@ -4,18 +4,6 @@ import { UAParser } from 'ua-parser-js';
 
 export const dynamic = 'force-dynamic';
 
-// Create a Supabase Admin client with service role key
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, 
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
 // Helper function to get user device information from user-agent
 function getUserDeviceInfo(userAgent: string) {
   const parser = new UAParser(userAgent);
@@ -38,8 +26,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
+    // Create a direct client with anon key - no auth needed for login history
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      }
+    );
+    
     // Extract headers from the request object directly
-    // The Request object has headers which is a standard Headers object
     const userAgent = request.headers.get('user-agent') || '';
     const deviceInfo = getUserDeviceInfo(userAgent);
     
@@ -65,26 +64,66 @@ export async function POST(request: Request) {
 
     console.log(`Recording login for user ${userId} from IP ${ipAddress} using ${deviceInfo.browser}`);
 
-    // Insert login record
-    const { data, error } = await supabaseAdmin
-      .from('login_history')
-      .insert([
-        {
-          user_id: userId,
-          login_at: new Date().toISOString(),
-          ip_address: ipAddress,
-          device: `${deviceInfo.browser} on ${deviceInfo.os} (${deviceInfo.device})`,
-          location: location
+    try {
+      // Try to use the RPC function first
+      const { data, error } = await supabase.rpc('record_login_history', {
+        p_user_id: userId,
+        p_login_at: new Date().toISOString(),
+        p_ip_address: ipAddress,
+        p_device: `${deviceInfo.browser} on ${deviceInfo.os} (${deviceInfo.device})`,
+        p_location: location
+      });
+
+      if (error) {
+        console.error('Error using RPC function:', error);
+        console.log('Falling back to direct insert...');
+        
+        // Fallback to direct insert
+        const { data: insertData, error: insertError } = await supabase
+          .from('login_history')
+          .insert([
+            {
+              user_id: userId,
+              login_at: new Date().toISOString(),
+              ip_address: ipAddress,
+              device: `${deviceInfo.browser} on ${deviceInfo.os} (${deviceInfo.device})`,
+              location: location
+            }
+          ])
+          .select();
+
+        if (insertError) {
+          console.error('Error recording login history:', insertError);
+          // Log more detailed information for debugging
+          console.log('Insert payload:', {
+            user_id: userId,
+            login_at: new Date().toISOString(),
+            ip_address: ipAddress,
+            device: `${deviceInfo.browser} on ${deviceInfo.os} (${deviceInfo.device})`,
+            location: location
+          });
+          
+          return NextResponse.json({ 
+            error: insertError.message,
+            details: insertError.details,
+            code: insertError.code,
+            hint: insertError.hint
+          }, { status: 500 });
         }
-      ])
-      .select();
+        
+        console.log('Login history recorded successfully via direct insert');
+        return NextResponse.json({ success: true, data: insertData });
+      }
 
-    if (error) {
-      console.error('Error recording login history:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.log('Login history recorded successfully via RPC');
+      return NextResponse.json({ success: true, data });
+    } catch (error) {
+      console.error('Unexpected error in login history API:', error);
+      return NextResponse.json({ 
+        error: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        stack: error instanceof Error ? error.stack : undefined
+      }, { status: 500 });
     }
-
-    return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Error in login history API:', error);
     return NextResponse.json({ 

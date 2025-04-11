@@ -89,48 +89,68 @@ export default function ProfilePage() {
       try {
         const supabase = createClient();
         
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-          
-        if (error) {
-          // Handle specific error cases
-          if (error.code === 'PGRST116' && !hasAttemptedProfileCreation) {
-            // This is "no rows returned" error, which is normal for new users
-            console.log('No profile found, using default values');
-            // Set default values from user metadata
-            form.reset({
-              name: user.user_metadata?.name || "",
-              email: user.email || "",
-              phone: "",
-              location: "",
-              bio: "",
-            });
-            
-            // Create a new profile for the user, but only try once
-            if (isMounted) {
-              setHasAttemptedProfileCreation(true);
-              await createUserProfile(user);
-            }
-            return;
-          } else {
-            // For other errors, show error toast
-            console.error('Error fetching profile:', JSON.stringify(error));
-            toast.error("Failed to load profile data: " + error.message);
-            return;
-          }
-        }
+        // Try using RPC function first (with proper type handling)
+        const { data: profileData, error: rpcError } = await supabase.rpc('get_profile_by_id', {
+          p_user_id: user.id
+        });
         
-        if (data && isMounted) {
-          setProfileData(data);
+        if (rpcError) {
+          console.log('RPC not available, falling back to direct query:', rpcError.message);
+          
+          // Use direct query with eq now that types match
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+            
+          if (error) {
+            // Handle specific error cases
+            if (error.code === 'PGRST116' && !hasAttemptedProfileCreation) {
+              // This is "no rows returned" error, which is normal for new users
+              console.log('No profile found, using default values');
+              // Set default values from user metadata
+              form.reset({
+                name: user.user_metadata?.name || "",
+                email: user.email || "",
+                phone: "",
+                location: "",
+                bio: "",
+              });
+              
+              // Create a new profile for the user, but only try once
+              if (isMounted) {
+                setHasAttemptedProfileCreation(true);
+                await createUserProfile(user);
+              }
+              return;
+            } else {
+              // For other errors, show error toast
+              console.error('Error fetching profile:', JSON.stringify(error));
+              toast.error("Failed to load profile data: " + error.message);
+              return;
+            }
+          }
+          
+          if (data && isMounted) {
+            setProfileData(data);
+            form.reset({
+              name: data.name || user.user_metadata?.name || "",
+              email: user.email || "",
+              phone: data.phone_number || "",
+              location: data.city || "",
+              bio: data.bio || "",
+            });
+          }
+        } else if (profileData && isMounted) {
+          // Profile data from RPC
+          setProfileData(profileData);
           form.reset({
-            name: data.name || user.user_metadata?.name || "",
+            name: profileData.name || user.user_metadata?.name || "",
             email: user.email || "",
-            phone: data.phone_number || "",
-            location: data.city || "",
-            bio: data.bio || "",
+            phone: profileData.phone_number || "",
+            location: profileData.city || "",
+            bio: profileData.bio || "",
           });
         }
       } catch (error) {

@@ -36,6 +36,8 @@ export default function Login() {
       // Record login history
       try {
         if (data.user) {
+          console.log('[Google Sign In] Recording login history for user:', data.user.id);
+          
           const loginHistoryResponse = await fetch('/api/auth/login-history', {
             method: 'POST',
             headers: {
@@ -48,7 +50,10 @@ export default function Login() {
           });
           
           if (!loginHistoryResponse.ok) {
-            console.error('[Google Sign In] Failed to record login history');
+            const errorData = await loginHistoryResponse.json();
+            console.error('[Google Sign In] Failed to record login history:', errorData);
+          } else {
+            console.log('[Google Sign In] Login history recorded successfully');
           }
         }
       } catch (historyError) {

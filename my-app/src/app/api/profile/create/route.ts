@@ -29,120 +29,99 @@ export async function POST(request: Request) {
       return createErrorResponse('User ID and email are required', 400);
     }
 
-    // Create a Supabase Admin client with service role key to bypass RLS
-    const supabaseAdmin = createClient(
+    // Create a direct Supabase client with anon key
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!, 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         auth: {
-          autoRefreshToken: false,
-          persistSession: false
+          persistSession: false,
+          autoRefreshToken: false
         }
       }
     );
 
-    // Check if user exists in auth
-    console.log(`API: Verifying auth user ${userId}`);
-    const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
-    
-    if (authError) {
-      console.error('API Error verifying auth user:', authError);
-      return createErrorResponse(`Failed to verify auth user: ${authError.message}`);
-    }
-    
-    if (!authUser || !authUser.user) {
-      return createErrorResponse('User not found in auth system', 404);
-    }
-
-    // Check if profile exists
+    // Check if profile exists using RPC to handle type casting
     console.log(`API: Checking if profile exists for user ${userId}`);
-    const { data: existingProfile, error: checkError } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('id', userId)
-      .single();
+    
+    // First try with RPC to handle UUID conversions properly
+    const { data: profileExists, error: rpcError } = await supabase.rpc('check_profile_exists', {
+      p_user_id: userId
+    });
+    
+    // If RPC fails or doesn't exist yet, use direct query with additional options
+    if (rpcError) {
+      console.log('RPC not available yet, using direct query');
+      
+      // Use direct query with eq now that types match
+      const { data: existingProfile, error: checkError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single();
 
-    if (checkError) {
-      if (checkError.code !== 'PGRST116') { // Not found is expected
-        console.error('API Error checking profile:', checkError);
-        return createErrorResponse(`Failed to check profile: ${checkError.message}`);
+      if (checkError) {
+        if (checkError.code !== 'PGRST116') { // Not found is expected
+          console.error('API Error checking profile:', checkError);
+          return createErrorResponse(`Failed to check profile: ${checkError.message}`);
+        }
+        // Not found, so we'll create the profile
+        console.log(`API: No profile found for ${userId}, will create one`);
+      } else {
+        // Profile exists
+        console.log(`API: Profile already exists for ${userId}`);
+        return createSuccessResponse('Profile already exists', { data: existingProfile });
       }
-      // Not found, so we'll create the profile
-      console.log(`API: No profile found for ${userId}, will create one`);
-    } else {
-      // Profile exists
-      console.log(`API: Profile already exists for ${userId}`);
-      return createSuccessResponse('Profile already exists', { data: existingProfile });
+    } else if (profileExists) {
+      // Profile exists based on RPC check
+      console.log(`API: Profile already exists for ${userId} (via RPC)`);
+      return createSuccessResponse('Profile already exists', { data: { id: userId } });
     }
 
     // Create profile if it doesn't exist
     console.log(`API: Creating profile for user ${userId}`);
-    const { data, error: insertError } = await supabaseAdmin
-      .from('profiles')
-      .insert([
-        {
-          id: userId,
-          email,
-          name: name || '',
-          picture: picture || '',
-          bio: bio || '',
-          phone_number: phone || '',
-          city: location || '',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-      ])
-      .select();
+    
+    // Try using an RPC function first for proper type handling
+    const { data: createdProfile, error: createRpcError } = await supabase.rpc('create_profile', {
+      p_user_id: userId,
+      p_email: email,
+      p_name: name || '',
+      p_picture: picture || '',
+      p_bio: bio || '',
+      p_phone_number: phone || '',
+      p_city: location || ''
+    });
+    
+    if (createRpcError) {
+      // Fallback to direct insertion if RPC not available
+      const { data, error: insertError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: userId,
+            email,
+            name: name || '',
+            picture: picture || '',
+            bio: bio || '',
+            phone_number: phone || '',
+            city: location || '',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ])
+        .select();
 
-    if (insertError) {
-      console.error('API Error creating profile:', insertError);
-      return createErrorResponse(`Failed to create profile: ${insertError.message}`);
-    }
-    
-    // Ensure auth metadata is in sync with profile data
-    if (name || picture) {
-      try {
-        // Get current metadata
-        const currentMetadata = authUser.user.user_metadata || {};
-        let needsUpdate = false;
-        const updatedMetadata = { ...currentMetadata };
-        
-        // Check if we need to update name
-        if (name && !currentMetadata.name && !currentMetadata.full_name) {
-          // For Google auth, use full_name
-          if (authUser.user.app_metadata?.provider === 'google') {
-            updatedMetadata.full_name = name;
-          } else {
-            updatedMetadata.name = name;
-          }
-          needsUpdate = true;
-        }
-        
-        // Check if we need to update picture
-        if (picture && !currentMetadata.picture && !currentMetadata.avatar_url) {
-          if (authUser.user.app_metadata?.provider === 'google') {
-            updatedMetadata.avatar_url = picture;
-          } else {
-            updatedMetadata.picture = picture;
-          }
-          needsUpdate = true;
-        }
-        
-        // Update auth metadata if needed
-        if (needsUpdate) {
-          console.log(`API: Updating auth metadata for ${userId}`);
-          await supabaseAdmin.auth.admin.updateUserById(userId, {
-            user_metadata: updatedMetadata
-          });
-        }
-      } catch (metadataError) {
-        // Don't fail the profile creation if metadata update fails
-        console.error('API: Error updating auth metadata:', metadataError);
+      if (insertError) {
+        console.error('API Error creating profile:', insertError);
+        return createErrorResponse(`Failed to create profile: ${insertError.message}`);
       }
+      
+      console.log(`API: Profile created successfully for: ${email}`);
+      return createSuccessResponse('Profile created successfully', { data });
     }
     
-    console.log(`API: Profile created successfully for: ${email}`);
-    return createSuccessResponse('Profile created successfully', { data });
+    console.log(`API: Profile created successfully for: ${email} (via RPC)`);
+    return createSuccessResponse('Profile created successfully', { data: createdProfile });
   } catch (error) {
     console.error('API: Profile creation error:', error);
     return createErrorResponse(`Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`);

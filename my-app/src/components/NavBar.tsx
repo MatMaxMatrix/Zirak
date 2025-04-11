@@ -44,6 +44,32 @@ const DynamicProjectSelector = dynamic(
 const UserDropdown = ({ user, onSignOut }) => {
   const { setTheme } = useTheme();
   const router = useRouter();
+  const [profileData, setProfileData] = useState(null);
+  
+  useEffect(() => {
+    // Fetch profile data for the user
+    const fetchProfileData = async () => {
+      if (!user) return;
+      
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (!error && data) {
+          console.log('[NavBar] Profile data loaded:', data.email);
+          setProfileData(data);
+        }
+      } catch (error) {
+        console.error('[NavBar] Error fetching profile:', error);
+      }
+    };
+    
+    fetchProfileData();
+  }, [user]);
   
   const goToProfile = () => {
     router.push('/user-dashboard/profile');
@@ -54,15 +80,15 @@ const UserDropdown = ({ user, onSignOut }) => {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarImage src={user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
-            <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+            <AvatarImage src={profileData?.picture || user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
+            <AvatarFallback>{profileData?.name?.charAt(0) || user.email?.charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel>
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.user_metadata?.name || user.email}</p>
+            <p className="text-sm font-medium leading-none">{profileData?.name || user.user_metadata?.name || user.email}</p>
             <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
           </div>
         </DropdownMenuLabel>
@@ -145,6 +171,7 @@ const NavBar = () => {
   const { user, isLoading } = useAuth();
   const pathname = usePathname();
   const fileSystem = useFileSystem();
+  const [profileData, setProfileData] = useState(null);
   
   // Check if we're on the chat page
   const isChatPage = pathname?.startsWith('/chat');
@@ -166,6 +193,32 @@ const NavBar = () => {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Fetch profile data when user changes
+  useEffect(() => {
+    // Fetch profile data for the user
+    const fetchProfileData = async () => {
+      if (!user) return;
+      
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+          
+        if (!error && data) {
+          console.log('[NavBar] Main Nav Profile data loaded:', data.email);
+          setProfileData(data);
+        }
+      } catch (error) {
+        console.error('[NavBar] Error fetching profile in main nav:', error);
+      }
+    };
+    
+    fetchProfileData();
+  }, [user]);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -342,12 +395,12 @@ const NavBar = () => {
                 <div className="flex items-center px-4">
                   <div className="flex-shrink-0">
                     <Avatar className="h-10 w-10">
-                      <AvatarImage src={user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
-                      <AvatarFallback>{user.email?.charAt(0).toUpperCase()}</AvatarFallback>
+                      <AvatarImage src={profileData?.picture || user.user_metadata?.avatar_url || user.user_metadata?.picture} alt={user.email} />
+                      <AvatarFallback>{profileData?.name?.charAt(0) || user.email?.charAt(0).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </div>
                   <div className="ml-3">
-                    <div className="text-base font-medium text-gray-800">{user.user_metadata?.name || user.email}</div>
+                    <div className="text-base font-medium text-gray-800">{profileData?.name || user.user_metadata?.name || user.email}</div>
                     <div className="text-sm font-medium text-gray-500">{user.email}</div>
                   </div>
                 </div>

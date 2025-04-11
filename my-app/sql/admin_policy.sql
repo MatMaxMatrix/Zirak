@@ -1,6 +1,9 @@
 -- Update the auth.user_id() function to properly parse our token
+-- First drop the existing function since we're changing the return type
+DROP FUNCTION IF EXISTS auth.user_id();
+
 CREATE OR REPLACE FUNCTION auth.user_id()
-RETURNS TEXT AS $$
+RETURNS UUID AS $$
 BEGIN
   -- Extract the user ID from JWT claims
   -- First check for 'userId' which is what we set in our token
@@ -8,7 +11,7 @@ BEGIN
     current_setting('request.jwt.claims', true)::json->>'userId',
     current_setting('request.jwt.claims', true)::json->>'sub',
     NULL
-  );
+  )::UUID;
 EXCEPTION
   WHEN OTHERS THEN RETURN NULL;
 END;
