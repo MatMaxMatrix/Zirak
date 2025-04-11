@@ -26,6 +26,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { 
   CreditCard, 
   Calendar,
@@ -38,69 +40,36 @@ import {
   PlusCircle,
   CreditCard as CreditCardIcon,
   ShoppingCart,
-  FileText
+  FileText,
+  Construction,
+  Rocket,
+  BellRing,
+  ArrowRight,
+  Mail
 } from "lucide-react";
 
-// Subscription plans available to purchase
-const plans = [
+// Features that will be available in our pricing plans
+const features = [
   {
-    id: "free",
-    name: "Free",
-    price: "$0",
-    features: [
-      "5 workflow completions per month",
-      "Basic code generation",
-      "Community support",
-      "Basic file management",
-      "Standard response time"
-    ],
-    nonFeatures: [
-      "Priority support",
-      "Advanced AI features",
-      "Custom templates",
-      "Team collaboration",
-      "API access"
-    ],
-    popular: false
+    icon: <Rocket className="h-8 w-8 text-blue-500" />,
+    title: "Free Launch Access",
+    description: "Early subscribers will be the first to access our platform for free"
   },
   {
-    id: "pro",
-    name: "Pro",
-    price: "$19",
-    period: "/month",
-    features: [
-      "Up to 500 workflow completions per month",
-      "Advanced code generation",
-      "Priority support",
-      "Advanced file management",
-      "Faster response time",
-      "Custom templates",
-      "API access (100k requests/month)",
-      "Basic team collaboration"
-    ],
-    popular: true
+    icon: <Calendar className="h-8 w-8 text-blue-500" />,
+    title: "Tiered Pricing",
+    description: "Custom plans for developers, teams, and enterprises"
   },
   {
-    id: "enterprise",
-    name: "Enterprise",
-    price: "Custom",
-    features: [
-      "Everything in Pro",
-      "Unlimited API access",
-      "24/7 priority support",
-      "Advanced team collaboration",
-      "Custom AI model training",
-      "SSO & advanced security",
-      "Dedicated account manager",
-      "Custom integrations"
-    ],
-    popular: false
+    icon: <BellRing className="h-8 w-8 text-blue-500" />,
+    title: "Pricing Notifications",
+    description: "Get notified when our pricing plans are available"
   }
 ];
 
 export default function BillingPage() {
   const { user } = useAuth();
-  const [selectedPlan, setSelectedPlan] = useState("pro");
+  const router = useRouter();
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [subscription, setSubscription] = useState<any>(null);
   const [payments, setPayments] = useState([]);
@@ -178,20 +147,24 @@ export default function BillingPage() {
     getSubscription();
   }, [user]);
 
-  // Handle subscription initiation
-  const handleSubscribe = () => {
+  // Handle waitlist redirection
+  const handleJoinWaitlist = () => {
     setIsSubscribing(true);
-    // Redirect to waitlist page after a short delay to simulate processing
+    // Redirect to waitlist page after a short delay
     setTimeout(() => {
       setIsSubscribing(false);
-      // Redirect to waitlist page instead of showing success toast
-      window.location.href = '/waitlist';
-    }, 1500);
+      router.push('/waitlist');
+    }, 1000);
   };
 
   // Handle adding a payment method
   const handleAddPaymentMethod = () => {
     toast.info("Payment method feature coming soon");
+  };
+
+  // Handle contact us
+  const handleContactUs = () => {
+    router.push('/contact');
   };
 
   return (
@@ -217,72 +190,52 @@ export default function BillingPage() {
             <CardHeader>
               <CardTitle className="text-white">Current Plan</CardTitle>
               <CardDescription className="text-yellow-400">
-                You don't have an active subscription
+                Beta access
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center p-4 rounded-lg bg-black border border-gray-800">
                 <Info className="h-8 w-8 text-yellow-400 mr-4" />
                 <div>
-                  <h3 className="font-medium text-white">No Active Subscription</h3>
+                  <h3 className="font-medium text-white">Free Beta Access</h3>
                   <p className="text-sm text-yellow-400">
-                    Choose a plan below to get started with our services.
+                    You're among our early users with free access to beta features.
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Choose Plan */}
-          <Card className="bg-black border-gray-800">
-            <CardHeader>
-              <CardTitle className="text-white">Choose a Plan</CardTitle>
-              <CardDescription className="text-yellow-400">
-                Select a subscription plan that works for you
+          {/* Pricing Coming Soon Card */}
+          <Card className="bg-gradient-to-b from-gray-900 to-black border-blue-500/30">
+            <CardHeader className="text-center">
+              <div className="inline-block mb-4 p-2 bg-blue-500/20 rounded-xl mx-auto">
+                <Construction className="h-8 w-8 text-blue-400" />
+              </div>
+              <CardTitle className="text-2xl text-white">Pricing Plans Coming Soon</CardTitle>
+              <CardDescription className="text-lg text-gray-400 max-w-2xl mx-auto">
+                We're currently developing our pricing structure to provide the best value for developers and teams.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                {plans.map((plan) => (
+            <CardContent className="pt-4">
+              <div className="grid gap-6 md:grid-cols-3 mb-8">
+                {features.map((feature, index) => (
                   <div 
-                    key={plan.id} 
-                    className={`relative rounded-lg border ${plan.id === selectedPlan ? 'border-red-500' : 'border-gray-800'} ${plan.popular ? 'border-red-500' : 'border-gray-800'} p-4 cursor-pointer bg-black`}
-                    onClick={() => setSelectedPlan(plan.id)}
+                    key={index}
+                    className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700 hover:border-blue-500/50 transition-all duration-300"
                   >
-                    {plan.popular && (
-                      <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 text-xs font-medium bg-red-500 text-white rounded">
-                        Popular
-                      </span>
-                    )}
-                    <div className="absolute right-4 top-4 h-4 w-4 rounded-full border border-red-500 flex items-center justify-center">
-                      {selectedPlan === plan.id && (
-                        <div className="h-2 w-2 rounded-full bg-red-500" />
-                      )}
-                    </div>
-                    <Label 
-                      className="font-medium text-lg block mb-1 cursor-pointer text-white"
-                    >
-                      {plan.name}
-                    </Label>
-                    <p className="text-2xl font-bold text-white">{plan.price}</p>
-                    <p className="text-sm text-yellow-400 mb-4">per month</p>
-                    <ul className="space-y-2 text-sm">
-                      {plan.features.map((feature, i) => (
-                        <li key={i} className="flex items-start">
-                          <Check className="h-4 w-4 mr-2 mt-0.5 text-red-500" />
-                          <span className="text-white">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mb-4">{feature.icon}</div>
+                    <h3 className="text-lg font-bold mb-2 text-white">{feature.title}</h3>
+                    <p className="text-sm text-gray-400">{feature.description}</p>
                   </div>
                 ))}
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
-                onClick={handleSubscribe} 
+                onClick={handleJoinWaitlist} 
                 disabled={isSubscribing}
-                className="ml-auto bg-red-500 hover:bg-red-600 text-white"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isSubscribing ? (
                   <>
@@ -291,10 +244,18 @@ export default function BillingPage() {
                   </>
                 ) : (
                   <>
-                    <ShoppingCart className="mr-2 h-4 w-4" />
-                    Subscribe Now
+                    <BellRing className="mr-2 h-4 w-4" />
+                    Join Waitlist
                   </>
                 )}
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={handleContactUs}
+                className="border-gray-700 hover:bg-gray-800 text-white"
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Contact Us
               </Button>
             </CardFooter>
           </Card>
@@ -306,19 +267,19 @@ export default function BillingPage() {
             <CardHeader>
               <CardTitle className="text-white">Payment Methods</CardTitle>
               <CardDescription className="text-yellow-400">
-                Add a payment method to manage your subscriptions
+                No payment methods required during beta
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
                 <CreditCardIcon className="h-12 w-12 text-yellow-400 mb-4" />
-                <h3 className="text-lg font-medium mb-2 text-white">No Payment Methods</h3>
+                <h3 className="text-lg font-medium mb-2 text-white">Free Beta Access</h3>
                 <p className="text-sm text-yellow-400 mb-4">
-                  You haven't added any payment methods yet.
+                  You currently have free access during our beta period. Payment methods will be available when pricing plans launch.
                 </p>
-                <Button onClick={handleAddPaymentMethod} className="bg-red-500 hover:bg-red-600 text-white">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Payment Method
+                <Button onClick={handleJoinWaitlist} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <BellRing className="mr-2 h-4 w-4" />
+                  Get Pricing Notifications
                 </Button>
               </div>
             </CardContent>
@@ -331,16 +292,20 @@ export default function BillingPage() {
             <CardHeader>
               <CardTitle className="text-white">Billing History</CardTitle>
               <CardDescription className="text-yellow-400">
-                View your invoice history
+                No billing history during beta
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
                 <FileText className="h-12 w-12 text-yellow-400 mb-4" />
                 <h3 className="text-lg font-medium mb-2 text-white">No Billing History</h3>
-                <p className="text-sm text-yellow-400">
-                  Your billing history will appear here after your first subscription.
+                <p className="text-sm text-yellow-400 mb-4">
+                  Your billing history will appear here after pricing plans launch and you subscribe.
                 </p>
+                <Button onClick={handleJoinWaitlist} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  <BellRing className="mr-2 h-4 w-4" />
+                  Get Pricing Notifications
+                </Button>
               </div>
             </CardContent>
           </Card>

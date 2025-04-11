@@ -830,17 +830,12 @@ export default function Home() {
                   <h3 className="text-sm font-semibold text-white mb-4">Contact Us</h3>
                   <ul className="space-y-2">
                     <li>
-                      <button 
-                        onClick={() => {
-                          const subject = "Inquiry about Zirak";
-                          const body = "Hello,\n\nI am interested in learning more about Zirak. Please provide more information about:\n\n";
-                          const mailtoLink = `mailto:azimipanah.mobin@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                          window.location.href = mailtoLink;
-                        }}
+                      <Link 
+                        href="/contact"
                         className="text-sm text-gray-300 hover:text-red-500 transition-colors"
                       >
-                        Email Support
-                      </button>
+                        Contact Support
+                      </Link>
                     </li>
                   </ul>
                 </div>

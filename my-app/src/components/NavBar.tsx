@@ -102,6 +102,10 @@ const UserDropdown = ({ user, onSignOut }) => {
             <Settings className="mr-2 h-4 w-4" />
             <span>Dashboard</span>
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/contact')}>
+            <MessageSquare className="mr-2 h-4 w-4" />
+            <span>Contact Us</span>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
@@ -270,6 +274,9 @@ const NavBar = () => {
               <Link href="/pricing" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                 Pricing
               </Link>
+              <Link href="/contact" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                Contact
+              </Link>
             </div>
           </div>
           
@@ -358,6 +365,9 @@ const NavBar = () => {
             <Link href="/pricing" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
               Pricing
             </Link>
+            <Link href="/contact" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+              Contact
+            </Link>
             {user && (
               <>
                 <Link href="/user-dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
@@ -421,6 +431,15 @@ const NavBar = () => {
                     <div className="flex items-center">
                       <Settings className="mr-2 h-4 w-4" />
                       Dashboard
+                    </div>
+                  </Link>
+                  <Link 
+                    href="/contact" 
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  >
+                    <div className="flex items-center">
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Contact Us
                     </div>
                   </Link>
                   <MobileThemeToggle />
