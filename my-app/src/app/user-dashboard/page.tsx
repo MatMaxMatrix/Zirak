@@ -38,11 +38,11 @@ import {
   ArrowRight,
   Activity
 } from "lucide-react";
-import { getStoredApiKey, getStoredAnthropicApiKey } from "@/utils/apiKey";
 import { createClient } from "@/utils/supabase/client";
 import { isAdmin } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthProvider";
+import { toast } from "sonner";
 
 // Interface for subscription data
 interface SubscriptionData {
@@ -103,18 +103,29 @@ export default function UserDashboardPage() {
   // Check if API keys exist
   useEffect(() => {
     async function checkApiKeys() {
-      if (!user) return;
+      if (!user) {
+        // console.log('[checkApiKeys] No user, skipping check.');
+        return;
+      }
       
+      // console.log(`[checkApiKeys] Checking keys for user: ${user.id}`);
       try {
         const supabase = createClient();
-        const { data, error } = await supabase
+        
+        // console.log('[checkApiKeys] Attempting to select from api_keys...');
+        
+        const { data, error, status, count } = await supabase
           .from('api_keys')
-          .select('key_name')
+          .select('key_name', { count: 'exact' }) // Keep count for potential future checks?
           .eq('user_id', user.id)
           .eq('is_active', true);
           
+        // console.log('[checkApiKeys] Query result:', { data, error, status, count });
+
         if (error) {
-          console.error('Error checking API keys:', error);
+          console.error('[checkApiKeys] Error checking API keys:', error); // Keep standard error log
+          // console.error('[checkApiKeys] Error object:', JSON.stringify(error, null, 2)); // Remove detailed log
+          toast.error(`Error checking API keys: ${error.message || 'Policy might be blocking access'}`);
           return;
         }
         
@@ -122,10 +133,14 @@ export default function UserDashboardPage() {
         const hasOpenAI = data?.some(key => key.key_name === 'openai');
         const hasAnthropic = data?.some(key => key.key_name === 'anthropic');
         
+        // console.log('[checkApiKeys] Key status:', { hasOpenAI, hasAnthropic }); // Remove detailed log
         setHasOpenAIKey(!!hasOpenAI);
         setHasAnthropicKey(!!hasAnthropic);
-      } catch (error) {
-        console.error('Error checking API keys:', error);
+        
+      } catch (catchError) {
+        console.error('[checkApiKeys] Exception caught checking API keys:', catchError); // Keep standard error log
+        // console.error('[checkApiKeys] Exception object:', JSON.stringify(catchError, null, 2)); // Remove detailed log
+        toast.error(`Exception checking API keys: ${catchError.message || 'An unexpected error occurred'}`);
       }
     }
     

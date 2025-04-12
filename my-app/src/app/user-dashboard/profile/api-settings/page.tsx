@@ -33,7 +33,7 @@ export default function ApiSettingsPage() {
   const [isSavingAnthropic, setIsSavingAnthropic] = useState(false);
   const [isEditingAnthropic, setIsEditingAnthropic] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-
+  
   // Helper function to generate hash and prefix
   const generateHashAndPrefix = (key) => {
     if (!key) return { hashedKey: '', prefix: '' };
@@ -57,12 +57,16 @@ export default function ApiSettingsPage() {
 
       try {
         const supabase = createClient();
+        
+        // Check if user has API keys for each provider
         const { data, error } = await supabase
           .from('api_keys')
           .select('*')
           .eq('user_id', user.id);
 
         if (error) {
+          console.error('Error fetching API keys:', error);
+          toast.error(`Failed to load your API keys: ${error.message}`);
           throw error;
         }
 
@@ -81,8 +85,7 @@ export default function ApiSettingsPage() {
           setHasAnthropicKey(true);
         }
       } catch (error) {
-        console.error('Error fetching API keys:', error);
-        toast.error('Failed to load your API keys');
+        // Error already shown in toast by the throw
       } finally {
         setIsLoading(false);
       }
@@ -108,9 +111,10 @@ export default function ApiSettingsPage() {
         .select('id')
         .eq('user_id', user.id)
         .eq('key_name', provider)
-        .single();
+        .maybeSingle();
       
-      if (fetchError && fetchError.code !== 'PGRST116') {
+      if (fetchError) {
+        console.error(`Error checking for existing ${provider} API key:`, fetchError);
         throw fetchError;
       }
       
@@ -126,9 +130,11 @@ export default function ApiSettingsPage() {
         expires_at: null, // You could set an expiration if needed
       };
       
-      if (data) {
+      let result;
+      
+      if (data?.id) {
         // Update existing key
-        const { error: updateError } = await supabase
+        result = await supabase
           .from('api_keys')
           .update({
             key_prefix: prefix,
@@ -137,19 +143,21 @@ export default function ApiSettingsPage() {
             updated_at: new Date().toISOString()
           })
           .eq('id', data.id);
-          
-        if (updateError) throw updateError;
       } else {
         // Insert new key
-        const { error: insertError } = await supabase
+        result = await supabase
           .from('api_keys')
           .insert([keyData]);
-          
-        if (insertError) throw insertError;
       }
+      
+      if (result.error) {
+        console.error(`Error saving ${provider} API key:`, result.error);
+        toast.error(`Failed to save ${provider} API key: ${result.error.message}`);
+        throw result.error;
+      }
+      
     } catch (error) {
-      console.error(`Error saving ${provider} API key:`, error);
-      toast.error(`Failed to save ${provider} API key`);
+      // Error already handled in toast by throw
       throw error;
     }
   };
@@ -166,10 +174,12 @@ export default function ApiSettingsPage() {
         .eq('user_id', user.id)
         .eq('key_name', provider);
         
-      if (error) throw error;
+      if (error) {
+        console.error(`Error removing ${provider} API key:`, error);
+        toast.error(`Failed to remove ${provider} API key: ${error.message}`);
+        throw error;
+      }
     } catch (error) {
-      console.error(`Error removing ${provider} API key:`, error);
-      toast.error(`Failed to remove ${provider} API key`);
       throw error;
     }
   };

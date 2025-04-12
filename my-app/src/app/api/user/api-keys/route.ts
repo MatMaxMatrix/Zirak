@@ -34,18 +34,25 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
       }
       
+      const userId = session.user.id;
+      console.log(`Checking API key for provider ${provider} for user ${userId}`);
+
       // Check if the user has the key for the specified provider
       const { data, error } = await supabase
         .from('api_keys')
         .select('id')
-        .eq('user_id', session.user.id)
+        .eq('user_id', userId)
         .eq('key_name', provider)
         .eq('is_active', true)
         .limit(1);
       
       if (error) {
         console.error('Error checking API key:', error);
-        return NextResponse.json({ error: 'Failed to check API key' }, { status: 500 });
+        return NextResponse.json({ 
+          error: 'Failed to check API key', 
+          details: error.message,
+          code: error.code
+        }, { status: 500 });
       }
       
       // Return response indicating if key exists
@@ -62,22 +69,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
+    console.log(`Fetching all API keys for user ${userId}`);
+
     // Get all API keys for the user (don't return the hashed key)
     const { data: apiKeys, error } = await supabase
       .from('api_keys')
       .select('id, key_name, key_prefix, is_active, last_used_at, created_at, expires_at')
-      .eq('user_id', session.user.id)
+      .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching API keys:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ 
+        error: error.message,
+        code: error.code,
+        details: error.details
+       }, { status: 500 });
     }
 
     return NextResponse.json({ apiKeys });
   } catch (error) {
     console.error('Error in API keys route:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error.message || JSON.stringify(error)
+    }, { status: 500 });
   }
 }
 
@@ -91,11 +108,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const userId = session.user.id;
     const { keyName, expiresInDays } = await request.json();
 
     if (!keyName) {
       return NextResponse.json({ error: 'Key name is required' }, { status: 400 });
     }
+
+    console.log(`Creating API key "${keyName}" for user ${userId}`);
 
     // Generate API key
     const { fullKey, prefix, hashedKey } = generateApiKey();
@@ -105,12 +125,23 @@ export async function POST(request: NextRequest) {
       ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString() 
       : null;
 
+    // Try to use the server-side client to avoid RLS issues
+    let serverSupabase;
+    try {
+      serverSupabase = await createClient();
+    } catch (error) {
+      console.error('Error creating server client:', error);
+      // Continue with the regular client
+    }
+
+    const clientToUse = serverSupabase || supabase;
+    
     // Insert new API key
-    const { data, error } = await supabase
+    const { data, error } = await clientToUse
       .from('api_keys')
       .insert([
         {
-          user_id: session.user.id,
+          user_id: userId,
           key_name: keyName,
           key_prefix: prefix,
           hashed_key: hashedKey,
@@ -122,7 +153,11 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating API key:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ 
+        error: error.message,
+        code: error.code,
+        details: error.details
+      }, { status: 500 });
     }
 
     // Return the new API key with the full key (only time it's returned)
@@ -135,7 +170,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating API key:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error.message || JSON.stringify(error)
+    }, { status: 500 });
   }
 }
 
