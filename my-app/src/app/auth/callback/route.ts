@@ -3,7 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 
 // List of allowed redirect paths for security
 const ALLOWED_REDIRECT_PATHS = [
-  '/dashboard',
+  // '/dashboard', // Removed
   '/reset-password',
   '/profile',
   '/'
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   
   // Get redirect destinations
-  const next = searchParams.get('next') ?? '/dashboard';
+  const next = searchParams.get('next') ?? '/'; // Default to home page
   const redirectTo = searchParams.get('redirect_to');
   
   console.log('[Auth Callback] Request received', { 
@@ -40,7 +40,7 @@ export async function GET(request: Request) {
     ? redirectTo 
     : isValidRedirectPath(next) 
       ? next 
-      : '/dashboard'; // Fallback to safe default
+      : '/'; // Fallback to safe default (home page)
   
   console.log('[Auth Callback] Final redirect path:', redirectPath);
 

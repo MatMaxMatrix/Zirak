@@ -5,12 +5,13 @@ import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Edit, UserPlus, Eye } from 'lucide-react';
+import { Search, Edit, UserPlus, Eye, Trash2 } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
+import { toast } from 'sonner';
 
 interface UserProfile {
   id: string;
@@ -28,17 +29,20 @@ interface UserProfile {
 }
 
 export default function UsersList() {
-  const { user } = useAuth();
+  const { user: adminUser } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     async function fetchUsers() {
-      if (!user) return;
+      if (!adminUser) return;
       
       try {
         setIsLoading(true);
@@ -62,7 +66,7 @@ export default function UsersList() {
     }
     
     fetchUsers();
-  }, [user]);
+  }, [adminUser]);
 
   // Filter users based on search query
   const filteredUsers = users.filter(user => {
@@ -93,13 +97,13 @@ export default function UsersList() {
     
     switch (status.toLowerCase()) {
       case 'active':
-        return <Badge className="bg-green-500">Active</Badge>;
+        return <Badge className="bg-green-500 text-white">Active</Badge>;
       case 'trialing':
-        return <Badge className="bg-blue-500">Trial</Badge>;
+        return <Badge className="bg-blue-500 text-white">Trial</Badge>;
       case 'past_due':
-        return <Badge className="bg-yellow-500">Past Due</Badge>;
+        return <Badge className="bg-yellow-500 text-white">Past Due</Badge>;
       case 'canceled':
-        return <Badge className="bg-red-500">Canceled</Badge>;
+        return <Badge className="bg-red-500 text-white">Canceled</Badge>;
       default:
         return <Badge variant="outline">{status || 'Free'}</Badge>;
     }
@@ -120,7 +124,52 @@ export default function UsersList() {
   // View user details
   const viewUserDetails = (user: UserProfile) => {
     setSelectedUser(user);
-    setIsDialogOpen(true);
+    setIsViewDialogOpen(true);
+  };
+
+  // Open delete confirmation dialog
+  const confirmDeleteUser = (user: UserProfile) => {
+    setUserToDelete(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  // Handle user deletion
+  const handleDeleteUser = async () => {
+    if (!userToDelete || !adminUser) return;
+    
+    // Prevent admin from deleting themselves
+    if (userToDelete.id === adminUser.id) {
+      toast.error("You cannot delete your own account.");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      // Call the API endpoint to delete the user
+      const response = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: userToDelete.id }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+
+      // Remove user from the local state
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userToDelete.id));
+      toast.success(`User ${userToDelete.email} deleted successfully.`);
+      setIsDeleteDialogOpen(false);
+      setUserToDelete(null);
+    } catch (error: any) { // Explicitly type error as any
+      console.error('Error deleting user:', error);
+      toast.error(`Error deleting user: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   if (isLoading) {
@@ -204,12 +253,21 @@ export default function UsersList() {
                     <TableCell>{user.login_count || 0}</TableCell>
                     <TableCell>{formatDate(user.last_login)}</TableCell>
                     <TableCell>
-                      <div className="flex space-x-2">
+                      <div className="flex space-x-1">
                         <Button size="sm" variant="ghost" onClick={() => viewUserDetails(user)}>
                           <Eye className="h-4 w-4" />
                         </Button>
                         <Button size="sm" variant="ghost">
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => confirmDeleteUser(user)}
+                          disabled={user.id === adminUser?.id} // Disable delete for self
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -221,8 +279,9 @@ export default function UsersList() {
         )}
       </CardContent>
 
+      {/* View User Details Dialog */}
       {selectedUser && (
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>User Details</DialogTitle>
@@ -249,7 +308,7 @@ export default function UsersList() {
                 <p className="text-sm text-muted-foreground">{selectedUser.username || 'None'}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Created</p>
+                <p className="text-sm font-medium">Joined</p>
                 <p className="text-sm text-muted-foreground">{formatDate(selectedUser.created_at)}</p>
               </div>
               <div>
@@ -257,23 +316,40 @@ export default function UsersList() {
                 <p className="text-sm text-muted-foreground">{formatDate(selectedUser.last_login)}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Login Count</p>
+                <p className="text-sm font-medium">Logins</p>
                 <p className="text-sm text-muted-foreground">{selectedUser.login_count || 0}</p>
               </div>
               <div>
-                <p className="text-sm font-medium">Onboarding</p>
-                <p className="text-sm text-muted-foreground">
-                  {selectedUser.onboarding_completed ? 'Completed' : 'Incomplete'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Location</p>
-                <p className="text-sm text-muted-foreground">{selectedUser.location || 'Unknown'}</p>
+                <p className="text-sm font-medium">Email Verified</p>
+                <p className="text-sm text-muted-foreground">{selectedUser.is_email_verified ? 'Yes' : 'No'}</p>
               </div>
             </div>
             <DialogFooter>
-              <Button size="sm" variant="outline" onClick={() => setIsDialogOpen(false)}>Close</Button>
-              <Button size="sm">Edit User</Button>
+              <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Delete User Confirmation Dialog */}
+      {userToDelete && (
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to permanently delete the user 
+                <span className="font-medium"> {userToDelete.email}</span>?
+                This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteUser} disabled={isDeleting}>
+                {isDeleting ? 'Deleting...' : 'Delete User'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

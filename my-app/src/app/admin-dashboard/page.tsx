@@ -9,10 +9,11 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import UsersList from '@/components/admin/UsersList';
 import AdminStats from '@/components/admin/AdminStats';
 import UserActivity from '@/components/admin/UserActivity';
+import ContactQueries from '@/components/admin/ContactQueries';
 // Remove RequireAuth if AuthProvider handles loading/auth state adequately
 // import { RequireAuth } from '@/components/auth/RequireAuth'; 
 import { useAuth } from '@/components/AuthProvider'; // Import our AuthProvider hook
-import { Loader2, ShieldAlert } from 'lucide-react'; // Import icons
+import { Loader2, ShieldAlert, MessageSquare } from 'lucide-react'; // Import icons
 
 export default function AdminDashboardPage() {
   // Use our AuthProvider hook
@@ -34,7 +35,7 @@ export default function AdminDashboardPage() {
       params.delete('tab'); // Remove tab param for default view
     } else {
       params.set('tab', newTab);
-    }
+      }
     router.push(`${pathname}?${params.toString()}`, { scroll: false }); // Use router.push to update URL without full reload
   };
 
@@ -84,6 +85,7 @@ export default function AdminDashboardPage() {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+            <TabsTrigger value="contact-queries">Contact Queries</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
@@ -105,6 +107,10 @@ export default function AdminDashboardPage() {
                 <p>Subscription management features coming soon.</p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="contact-queries">
+            <ContactQueries />
           </TabsContent>
           
           <TabsContent value="activity">

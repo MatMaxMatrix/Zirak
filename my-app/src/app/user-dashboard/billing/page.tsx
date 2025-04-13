@@ -28,6 +28,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
 import { 
   CreditCard, 
   Calendar,
@@ -75,6 +76,7 @@ export default function BillingPage() {
   const [payments, setPayments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   // Fetch user's subscription data
   useEffect(() => {
@@ -186,19 +188,19 @@ export default function BillingPage() {
         {/* Subscription Tab */}
         <TabsContent value="subscription" className="space-y-6">
           {/* No Active Subscription Card */}
-          <Card className="bg-black border-gray-800">
+          <Card className="dark-card">
             <CardHeader>
-              <CardTitle className="text-white">Current Plan</CardTitle>
-              <CardDescription className="text-yellow-400">
+              <CardTitle>Current Plan</CardTitle>
+              <CardDescription>
                 Beta access
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center p-4 rounded-lg bg-black border border-gray-800">
+              <div className="flex items-center p-4 rounded-lg dark-card border">
                 <Info className="h-8 w-8 text-yellow-400 mr-4" />
                 <div>
-                  <h3 className="font-medium text-white">Free Beta Access</h3>
-                  <p className="text-sm text-yellow-400">
+                  <h3 className="font-medium">Free Beta Access</h3>
+                  <p className="text-sm text-muted-foreground">
                     You're among our early users with free access to beta features.
                   </p>
                 </div>
@@ -207,13 +209,13 @@ export default function BillingPage() {
           </Card>
 
           {/* Pricing Coming Soon Card */}
-          <Card className="bg-gradient-to-b from-gray-900 to-black border-blue-500/30">
+          <Card className="dark-card border-blue-500/30">
             <CardHeader className="text-center">
               <div className="inline-block mb-4 p-2 bg-blue-500/20 rounded-xl mx-auto">
                 <Construction className="h-8 w-8 text-blue-400" />
               </div>
-              <CardTitle className="text-2xl text-white">Pricing Plans Coming Soon</CardTitle>
-              <CardDescription className="text-lg text-gray-400 max-w-2xl mx-auto">
+              <CardTitle className="text-2xl">Pricing Plans Coming Soon</CardTitle>
+              <CardDescription className="text-lg">
                 We're currently developing our pricing structure to provide the best value for developers and teams.
               </CardDescription>
             </CardHeader>
@@ -222,11 +224,11 @@ export default function BillingPage() {
                 {features.map((feature, index) => (
                   <div 
                     key={index}
-                    className="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700 hover:border-blue-500/50 transition-all duration-300"
+                    className="dark-card p-6 rounded-xl border hover:border-blue-500/50 transition-all duration-300"
                   >
                     <div className="mb-4">{feature.icon}</div>
-                    <h3 className="text-lg font-bold mb-2 text-white">{feature.title}</h3>
-                    <p className="text-sm text-gray-400">{feature.description}</p>
+                    <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground">{feature.description}</p>
                   </div>
                 ))}
               </div>
@@ -250,9 +252,8 @@ export default function BillingPage() {
                 )}
               </Button>
               <Button 
-                variant="outline"
+                variant="outline" 
                 onClick={handleContactUs}
-                className="border-gray-700 hover:bg-gray-800 text-white"
               >
                 <Mail className="mr-2 h-4 w-4" />
                 Contact Us
@@ -263,50 +264,95 @@ export default function BillingPage() {
 
         {/* Payment Methods Tab */}
         <TabsContent value="payment-methods" className="space-y-6">
-          <Card className="bg-black border-gray-800">
+          <Card className="dark-card">
             <CardHeader>
-              <CardTitle className="text-white">Payment Methods</CardTitle>
-              <CardDescription className="text-yellow-400">
-                No payment methods required during beta
+              <CardTitle>Payment Methods</CardTitle>
+              <CardDescription>
+                Add or remove payment methods
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
-                <CreditCardIcon className="h-12 w-12 text-yellow-400 mb-4" />
-                <h3 className="text-lg font-medium mb-2 text-white">Free Beta Access</h3>
-                <p className="text-sm text-yellow-400 mb-4">
-                  You currently have free access during our beta period. Payment methods will be available when pricing plans launch.
-                </p>
-                <Button onClick={handleJoinWaitlist} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <BellRing className="mr-2 h-4 w-4" />
-                  Get Pricing Notifications
-                </Button>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 rounded-lg border dark-card">
+                  <div className="flex items-center">
+                    <div className="p-2 mr-4 rounded-full dark-card">
+                      <CreditCardIcon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="font-medium">No payment methods</p>
+                      <p className="text-sm text-muted-foreground">
+                        Add a payment method to manage your subscription
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={handleAddPaymentMethod}
+                className="w-full"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Payment Method
+              </Button>
+            </CardFooter>
           </Card>
         </TabsContent>
 
         {/* Billing History Tab */}
-        <TabsContent value="billing-history">
-          <Card className="bg-black border-gray-800">
+        <TabsContent value="billing-history" className="space-y-6">
+          <Card className="dark-card">
             <CardHeader>
-              <CardTitle className="text-white">Billing History</CardTitle>
-              <CardDescription className="text-yellow-400">
-                No billing history during beta
+              <CardTitle>Billing History</CardTitle>
+              <CardDescription>
+                View your past transactions and invoices
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center p-8 border border-gray-800 rounded-lg text-center bg-black">
-                <FileText className="h-12 w-12 text-yellow-400 mb-4" />
-                <h3 className="text-lg font-medium mb-2 text-white">No Billing History</h3>
-                <p className="text-sm text-yellow-400 mb-4">
-                  Your billing history will appear here after pricing plans launch and you subscribe.
-                </p>
-                <Button onClick={handleJoinWaitlist} className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <BellRing className="mr-2 h-4 w-4" />
-                  Get Pricing Notifications
-                </Button>
-              </div>
+              {payments.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Receipt</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map((payment: any, i) => (
+                      <TableRow key={i}>
+                        <TableCell>{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
+                        <TableCell>{payment.description}</TableCell>
+                        <TableCell>${payment.amount.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={payment.status === 'succeeded' ? 'default' : 'outline'}
+                            className={payment.status === 'succeeded' ? 'bg-green-500/10 text-green-500' : ''}
+                          >
+                            {payment.status === 'succeeded' ? 'Paid' : payment.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="p-8 text-center">
+                  <FileText className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-medium text-lg mb-2">No billing history yet</h3>
+                  <p className="text-muted-foreground max-w-md mx-auto">
+                    Once you subscribe to a paid plan, your billing history will appear here.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -30,7 +30,7 @@ export async function middleware(request: NextRequest) {
 
     // Protected routes that require authentication
     const protectedPaths = [
-      '/dashboard',
+      // '/dashboard', // Removed
       '/user-dashboard',
       '/admin-dashboard',
       '/profile',
@@ -62,7 +62,7 @@ export const config = {
     '/chat',
     '/chat/:path*',
     // Protected routes that need auth
-    '/dashboard/:path*',
+    // '/dashboard/:path*', // Removed
     '/user-dashboard/:path*',
     '/admin-dashboard/:path*',
     '/profile/:path*',

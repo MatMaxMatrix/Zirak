@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Form, 
@@ -19,6 +19,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
 import { ArrowLeft, Send, CheckCircle } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useAuth } from "@/components/AuthProvider";
+import { toast } from "sonner";
+import { createClient } from "@/utils/supabase/client";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -38,6 +42,8 @@ const formSchema = z.object({
 export default function ContactPage() {
   const router = useRouter();
   const [submitted, setSubmitted] = useState(false);
+  const { theme } = useTheme();
+  const { user } = useAuth();
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -49,19 +55,44 @@ export default function ContactPage() {
     },
   });
 
+  // Set email from logged-in user when component mounts or user changes
+  useEffect(() => {
+    if (user?.email) {
+      form.setValue('email', user.email);
+    }
+  }, [user, form]);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    // In a real application, you would submit this to your backend
-    console.log(values);
-    
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const supabase = createClient();
+      
+      // Insert the contact query
+      const { data, error } = await supabase
+        .from('contact_queries')
+        .insert({
+          user_id: user?.id || null,
+          topic: values.topic,
+          message: values.message,
+          status: 'new', // Set initial status as 'new'
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        throw error;
+      }
+      
+      console.log('Contact query submitted:', data);
       setSubmitted(true);
       
       // Redirect after showing success message
       setTimeout(() => {
         router.push('/');
       }, 2000);
-    }, 1000);
+    } catch (error) {
+      console.error('Error submitting contact query:', error);
+      toast.error('Failed to send message. Please try again.');
+    }
   };
 
   const topics = [
@@ -74,26 +105,26 @@ export default function ContactPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white flex items-center justify-center">
+      <div className="min-h-screen dark-bg flex items-center justify-center">
         <motion.div 
-          className="p-8 rounded-xl border border-green-500/30 bg-gray-800/20 backdrop-blur-sm text-center max-w-md"
+          className="p-8 rounded-xl border border-green-500/30 dark-card text-center max-w-md"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
         >
           <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
           <h1 className="text-2xl font-bold mb-2">Message Sent!</h1>
-          <p className="text-gray-400 mb-6">
+          <p className="text-muted-foreground mb-6">
             Thank you for reaching out. We'll get back to you as soon as possible.
           </p>
-          <p className="text-sm text-gray-500">Redirecting you to the home page...</p>
+          <p className="text-sm text-muted-foreground">Redirecting you to the home page...</p>
         </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white py-20">
+    <div className="min-h-screen dark-bg py-20">
       <div className="max-w-2xl mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -103,14 +134,14 @@ export default function ContactPage() {
         >
           <Button 
             variant="ghost" 
-            className="text-gray-400 hover:text-white mb-8"
+            className="mb-8"
             onClick={() => router.back()}
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
           
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Contact Us</h1>
-          <p className="text-gray-400 mb-8">
+          <p className="text-muted-foreground mb-8">
             Have questions or need assistance? Fill out the form below and we'll get back to you as soon as possible.
           </p>
         </motion.div>
@@ -119,7 +150,7 @@ export default function ContactPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="bg-gray-800/30 backdrop-blur-sm p-8 rounded-xl border border-gray-700"
+          className="dark-card p-8 rounded-xl border"
         >
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -129,9 +160,9 @@ export default function ContactPage() {
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-white">Name</FormLabel>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your name" {...field} className="bg-gray-800/50" />
+                        <Input placeholder="Your name" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -143,10 +174,17 @@ export default function ContactPage() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-white">Email</FormLabel>
+                      <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input placeholder="Your email address" {...field} className="bg-gray-800/50" />
+                        <Input 
+                          placeholder="Your email address" 
+                          {...field} 
+                          disabled={!!user?.email}
+                        />
                       </FormControl>
+                      {user?.email && (
+                        <p className="text-xs text-muted-foreground">Using your account email</p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -158,19 +196,19 @@ export default function ContactPage() {
                 name="topic"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white">Topic</FormLabel>
+                    <FormLabel>Topic</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       defaultValue={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger className="bg-gray-800/50">
+                        <SelectTrigger>
                           <SelectValue placeholder="Select a topic" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectContent>
                         {topics.map((topic) => (
-                          <SelectItem key={topic.value} value={topic.value} className="text-white">
+                          <SelectItem key={topic.value} value={topic.value}>
                             {topic.label}
                           </SelectItem>
                         ))}
@@ -186,11 +224,11 @@ export default function ContactPage() {
                 name="message"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-white">Message</FormLabel>
+                    <FormLabel>Message</FormLabel>
                     <FormControl>
                       <Textarea 
                         placeholder="What would you like to ask or tell us?" 
-                        className="bg-gray-800/50 min-h-[150px]" 
+                        className="min-h-[150px]" 
                         {...field} 
                       />
                     </FormControl>
