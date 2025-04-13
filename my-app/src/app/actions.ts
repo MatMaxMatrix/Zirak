@@ -53,6 +53,13 @@ export const signInAction = async (formData: FormData) => {
     return redirect("/");
   } catch (unexpectedError) {
     console.error("[SignIn] Unexpected error:", unexpectedError);
+    
+    // Check if this is a redirect - we don't want to treat redirects as errors
+    if (unexpectedError instanceof Error && 
+        unexpectedError.message === 'NEXT_REDIRECT') {
+      throw unexpectedError; // Let Next.js handle the redirect
+    }
+    
     return redirect(`/sign-in?error=${encodeURIComponent("An error occurred during sign in")}`);
   }
 };
@@ -77,8 +84,10 @@ export const signUpAction = async (formData: FormData) => {
   try {
     const supabase = await createClient();
     const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    
+    console.log("[SignUp] Using redirect URL:", `${origin}/auth/callback`);
 
-    const { error } = await supabase.auth.signUp({
+    const { error, data } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -87,13 +96,28 @@ export const signUpAction = async (formData: FormData) => {
     });
 
     if (error) {
-      console.error("[SignUp] Error:", error.message);
+      console.error("[SignUp] Error:", error.message, error);
       return redirect(`/sign-up?error=${encodeURIComponent(error.message)}`);
     }
 
+    // Check if email is already registered (identities array will be empty)
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      console.log("[SignUp] Email already registered:", email);
+      return redirect(`/sign-up?error=${encodeURIComponent("Email already registered. Try signing in instead.")}`);
+    }
+
+    // If we got here, signup was successful
+    console.log("[SignUp] Success:", data);
     return redirect(`/sign-up?success=${encodeURIComponent("Check your email for verification link")}`);
   } catch (unexpectedError) {
     console.error("[SignUp] Unexpected error:", unexpectedError);
+    
+    // Check if this is a redirect - we don't want to treat redirects as errors
+    if (unexpectedError instanceof Error && 
+        unexpectedError.message === 'NEXT_REDIRECT') {
+      throw unexpectedError; // Let Next.js handle the redirect
+    }
+    
     return redirect(`/sign-up?error=${encodeURIComponent("An error occurred during sign up")}`);
   }
 };
@@ -102,12 +126,21 @@ export const signOutAction = async () => {
   try {
     const supabase = await createClient();
     await supabase.auth.signOut();
+    
+    // Always redirect to home page after sign out attempt
+    return redirect("/");
   } catch (error) {
     console.error("[SignOut] Error:", error);
+    
+    // Check if this is a redirect - we don't want to treat redirects as errors
+    if (error instanceof Error && 
+        error.message === 'NEXT_REDIRECT') {
+      throw error; // Let Next.js handle the redirect
+    }
+    
+    // For other errors, still try to redirect home
+    return redirect("/");
   }
-  
-  // Always redirect to home page after sign out attempt
-  return redirect("/");
 };
 
 export const forgotPasswordAction = async (formData: FormData) => {
@@ -138,6 +171,13 @@ export const forgotPasswordAction = async (formData: FormData) => {
     return redirect(`/forgot-password?success=${encodeURIComponent("Check your email for a link to reset your password.")}`);
   } catch (unexpectedError) {
     console.error("[ForgotPassword] Unexpected error:", unexpectedError);
+    
+    // Check if this is a redirect - we don't want to treat redirects as errors
+    if (unexpectedError instanceof Error && 
+        unexpectedError.message === 'NEXT_REDIRECT') {
+      throw unexpectedError; // Let Next.js handle the redirect
+    }
+    
     return redirect(`/forgot-password?error=${encodeURIComponent("An error occurred")}`);
   }
 }; 

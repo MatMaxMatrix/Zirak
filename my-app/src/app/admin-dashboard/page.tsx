@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 // Remove Auth0 import if no longer needed elsewhere after this change
 // import { useUser } from '@auth0/nextjs-auth0/client'; 
 import UsersList from '@/components/admin/UsersList';
@@ -17,13 +17,26 @@ import { Loader2, ShieldAlert } from 'lucide-react'; // Import icons
 export default function AdminDashboardPage() {
   // Use our AuthProvider hook
   const { user, isLoading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   
   // Get the tab from query params or default to "overview"
-  const tab = searchParams.get('tab') || 'overview';
+  const currentTab = searchParams.get('tab') || 'overview';
   
   // Directly check the role from the user context
   const isAdmin = user?.role === 'admin';
+
+  // Handler to update URL when tab changes
+  const handleTabChange = (newTab: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (newTab === 'overview') {
+      params.delete('tab'); // Remove tab param for default view
+    } else {
+      params.set('tab', newTab);
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false }); // Use router.push to update URL without full reload
+  };
 
   if (isLoading) {
     return (
@@ -62,12 +75,16 @@ export default function AdminDashboardPage() {
           <p className="text-muted-foreground">Manage your system and users</p>
         </div>
 
-        <Tabs defaultValue={tab}>
+        <Tabs 
+          value={currentTab} 
+          onValueChange={handleTabChange}
+          className="space-y-4"
+        >
           <TabsList className="mb-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="activity">User Activity</TabsTrigger>
             <TabsTrigger value="subscriptions">Subscriptions</TabsTrigger>
+            <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           
@@ -79,10 +96,6 @@ export default function AdminDashboardPage() {
             <UsersList />
           </TabsContent>
           
-          <TabsContent value="activity">
-            <UserActivity />
-          </TabsContent>
-          
           <TabsContent value="subscriptions">
             <Card>
               <CardHeader>
@@ -92,6 +105,10 @@ export default function AdminDashboardPage() {
                 <p>Subscription management features coming soon.</p>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="activity">
+            <UserActivity />
           </TabsContent>
           
           <TabsContent value="settings">

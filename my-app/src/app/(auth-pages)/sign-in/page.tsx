@@ -12,6 +12,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import Script from "next/script";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 
 // Define types for Google Identity Services
 declare global {
@@ -32,10 +35,64 @@ export default function Login() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const supabase = createClient();
+  const { refreshUser } = useAuth();
   const [googleButtonReady, setGoogleButtonReady] = useState(false);
   const [googleButtonError, setGoogleButtonError] = useState(false);
   const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const googleButtonContainerRef = useRef<HTMLDivElement>(null);
+
+  // Successful sign-in handler that updates auth state and redirects
+  const handleSuccessfulSignIn = async () => {
+    // First refresh the user data in the auth context
+    await refreshUser();
+    
+    // Then show success message
+    toast.success('Signed in successfully');
+    
+    // Then redirect and refresh the router
+    router.push('/');
+    router.refresh();
+    
+    // Force a page reload to update all components with the new auth state
+    window.location.href = '/';
+  };
+
+  // Handle form submission using the API endpoint
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    
+    try {
+      // Call our API endpoint
+      const response = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        setErrorMessage(data.error || 'An error occurred during sign in');
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Handle successful sign-in
+      await handleSuccessfulSignIn();
+    } catch (error) {
+      console.error('[Email Sign In] Error:', error);
+      setErrorMessage('An error occurred during sign in');
+      setIsSubmitting(false);
+    }
+  };
 
   async function handleSignInWithGoogle(response: any) {
     try {
@@ -71,8 +128,8 @@ export default function Login() {
         }
       }
       
-      // Redirect to home page after successful sign-in
-      router.push('/');
+      // Handle successful sign-in
+      await handleSuccessfulSignIn();
     } catch (err) {
       console.error('[Google Sign In] Error during authentication');
     }
@@ -128,6 +185,14 @@ export default function Login() {
       setScriptLoaded(true);
     }, 500);
   };
+  
+  // Get error from URL if present (for redirects from other pages)
+  useEffect(() => {
+    const urlError = searchParams.get('error');
+    if (urlError) {
+      setErrorMessage(urlError);
+    }
+  }, [searchParams]);
 
   return (
     <>
@@ -139,7 +204,7 @@ export default function Login() {
         onError={() => setGoogleButtonError(true)}
       />
       
-      <form className="flex-1 flex flex-col min-w-64">
+      <form className="flex-1 flex flex-col min-w-64" onSubmit={handleSubmit}>
         <h1 className="text-2xl font-medium">Sign in</h1>
         <p className="text-sm text-foreground mb-6">
           Don't have an account?{" "}
@@ -178,7 +243,15 @@ export default function Login() {
           </Separator>
 
           <Label htmlFor="email">Email</Label>
-          <Input name="email" placeholder="you@example.com" required />
+          <Input 
+            id="email"
+            name="email" 
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com" 
+            required 
+          />
           <div className="flex justify-between items-center">
             <Label htmlFor="password">Password</Label>
             <Link
@@ -189,15 +262,33 @@ export default function Login() {
             </Link>
           </div>
           <Input
+            id="password"
             type="password"
             name="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="Your password"
             required
           />
-          <SubmitButton pendingText="Signing In..." formAction={signInAction}>
-            Sign in with Email
-          </SubmitButton>
-          <FormMessage message={null} />
+          
+          {/* Error message */}
+          {errorMessage && (
+            <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
+          )}
+          
+          {/* Submit button */}
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing In...
+              </>
+            ) : 'Sign in with Email'}
+          </Button>
         </div>
       </form>
     </>

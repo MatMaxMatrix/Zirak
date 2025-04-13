@@ -29,22 +29,36 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/dashboard';
   const redirectTo = searchParams.get('redirect_to');
   
+  console.log('[Auth Callback] Request received', { 
+    hasCode: !!code,
+    redirectTo,
+    next
+  });
+  
   // Validate and sanitize redirect paths
   const redirectPath = redirectTo && isValidRedirectPath(redirectTo) 
     ? redirectTo 
     : isValidRedirectPath(next) 
       ? next 
       : '/dashboard'; // Fallback to safe default
+  
+  console.log('[Auth Callback] Final redirect path:', redirectPath);
 
   if (code) {
     try {
       const supabase = await createClient();
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      console.log('[Auth Callback] Exchanging code for session');
+      const { error, data } = await supabase.auth.exchangeCodeForSession(code);
       
       if (error) {
-        console.error('[Auth] Session exchange error');
-        return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed')}`);
+        console.error('[Auth Callback] Session exchange error:', error.message, error);
+        return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed: ' + error.message)}`);
       }
+
+      console.log('[Auth Callback] Session exchange successful', { 
+        hasSession: !!data?.session,
+        user: data?.session?.user?.id ? 'authenticated' : 'missing' 
+      });
 
       const forwardedHost = request.headers.get('x-forwarded-host');
       const isLocalEnv = process.env.NODE_ENV === 'development';
@@ -55,13 +69,17 @@ export async function GET(request: Request) {
         baseUrl = `https://${forwardedHost}`;
       }
       
-      return NextResponse.redirect(`${baseUrl}${redirectPath}`);
+      const redirectUrl = `${baseUrl}${redirectPath}`;
+      console.log('[Auth Callback] Redirecting to:', redirectUrl);
+      
+      return NextResponse.redirect(redirectUrl);
     } catch (error) {
-      console.error('[Auth] Unexpected error in callback');
-      return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed')}`);
+      console.error('[Auth Callback] Unexpected error in callback:', error);
+      return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed due to an unexpected error')}`);
     }
   }
 
   // No code parameter found
-  return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed')}`);
+  console.error('[Auth Callback] No code parameter found in URL');
+  return NextResponse.redirect(`${origin}/sign-in?error=${encodeURIComponent('Authentication failed: Missing verification code')}`);
 } 

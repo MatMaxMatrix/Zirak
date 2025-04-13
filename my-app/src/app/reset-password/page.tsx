@@ -1,18 +1,56 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/utils/supabase/client';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2 } from 'lucide-react';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [apiMode, setApiMode] = useState(false);
   const router = useRouter();
+  const supabase = createClient();
+  
+  // Check if user has a valid session
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session check error:', error.message);
+          setApiMode(true); // Fall back to API mode
+          setCheckingSession(false);
+          return;
+        }
+        
+        if (!session) {
+          console.log('No active session found for password reset');
+          setApiMode(true); // Fall back to API mode
+          setCheckingSession(false);
+          return;
+        }
+        
+        // Session is valid
+        setCheckingSession(false);
+      } catch (error) {
+        console.error('Unexpected error checking session:', error);
+        setApiMode(true); // Fall back to API mode
+        setCheckingSession(false);
+      }
+    };
+    
+    checkSession();
+  }, [supabase.auth]);
   
   // Password validation
   const validatePassword = (password: string): { valid: boolean; message?: string } => {
@@ -56,17 +94,51 @@ export default function ResetPassword() {
     }
     
     try {
-      const supabase = createClient();
+      let success = false;
       
-      const { error } = await supabase.auth.updateUser({
-        password: password,
-      });
+      // Try updating via the direct Supabase client first
+      if (!apiMode) {
+        const { error } = await supabase.auth.updateUser({
+          password: password,
+        });
+        
+        if (error) {
+          console.error('Password update using client error:', error.message);
+          // If this fails, we'll fall back to the API below
+        } else {
+          success = true;
+        }
+      }
       
-      if (error) {
-        console.error('Password update error:', error.message);
-        toast.error('Unable to update password. Please try again later.');
-        setIsLoading(false);
-        return;
+      // Fall back to the API if client method fails or we're in API mode
+      if (!success) {
+        console.log('Falling back to API endpoint for password update');
+        
+        const response = await fetch('/api/auth/update-password', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ password }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('Password update API error:', data.error);
+          
+          // Check for the specific "same password" error
+          if (data.error && data.error.includes('same password')) {
+            toast.error('Your new password must be different from your current password');
+          } else {
+            toast.error(`Unable to update password: ${data.error}`);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+        
+        success = true;
       }
       
       // Clear sensitive data
@@ -84,6 +156,18 @@ export default function ResetPassword() {
       setIsLoading(false);
     }
   };
+
+  // Show loading state while checking session
+  if (checkingSession) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-background">
+        <div className="w-full max-w-md p-8 space-y-6 bg-card rounded-lg shadow-lg text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p>Verifying your password reset session...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex justify-center items-center min-h-screen bg-background">
@@ -92,6 +176,14 @@ export default function ResetPassword() {
           <h1 className="text-3xl font-bold">Reset Your Password</h1>
           <p className="text-muted-foreground">Create a new secure password</p>
         </div>
+        
+        {apiMode && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              Using alternative method to reset your password.
+            </AlertDescription>
+          </Alert>
+        )}
         
         <form onSubmit={handlePasswordReset} className="space-y-4">
           <div className="space-y-2">
