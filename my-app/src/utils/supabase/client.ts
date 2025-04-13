@@ -2,19 +2,30 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 
+// Use a singleton pattern for the Supabase instance
+let supabaseInstance: ReturnType<typeof createBrowserClient> | null = null;
+let hasLoggedInitialization = false;
+
 export function createClient() {
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
   try {
-    const supabase = createBrowserClient(
+    supabaseInstance = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     );
 
-    // Debug Supabase client creation
-    console.log('[Supabase Client] Initialized with URL:', 
-      process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Valid URL' : 'Missing URL',
-      'and key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Valid Key' : 'Missing Key');
+    // Only log on first initialization
+    if (!hasLoggedInitialization) {
+      console.log('[Supabase Client] Initialized with URL:', 
+        process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Valid URL' : 'Missing URL',
+        'and key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Valid Key' : 'Missing Key');
+      hasLoggedInitialization = true;
+    }
 
-    return supabase;
+    return supabaseInstance;
   } catch (error) {
     console.error('[Supabase Client] Error creating client:', error);
     throw error;

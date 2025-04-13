@@ -4,6 +4,7 @@
 
 import { createClient } from '@/utils/supabase/client';
 import { User } from '@supabase/supabase-js';
+import { UserWithRole } from '@/components/AuthProvider';
 
 /**
  * Check if a user has admin role
@@ -35,7 +36,7 @@ export async function fetchUserRole(userId: string): Promise<string> {
 }
 
 // Synchronous helper for UI components that can't use async functions directly
-export function isAdmin(user: User | null): boolean {
+export function isAdmin(user: User | UserWithRole | null): boolean {
   // Admin emails - define your admin emails here
   const adminEmails = [
     'admin@example.com', 
@@ -45,7 +46,12 @@ export function isAdmin(user: User | null): boolean {
   
   if (!user) return false;
   
-  // Check if user's email is in the admin list
+  // First, check if the user has a role property (from useAuth hook)
+  if ('role' in user && user.role === 'admin') {
+    return true;
+  }
+  
+  // If no role property or not admin, check if user's email is in the admin list
   return adminEmails.includes(user.email || '');
 }
 

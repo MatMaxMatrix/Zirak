@@ -26,27 +26,27 @@ export function AdminNav({ className }: AdminNavProps) {
   const navItems = [
     {
       title: 'Dashboard',
-      href: '/admin/dashboard',
+      href: '/admin-dashboard',
       icon: <BarChart className="mr-2 h-4 w-4" />,
     },
     {
       title: 'Users',
-      href: '/admin/users',
+      href: '/admin-dashboard?tab=users',
       icon: <Users className="mr-2 h-4 w-4" />,
     },
     {
       title: 'Subscriptions',
-      href: '/admin/subscriptions',
+      href: '/admin-dashboard?tab=subscriptions',
       icon: <CreditCard className="mr-2 h-4 w-4" />,
     },
     {
       title: 'Settings',
-      href: '/admin/settings',
+      href: '/admin-dashboard?tab=settings',
       icon: <Settings className="mr-2 h-4 w-4" />,
     },
     {
-      title: 'Access Control',
-      href: '/admin/assign-admin',
+      title: 'Activity',
+      href: '/admin-dashboard?tab=activity',
       icon: <Shield className="mr-2 h-4 w-4" />,
     }
   ];

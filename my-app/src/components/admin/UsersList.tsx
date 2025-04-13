@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuth } from '@/components/AuthProvider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -10,14 +10,14 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Edit, UserPlus, Eye } from 'lucide-react';
-import { getSupabase } from '@/utils/supabase';
+import { createClient } from '@/utils/supabase/client';
 
 interface UserProfile {
   id: string;
   email: string;
   username: string;
-  full_name: string;
-  avatar_url: string;
+  name: string;
+  picture: string;
   created_at: string;
   last_login: string;
   login_count: number;
@@ -28,7 +28,7 @@ interface UserProfile {
 }
 
 export default function UsersList() {
-  const { user } = useUser();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -42,7 +42,7 @@ export default function UsersList() {
       
       try {
         setIsLoading(true);
-        const supabase = getSupabase(user.accessToken as string);
+        const supabase = createClient();
         
         const { data, error } = await supabase
           .from('profiles')
@@ -53,8 +53,9 @@ export default function UsersList() {
         
         setUsers(data || []);
       } catch (error: any) {
-        console.error('Error fetching users:', error);
-        setError(error.message || 'Failed to load users');
+        // Log the full error object for better debugging
+        console.error('Full error object fetching users:', JSON.stringify(error, null, 2));
+        setError(error?.message || `Failed to load users. Code: ${error?.code || 'N/A'}`);
       } finally {
         setIsLoading(false);
       }
@@ -71,7 +72,7 @@ export default function UsersList() {
     return (
       user.email?.toLowerCase().includes(query) ||
       user.username?.toLowerCase().includes(query) ||
-      user.full_name?.toLowerCase().includes(query)
+      user.name?.toLowerCase().includes(query)
     );
   });
 
@@ -182,11 +183,11 @@ export default function UsersList() {
                     <TableCell>
                       <div className="flex items-center space-x-3">
                         <Avatar>
-                          <AvatarImage src={user.avatar_url || ''} />
-                          <AvatarFallback>{getAvatarFallback(user.full_name)}</AvatarFallback>
+                          <AvatarImage src={user.picture || ''} />
+                          <AvatarFallback>{getAvatarFallback(user.name)}</AvatarFallback>
                         </Avatar>
                         <div>
-                          <div className="font-medium">{user.full_name || 'Unnamed User'}</div>
+                          <div className="font-medium">{user.name || 'Unnamed User'}</div>
                           <div className="text-xs text-muted-foreground">{user.username || user.id.substring(0, 8)}</div>
                         </div>
                       </div>
@@ -229,10 +230,10 @@ export default function UsersList() {
             </DialogHeader>
             <div className="flex flex-col items-center py-4">
               <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={selectedUser.avatar_url || ''} />
-                <AvatarFallback className="text-2xl">{getAvatarFallback(selectedUser.full_name)}</AvatarFallback>
+                <AvatarImage src={selectedUser.picture || ''} />
+                <AvatarFallback className="text-2xl">{getAvatarFallback(selectedUser.name)}</AvatarFallback>
               </Avatar>
-              <h3 className="text-xl font-bold">{selectedUser.full_name || 'Unnamed User'}</h3>
+              <h3 className="text-xl font-bold">{selectedUser.name || 'Unnamed User'}</h3>
               <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
               <div className="mt-2">
                 {getSubscriptionBadge(selectedUser.subscription_status)}

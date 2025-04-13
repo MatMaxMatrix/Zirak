@@ -289,7 +289,7 @@ const NavBar = () => {
                 </Link>
                 {/* Show admin dashboard link only if user is an admin */}
                 {isAdmin(user) && (
-                  <Link href="/admin/dashboard" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                  <Link href="/admin-dashboard" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                     Admin Dashboard
                   </Link>
                 )}
@@ -375,7 +375,7 @@ const NavBar = () => {
                 </Link>
                 {/* Show admin dashboard link only if user is an admin */}
                 {isAdmin(user) && (
-                  <Link href="/admin/dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                  <Link href="/admin-dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
                     Admin Dashboard
                   </Link>
                 )}
