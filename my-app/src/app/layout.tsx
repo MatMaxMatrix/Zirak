@@ -6,6 +6,8 @@ import { WebSocketProvider } from "./contexts/WebSocketContext";
 import NavBar from "@/components/NavBar";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ProfileSync } from "@/components/auth/ProfileSync";
+import { Toaster } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,8 +22,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressHydrationWarning>
+    <html lang="en" className="bg-background" suppressHydrationWarning>
+      <head>
+        {/* Head content managed by Next.js */}
+      </head>
+      <body className={`${inter.className} bg-background text-foreground`} suppressHydrationWarning>
         <ThemeProvider 
           attribute="class" 
           defaultTheme="system" 
@@ -38,6 +43,7 @@ export default function RootLayout({
               </div>
               <ProfileSync />
             </WebSocketProvider>
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

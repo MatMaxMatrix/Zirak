@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useUser } from "@auth0/nextjs-auth0/client";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { getSupabase } from "@/utils/supabase";
+import { createClient } from "@/utils/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
 
 import {
   Card,
@@ -57,62 +57,18 @@ const profileFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
-// Add Auth0 user type definition with accessToken
-interface Auth0User {
-  sub: string;
-  name?: string;
-  email?: string;
-  picture?: string;
-  accessToken?: string;
-}
-
 export default function ProfilePage() {
-  const { user } = useUser();
+  const { user, refreshUser } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [hasAttemptedProfileCreation, setHasAttemptedProfileCreation] = useState(false);
   
-  // Type cast user to include accessToken
-  const auth0User = user as Auth0User;
-  
-  useEffect(() => {
-    async function fetchProfileData() {
-      if (!auth0User) return;
-      
-      try {
-        const supabase = getSupabase(auth0User.accessToken);
-        
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', auth0User.sub)
-          .single();
-          
-        if (error) throw error;
-        
-        if (data) {
-          setProfileData(data);
-          form.reset({
-            name: data.full_name || auth0User.name || "",
-            email: auth0User.email || "",
-            phone: data.phone_number || "",
-            location: data.location || "",
-            bio: data.metadata?.bio || "",
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-        toast.error("Failed to load profile data");
-      }
-    }
-    
-    fetchProfileData();
-  }, [auth0User]);
-
-  // Set default form values from Auth0 user profile
+  // Set default form values from Supabase user profile
   const defaultValues: Partial<ProfileFormValues> = {
-    name: auth0User?.name || "",
-    email: auth0User?.email || "",
+    name: user?.user_metadata?.name || "",
+    email: user?.email || "",
     phone: "",
     location: "",
     bio: "",
@@ -123,38 +79,174 @@ export default function ProfilePage() {
     defaultValues,
     mode: "onChange",
   });
+  
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchProfileData() {
+      if (!user || isCreatingProfile || hasAttemptedProfileCreation) return;
+      
+      try {
+        const supabase = createClient();
+        
+        // Try using RPC function first (with proper type handling)
+        const { data: profileData, error: rpcError } = await supabase.rpc('get_profile_by_id', {
+          p_user_id: user.id
+        });
+        
+        if (rpcError) {
+          console.log('RPC not available, falling back to direct query:', rpcError.message);
+          
+          // Use direct query with eq now that types match
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+            
+          if (error) {
+            // Handle specific error cases
+            if (error.code === 'PGRST116' && !hasAttemptedProfileCreation) {
+              // This is "no rows returned" error, which is normal for new users
+              console.log('No profile found, using default values');
+              // Set default values from user metadata
+              form.reset({
+                name: user.user_metadata?.name || "",
+                email: user.email || "",
+                phone: "",
+                location: "",
+                bio: "",
+              });
+              
+              // Create a new profile for the user, but only try once
+              if (isMounted) {
+                setHasAttemptedProfileCreation(true);
+                await createUserProfile(user);
+              }
+              return;
+            } else {
+              // For other errors, show error toast
+              console.error('Error fetching profile:', JSON.stringify(error));
+              toast.error("Failed to load profile data: " + error.message);
+              return;
+            }
+          }
+          
+          if (data && isMounted) {
+            setProfileData(data);
+            form.reset({
+              name: data.name || user.user_metadata?.name || "",
+              email: user.email || "",
+              phone: data.phone_number || "",
+              location: data.city || "",
+              bio: data.bio || "",
+            });
+          }
+        } else if (profileData && isMounted) {
+          // Profile data from RPC
+          setProfileData(profileData);
+          form.reset({
+            name: profileData.name || user.user_metadata?.name || "",
+            email: user.email || "",
+            phone: profileData.phone_number || "",
+            location: profileData.city || "",
+            bio: profileData.bio || "",
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching profile:', error instanceof Error ? error.message : JSON.stringify(error));
+        if (isMounted) toast.error("Failed to load profile data");
+      }
+    }
+    
+    // Helper function to create a new profile
+    async function createUserProfile(user: any) {
+      if (isCreatingProfile) return;
+      
+      try {
+        setIsCreatingProfile(true);
+        
+        // Use the API endpoint with admin privileges instead of direct client access
+        const response = await fetch('/api/profile/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            userId: user.id,
+            email: user.email,
+            name: user.user_metadata?.name || "",
+            picture: user.user_metadata?.picture || ""
+          }),
+          // Add a cache-busting query parameter
+          cache: 'no-store',
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+          console.error('Error creating profile:', result.error);
+          if (isMounted) toast.error("Failed to create profile: " + (result.error || "Unknown error"));
+        } else {
+          console.log('Profile created successfully via API');
+          if (isMounted) toast.success("Profile created successfully");
+          // Refresh user data to get the new profile
+          if (isMounted) await refreshUser();
+        }
+      } catch (error) {
+        console.error('Error calling profile creation API:', error instanceof Error ? error.message : JSON.stringify(error));
+        if (isMounted) toast.error("Failed to create profile");
+      } finally {
+        if (isMounted) setIsCreatingProfile(false);
+      }
+    }
+    
+    fetchProfileData();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user, form, hasAttemptedProfileCreation, isCreatingProfile]);
 
   async function onSubmit(data: ProfileFormValues) {
-    if (!auth0User) return;
+    if (!user) return;
     
     setIsSubmitting(true);
     
     try {
-      const supabase = getSupabase(auth0User.accessToken);
-      
-      // Create a metadata object to store bio since it's not a direct column
-      const metadata = {
-        ...(profileData?.metadata || {}),
-        bio: data.bio
-      };
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: data.name,
-          phone_number: data.phone,
+      // Instead of updating directly with client-side Supabase, use the API endpoint
+      const response = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          name: data.name,
+          bio: data.bio,
+          phone: data.phone,
           location: data.location,
-          metadata: metadata,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', auth0User.sub);
-        
-      if (error) throw error;
+        }),
+        cache: 'no-store',
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        console.error('Error updating profile:', result.error);
+        throw new Error(result.error || 'Failed to update profile');
+      }
+      
+      // Update local profile data
+      if (result.data) {
+        setProfileData(result.data);
+      }
       
       toast.success("Profile updated successfully!");
     } catch (error) {
-      console.error('Error updating profile:', error);
-      toast.error("Failed to update profile");
+      console.error('Error updating profile:', error instanceof Error ? error.message : JSON.stringify(error));
+      toast.error(error instanceof Error ? error.message : "Failed to update profile");
     } finally {
       setIsSubmitting(false);
     }
@@ -187,8 +279,8 @@ export default function ProfilePage() {
           <CardContent className="flex flex-col items-center justify-center space-y-4">
             <div className="relative">
               <Avatar className="h-32 w-32">
-                <AvatarImage src={auth0User?.picture || ""} alt={auth0User?.name || "Profile"} />
-                <AvatarFallback className="text-4xl">{auth0User?.name?.charAt(0) || "U"}</AvatarFallback>
+                <AvatarImage src={user?.user_metadata?.picture || profileData?.picture || ""} alt={user?.user_metadata?.name || "Profile"} />
+                <AvatarFallback className="text-4xl">{user?.user_metadata?.name?.charAt(0) || "U"}</AvatarFallback>
               </Avatar>
               <Button
                 variant="secondary"
@@ -210,7 +302,7 @@ export default function ProfilePage() {
             <div className="w-full space-y-2 text-sm">
               <div className="flex items-center">
                 <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span>{auth0User?.email}</span>
+                <span>{user?.email}</span>
               </div>
               {form.watch("phone") && (
                 <div className="flex items-center">
@@ -259,22 +351,28 @@ export default function ProfilePage() {
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email Address</FormLabel>
+                          <FormLabel>Email</FormLabel>
                           <FormControl>
                             <Input 
                               placeholder="Your email" 
                               {...field} 
                               disabled 
-                              value={auth0User?.email || ""}
+                              title="Email cannot be changed"
                             />
                           </FormControl>
-                          <FormDescription>
-                            Your email is managed by Auth0
-                          </FormDescription>
+                          <FormDescription>Email managed by authentication provider</FormDescription>
+                          <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
+                </div>
+
+                <Separator />
+
+                {/* Contact Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Contact Information</h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     <FormField
                       control={form.control}
@@ -296,7 +394,7 @@ export default function ProfilePage() {
                         <FormItem>
                           <FormLabel>Location</FormLabel>
                           <FormControl>
-                            <Input placeholder="Your location" {...field} />
+                            <Input placeholder="City, Country" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -307,9 +405,9 @@ export default function ProfilePage() {
 
                 <Separator />
 
-                {/* About */}
+                {/* Biography */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium">About You</h3>
+                  <h3 className="text-lg font-medium">Biography</h3>
                   <FormField
                     control={form.control}
                     name="bio"
@@ -319,12 +417,12 @@ export default function ProfilePage() {
                         <FormControl>
                           <Textarea
                             placeholder="Tell us a little about yourself"
-                            className="resize-none"
+                            className="min-h-[100px]"
                             {...field}
                           />
                         </FormControl>
                         <FormDescription>
-                          Brief description for your profile. Maximum 160 characters.
+                          Brief description for your profile. Max 160 characters.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -332,8 +430,11 @@ export default function ProfilePage() {
                   />
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button type="submit" disabled={isSubmitting}>
+              <CardFooter className="justify-end space-x-2">
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -351,6 +452,24 @@ export default function ProfilePage() {
           </Form>
         </Card>
       </div>
+
+      <Separator />
+
+      {/* API Keys Management Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle>API Settings</CardTitle>
+          <CardDescription>Manage your API keys for accessing different AI models</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p>API key management has been moved to a separate page.</p>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" asChild>
+            <a href="/user-dashboard/profile/api-settings">Manage API Keys</a>
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 } 

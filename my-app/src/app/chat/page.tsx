@@ -1,9 +1,7 @@
 "use client";
 
-import dynamic from 'next/dynamic';
-import { Suspense, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
-import { useUser } from "@auth0/nextjs-auth0/client";
 import { useRouter } from 'next/navigation';
 
 // Loading component
@@ -11,47 +9,35 @@ function Loading() {
   return (
     <div className="flex items-center justify-center w-full h-screen">
       <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      <span className="ml-2 text-lg">Loading chat interface...</span>
+      <span className="ml-2 text-lg">Redirecting to waitlist...</span>
     </div>
   );
 }
 
-// Dynamically import the chat interface with no SSR
-const ChatInterface = dynamic(
-  () => import('@/components/chat/ChatInterface'),
-  { 
-    ssr: false,
-    loading: () => <Loading />
-  }
-);
-
-// Simple wrapper for the chat page
+// Simple wrapper for the chat page that redirects all users to waitlist
 export default function ChatPage() {
   const router = useRouter();
-  const { user, isLoading } = useUser();
   
-  // Redirect to waitlist if user is authenticated
+  // Always redirect to waitlist regardless of authentication status
   useEffect(() => {
-    if (!isLoading) {
-      if (user) {
-        // Redirect authenticated users to the waitlist
+    // Immediate redirect to waitlist page
+    router.push('/waitlist');
+    
+    // Add event listener for navigation back to this page
+    const handleFocus = () => {
+      // Re-redirect if user navigates back to this page
+      if (window.location.pathname.startsWith('/chat')) {
         router.push('/waitlist');
-      } else {
-        // Redirect unauthenticated users to login
-        router.push('/api/auth/login?returnTo=/waitlist');
       }
-    }
-  }, [user, isLoading, router]);
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [router]);
 
-  // Show loading while authentication state is being determined
-  if (isLoading) {
-    return <Loading />;
-  }
-  
-  // This will only briefly show before redirection happens
-  return (
-    <Suspense fallback={<Loading />}>
-      <ChatInterface />
-    </Suspense>
-  );
+  // Show loading while redirect happens
+  return <Loading />;
 } 

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from "@/components/AuthProvider";
+import { createClient } from "@/utils/supabase/client";
 import {
   LayoutDashboard,
   Users,
@@ -16,19 +17,25 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Logout function
-function handleLogout() {
-  // Redirect to Auth0 logout endpoint with returnTo parameter and federated flag
-  window.location.href = "/api/auth/logout?returnTo=" + encodeURIComponent(window.location.origin) + "&federated";
-}
-
 export function Sidebar() {
   const pathname = usePathname();
-  const { user } = useUser();
+  const router = useRouter();
+  const { user } = useAuth();
+  const supabase = createClient();
 
   // Determine if user is admin
   const isAdmin = user?.email === "admin@example.com";
   const userEmail = user?.email;
+
+  // Function to handle logout
+  async function handleLogout() {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error signing out:', error.message);
+    } else {
+      router.push('/sign-in');
+    }
+  }
 
   // Define navigation items
   const navItems = [

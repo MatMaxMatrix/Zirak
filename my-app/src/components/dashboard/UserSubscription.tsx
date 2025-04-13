@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/components/AuthProvider';
 import { getSupabase } from '@/utils/supabase';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, Clock } from 'lucide-react';
+import { createClient } from '@/utils/supabase/client';
 
 type SubscriptionPlan = {
   id: number;
@@ -26,12 +27,32 @@ type Subscription = {
   plan: SubscriptionPlan;
 };
 
+/**
+ * This component requires the following RLS policies in Supabase:
+ * 
+ * -- Allow users to view their own subscriptions
+ * CREATE POLICY "Users can view their own subscriptions" 
+ * ON subscriptions FOR SELECT 
+ * USING (user_id = auth.user_id());
+ * 
+ * -- Allow users to view subscription plans (all users can view plans)
+ * CREATE POLICY "Anyone can view subscription plans" 
+ * ON subscription_plans FOR SELECT 
+ * USING (true);
+ * 
+ * -- Allow users to view their own payment history
+ * CREATE POLICY "Users can view their own payments" 
+ * ON payments FOR SELECT 
+ * USING (user_id = auth.user_id());
+ */
+
 export default function UserSubscription() {
-  const { user, isLoading: isUserLoading } = useUser();
+  const { user, isLoading: isUserLoading } = useAuth();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<any>(null);
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -47,54 +68,65 @@ export default function UserSubscription() {
   const fetchSubscriptionData = async () => {
     setIsLoading(true);
     setError(null);
-
+    
     try {
-      const supabase = getSupabase(user?.accessToken as string | undefined);
-      
-      // Get all available plans
-      const { data: plansData, error: plansError } = await supabase
-        .from('subscription_plans')
-        .select('*')
-        .order('price_monthly');
-      
-      if (plansError) {
-        throw new Error(`Error fetching plans: ${plansError.message}`);
+      if (!user) {
+        throw new Error("User not authenticated");
       }
       
-      // Format the features which are stored as JSON
-      const formattedPlans = plansData.map(plan => ({
-        ...plan,
-        features: typeof plan.features === 'string' 
-          ? JSON.parse(plan.features) 
-          : plan.features
-      }));
+      const supabase = createClient();
+      
+      // First get all available subscription plans
+      const { data: plans, error: plansError } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .order('price_monthly', { ascending: true });
+      
+      if (plansError) {
+        throw plansError;
+      }
+      
+      // Format plan features from JSONB to array
+      const formattedPlans = plans.map(plan => {
+        let features: string[] = [];
+        
+        if (plan.features) {
+          if (typeof plan.features === 'string') {
+            try {
+              features = JSON.parse(plan.features);
+            } catch (e) {
+              console.error('Error parsing features:', e);
+            }
+          } else if (Array.isArray(plan.features)) {
+            features = plan.features;
+          } else if (typeof plan.features === 'object') {
+            // Handle JSONB object
+            features = Object.values(plan.features).map(f => String(f));
+          }
+        }
+        
+        return {
+          ...plan,
+          features
+        };
+      });
       
       setAvailablePlans(formattedPlans);
       
-      // Get user's current subscription
+      // Get user's active subscription with join to subscription_plans
       const { data: subscriptionData, error: subscriptionError } = await supabase
         .from('subscriptions')
         .select(`
-          id,
-          status,
-          started_at,
-          trial_ends_at,
-          current_period_ends_at,
-          subscription_plans (
-            id,
-            name,
-            description,
-            price_monthly,
-            price_yearly,
-            features
-          )
+          *,
+          subscription_plans:plan_id (*)
         `)
-        .eq('user_id', user.sub)
+        .eq('user_id', user.id)
         .eq('status', 'active')
-        .maybeSingle();
+        .single();
       
-      if (subscriptionError) {
-        throw new Error(`Error fetching subscription: ${subscriptionError.message}`);
+      if (subscriptionError && subscriptionError.code !== 'PGRST116') {
+        // Error other than "not found"
+        throw subscriptionError;
       }
       
       if (subscriptionData) {
@@ -115,6 +147,9 @@ export default function UserSubscription() {
             }
           } else if (Array.isArray(planData.features)) {
             planFeatures = planData.features;
+          } else if (typeof planData.features === 'object') {
+            // Handle JSONB object
+            planFeatures = Object.values(planData.features).map(f => String(f));
           }
         }
         
@@ -129,6 +164,18 @@ export default function UserSubscription() {
         delete formattedSubscription.subscription_plans;
         
         setSubscription(formattedSubscription);
+        
+        // Get latest payment for this subscription
+        const { data: paymentData } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('subscription_id', subscriptionData.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (paymentData && paymentData.length > 0) {
+          setPaymentInfo(paymentData[0]);
+        }
       } else {
         // If no active subscription, use the free plan
         const freePlan = formattedPlans.find(plan => plan.name.toLowerCase() === 'free');
@@ -152,10 +199,9 @@ export default function UserSubscription() {
   };
 
   const handleUpgrade = (planId: number) => {
-    // Redirect to checkout page or show modal
+    // Redirect to waitlist page
     console.log(`Upgrading to plan ${planId}`);
-    // Here you would redirect to a checkout page
-    // window.location.href = `/checkout?plan=${planId}`;
+    window.location.href = '/waitlist';
   };
 
   const getStatusBadge = (status: string) => {
@@ -184,23 +230,23 @@ export default function UserSubscription() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight">Subscription</h2>
-        <p className="text-muted-foreground">Manage your subscription and billing</p>
+        <h2 className="text-2xl font-bold tracking-tight text-white">Subscription</h2>
+        <p className="text-yellow-400">Manage your subscription and billing</p>
       </div>
 
       {subscription && (
-        <Card>
+        <Card className="bg-black border-gray-800">
           <CardHeader>
-            <CardTitle>Current Plan: {subscription.plan.name}</CardTitle>
-            <CardDescription className="flex items-center">
+            <CardTitle className="text-white">Current Plan: {subscription.plan.name}</CardTitle>
+            <CardDescription className="flex items-center text-yellow-400">
               Status: {getStatusBadge(subscription.status)}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               <div>
-                <p className="font-medium">Plan Features:</p>
-                <ul className="mt-2 list-disc pl-5">
+                <p className="font-medium text-white">Plan Features:</p>
+                <ul className="mt-2 list-disc pl-5 text-yellow-400">
                   {subscription.plan.features.map((feature, index) => (
                     <li key={index}>{feature}</li>
                   ))}
@@ -209,23 +255,23 @@ export default function UserSubscription() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">Started</p>
-                  <p className="font-medium">
+                  <p className="text-sm text-yellow-400">Started</p>
+                  <p className="font-medium text-white">
                     {new Date(subscription.started_at).toLocaleDateString()}
                   </p>
                 </div>
                 {subscription.current_period_ends_at && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Renews on</p>
-                    <p className="font-medium">
+                    <p className="text-sm text-yellow-400">Renews on</p>
+                    <p className="font-medium text-white">
                       {new Date(subscription.current_period_ends_at).toLocaleDateString()}
                     </p>
                   </div>
                 )}
                 {subscription.trial_ends_at && (
                   <div>
-                    <p className="text-sm text-muted-foreground">Trial ends on</p>
-                    <p className="font-medium">
+                    <p className="text-sm text-yellow-400">Trial ends on</p>
+                    <p className="font-medium text-white">
                       {new Date(subscription.trial_ends_at).toLocaleDateString()}
                     </p>
                   </div>
@@ -235,11 +281,11 @@ export default function UserSubscription() {
           </CardContent>
           <CardFooter>
             {subscription.status === 'free' ? (
-              <Button className="w-full">Upgrade Now</Button>
+              <Button className="w-full bg-red-500 hover:bg-red-600 text-white" onClick={() => window.location.href = '/waitlist'}>Upgrade Now</Button>
             ) : (
               <div className="w-full space-y-2">
-                <Button className="w-full" variant="outline">Manage Billing</Button>
-                <Button className="w-full" variant="ghost">Cancel Subscription</Button>
+                <Button className="w-full bg-red-500 hover:bg-red-600 text-white" variant="outline">Manage Billing</Button>
+                <Button className="w-full border-red-500 text-red-500 hover:bg-red-500 hover:text-white" variant="ghost">Cancel Subscription</Button>
               </div>
             )}
           </CardFooter>
@@ -248,34 +294,36 @@ export default function UserSubscription() {
 
       {availablePlans.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-xl font-medium">Available Plans</h3>
+          <h3 className="text-xl font-medium text-white">Available Plans</h3>
           <div className="grid gap-6 md:grid-cols-3">
             {availablePlans.map(plan => (
-              <Card key={plan.id} className={subscription?.plan.id === plan.id ? 'border-primary' : ''}>
+              <Card key={plan.id} className={`bg-black border-gray-800 ${subscription?.plan.id === plan.id ? 'border-red-500' : ''}`}>
                 <CardHeader>
-                  <CardTitle>{plan.name}</CardTitle>
-                  <CardDescription>{plan.description}</CardDescription>
+                  <CardTitle className="text-white">{plan.name}</CardTitle>
+                  <CardDescription className="text-yellow-400">{plan.description}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-bold">
+                  <div className="text-3xl font-bold text-white">
                     ${plan.price_monthly}
-                    <span className="text-sm font-normal text-muted-foreground">/month</span>
+                    <span className="text-sm font-normal text-yellow-400">/month</span>
                   </div>
                   <ul className="mt-4 space-y-2">
                     {plan.features.map((feature, index) => (
                       <li key={index} className="flex items-center">
-                        <CheckCircle className="h-4 w-4 mr-2 text-green-500" />
-                        <span>{feature}</span>
+                        <CheckCircle className="h-4 w-4 mr-2 text-red-500" />
+                        <span className="text-white">{feature}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 <CardFooter>
                   {subscription?.plan.id === plan.id ? (
-                    <Button className="w-full" disabled>Current Plan</Button>
+                    <Button className="w-full bg-black text-white border border-gray-800" disabled>Current Plan</Button>
                   ) : (
                     <Button 
-                      className="w-full" 
+                      className={`w-full ${plan.name.toLowerCase() === 'free' 
+                        ? 'bg-black text-yellow-400 border border-yellow-400 hover:bg-yellow-400 hover:text-black' 
+                        : 'bg-red-500 hover:bg-red-600 text-white'}`}
                       onClick={() => handleUpgrade(plan.id)}
                       variant={plan.name.toLowerCase() === 'free' ? 'outline' : 'default'}
                     >

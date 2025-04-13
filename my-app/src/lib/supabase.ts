@@ -1,7 +1,6 @@
 'use client';
 
 import { createClient } from '@supabase/supabase-js';
-import { useUser } from '@auth0/nextjs-auth0/client';
 import { useState, useEffect } from 'react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,48 +10,41 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create an anonymous Supabase client
+// Create a Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 
 /**
- * Custom hook to get Supabase client with Auth0 token
+ * Custom hook to get Supabase client with session
  */
 export function useSupabaseClient() {
-  const { user, isLoading } = useUser();
   const [supabaseClient, setSupabaseClient] = useState(supabase);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function setupSupabase() {
-      if (isLoading) return;
-
       try {
         setLoading(true);
         
-        if (!user) {
+        // Get the current session
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
           setSupabaseClient(supabase);
           return;
         }
 
-        const response = await fetch('/api/auth/token');
-        if (!response.ok) {
-          throw new Error('Failed to get authentication token');
-        }
-
-        const { accessToken } = await response.json();
-        
+        // Create an authenticated client with the session
         const authenticatedClient = createClient(supabaseUrl, supabaseAnonKey, {
-          global: {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
-          },
           auth: {
-            persistSession: false
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true
           }
         });
 
@@ -66,7 +58,7 @@ export function useSupabaseClient() {
     }
 
     setupSupabase();
-  }, [user, isLoading]);
+  }, []);
 
-  return { supabase: supabaseClient, isLoading: isLoading || loading };
+  return { supabase: supabaseClient, isLoading: loading };
 } 

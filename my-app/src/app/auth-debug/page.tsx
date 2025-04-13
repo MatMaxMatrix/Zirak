@@ -1,247 +1,243 @@
 'use client';
 
-import { useState, useEffect, ReactNode } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import Link from 'next/link';
-import { RequireAuth } from '@/components/auth/RequireAuth';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { createClient } from "@/utils/supabase/client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Script from "next/script";
+import { useAuth, UserWithRole } from "@/components/AuthProvider";
+import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
+import React from "react";
 
-// Define a type for Hasura claims in the user object
-interface HasuraClaims {
-  'x-hasura-user-id': string;
-  'x-hasura-default-role': string;
-  'x-hasura-allowed-roles': string[];
-  [key: string]: unknown;
-}
+export default function AuthDebug() {
+  const { user, isLoading: authLoading, refreshUser } = useAuth();
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isProcessingSignIn, setIsProcessingSignIn] = useState(false);
 
-// Extend UserProfile to include Auth0 claims
-interface Auth0UserProfile {
-  name?: string;
-  email?: string;
-  sub?: string;
-  picture?: string;
-  'https://hasura.io/jwt/claims'?: HasuraClaims;
-  [key: string]: any;
-}
+  const router = useRouter();
+  const supabase = createClient();
 
-export default function AuthDebugPage() {
-  const { user, error, isLoading } = useUser();
-  const [token, setToken] = useState<string | null>(null);
-  const [tokenError, setTokenError] = useState<string | null>(null);
-  const [cookieInfo, setCookieInfo] = useState<string>('');
-
-  const getTokenInfo = async () => {
+  async function handleSignInWithGoogle(response: any) {
+    setIsProcessingSignIn(true);
+    setLocalError(null);
+    console.log('[Google Debug] Response:', response);
+    
     try {
-      const response = await fetch('/api/auth/token');
-      const data = await response.json();
-      
-      if (data.error) {
-        setTokenError(data.error);
-        setToken(null);
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+      });
+
+      if (error) {
+        console.error('[Google Debug] Error:', error);
+        setLocalError(error.message);
       } else {
-        setToken(data.token);
-        setTokenError(null);
+        console.log('[Google Debug] Success:', data);
+        await refreshUser();
       }
     } catch (err) {
-      setTokenError('Failed to fetch token');
-      setToken(null);
+      console.error('[Google Debug] Error:', err);
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsProcessingSignIn(false);
     }
-  };
-
-  const checkCookies = () => {
-    const cookies = document.cookie;
-    setCookieInfo(cookies || 'No cookies found');
-  };
+  }
 
   useEffect(() => {
-    if (user) {
-      getTokenInfo();
-    }
-  }, [user]);
+    // @ts-ignore
+    window.handleSignInWithGoogle = handleSignInWithGoogle;
+    
+    console.log('Google Client ID available:', !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+    console.log('Supabase URL available:', !!process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('Supabase Anon Key available:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+  }, [refreshUser]);
 
-  // Type guard to check if the claims object has the expected structure
-  const hasHasuraClaims = (claims: any): claims is HasuraClaims => {
-    return claims && 
-           typeof claims['x-hasura-user-id'] === 'string' && 
-           typeof claims['x-hasura-default-role'] === 'string' && 
-           Array.isArray(claims['x-hasura-allowed-roles']);
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    setLocalError(null);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        setLocalError(error.message);
+        console.error("Sign out error:", error);
+      } else {
+        console.log("Sign out initiated successfully");
+      }
+    } catch (err) {
+      console.error("Sign out exception:", err);
+      setLocalError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
+
+  // Helper to render user properties nicely
+  const renderUserProperty = (label: string, value: any) => {
+    let displayValue: React.ReactNode;
+
+    if (value === null || value === undefined) {
+      displayValue = <span className="text-gray-400">N/A</span>;
+    } else if (typeof value === 'object' && value !== null && !React.isValidElement(value)) {
+      // Handle plain objects (like metadata) - check if it's NOT a valid React element
+      displayValue = (
+        <div className="text-xs bg-gray-50 p-1 rounded space-y-0.5">
+          {Object.entries(value).map(([key, val]) => (
+            <div key={key} className="flex">
+              <span className="font-medium text-gray-600 w-20 shrink-0 truncate" title={key}>{key}:</span>
+              <span className="ml-2 break-all">
+                {typeof val === 'object' && val !== null ? '(Object)' : String(val)}
+              </span>
+            </div>
+          ))}
+          {Object.keys(value).length === 0 && <span className="text-gray-400">(Empty Object)</span>}
+        </div>
+      );
+    } else if (React.isValidElement(value)) {
+       // If it's already a React element (like the Badge), render it directly
+       displayValue = value;
+    } else {
+      // Handle primitive types (strings, numbers, booleans)
+      displayValue = value.toString();
+    }
+
+    return (
+      <div className="grid grid-cols-3 gap-2 py-1 border-b border-gray-200">
+        <dt className="text-sm font-medium text-gray-500 break-words col-span-1">{label}</dt>
+        <dd className="text-sm text-gray-900 break-words col-span-2">
+          {displayValue}
+        </dd>
+      </div>
+    );
   };
 
-  // Type cast user to our extended Auth0 profile type
-  const typedUser = user as Auth0UserProfile | undefined;
-
   return (
-    <RequireAuth>
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Auth Debugging Page</h1>
-        <p className="text-muted-foreground">Debug authentication state and session information</p>
-        
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* User Info Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>User Authentication Status</CardTitle>
-              <CardDescription>Current login state from useUser hook</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoading ? (
-                <p>Loading authentication status...</p>
-              ) : error ? (
-                <div className="text-red-500">
-                  <p>Error: {error.message}</p>
+    <>
+      <Script 
+        src="https://accounts.google.com/gsi/client" 
+        strategy="afterInteractive"
+        onLoad={() => console.log('Google Identity Services script loaded in debug page')}
+      />
+      
+      <div className="container py-10">
+        <Card className="w-full max-w-4xl mx-auto shadow-lg">
+          <CardHeader className="bg-gray-50 border-b">
+            <CardTitle className="text-xl">Authentication Debug</CardTitle>
+            <CardDescription>
+              View current session details and test sign-in/out.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Environment Variables</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm space-y-1">
+                   <div>
+                    <span className="font-mono">NEXT_PUBLIC_SUPABASE_URL: </span>
+                    <Badge variant={process.env.NEXT_PUBLIC_SUPABASE_URL ? 'secondary' : 'destructive'}>
+                      {process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Missing'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <span className="font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY: </span>
+                     <Badge variant={process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'secondary' : 'destructive'}>
+                       {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Missing'}
+                     </Badge>
+                  </div>
+                  <div>
+                    <span className="font-mono">NEXT_PUBLIC_GOOGLE_CLIENT_ID: </span>
+                     <Badge variant={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? 'secondary' : 'destructive'}>
+                       {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? 'Set' : 'Missing'}
+                     </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              {localError && (
+                <Card className="border-red-300 bg-red-50">
+                   <CardHeader>
+                     <CardTitle className="text-base text-red-700">Action Error</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                     <pre className="text-sm text-red-600 overflow-x-auto">{localError}</pre>
+                   </CardContent>
+                </Card>
+              )}
+              
+              {authLoading && (
+                <div className="flex items-center justify-center p-6 text-gray-500">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Loading session information...
                 </div>
-              ) : typedUser ? (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold">✅ Authenticated</h3>
-                    <p className="text-sm text-muted-foreground">You are logged in</p>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <p><span className="font-semibold">User ID:</span> {typedUser.sub}</p>
-                    <p><span className="font-semibold">Name:</span> {typedUser.name}</p>
-                    <p><span className="font-semibold">Email:</span> {typedUser.email}</p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-semibold mt-4">Roles/Permissions:</h4>
-                    {typedUser['https://hasura.io/jwt/claims'] && hasHasuraClaims(typedUser['https://hasura.io/jwt/claims']) && (
-                      <div className="mt-2 text-xs">
-                        <p><span className="font-semibold">User ID:</span> {typedUser['https://hasura.io/jwt/claims']['x-hasura-user-id']}</p>
-                        <p><span className="font-semibold">Default Role:</span> {typedUser['https://hasura.io/jwt/claims']['x-hasura-default-role']}</p>
-                        <p><span className="font-semibold">Allowed Roles:</span> {typedUser['https://hasura.io/jwt/claims']['x-hasura-allowed-roles'].join(', ')}</p>
+              )}
+
+              {!authLoading && (
+                <Card>
+                   <CardHeader>
+                     <CardTitle className="text-base">Session Status</CardTitle>
+                   </CardHeader>
+                   <CardContent>
+                    {user ? (
+                      <div className="space-y-4">
+                        <dl>
+                           {renderUserProperty("User ID", user.id)}
+                           {renderUserProperty("Email", user.email)}
+                           {renderUserProperty("Role", user.role ? (
+                             <Badge variant={user.role === 'admin' ? 'destructive' : 'secondary'}>{user.role}</Badge>
+                           ) : 'N/A')}
+                           {renderUserProperty("Provider", user.app_metadata?.provider)}
+                           {renderUserProperty("Created At", user.created_at ? new Date(user.created_at).toLocaleString() : 'N/A')}
+                           {renderUserProperty("Last Sign In", user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'N/A')}
+                           {renderUserProperty("User Metadata", user.user_metadata)}
+                           {renderUserProperty("App Metadata", user.app_metadata)}
+                        </dl>
+                         <Button 
+                           variant="destructive" 
+                           onClick={handleSignOut} 
+                           disabled={isSigningOut}
+                           className="w-full sm:w-auto"
+                         >
+                           {isSigningOut ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                           Sign Out
+                         </Button>
                       </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center space-y-4 p-4 border rounded-md">
+                         <p className="text-gray-600">No active session.</p>
+                         <h3 className="font-medium">Test Google Sign In:</h3>
+                         {(isProcessingSignIn) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                         <div
+                           id="g_id_onload"
+                           data-client_id={process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID}
+                           data-context="signin"
+                           data-ux_mode="popup"
+                           data-callback="handleSignInWithGoogle"
+                           data-auto_select="false"
+                           data-itp_support="true"
+                           data-use_fedcm_for_prompt="false"
+                         ></div>
+                         <div
+                           className="g_id_signin"
+                           data-type="standard"
+                           data-shape="rectangular"
+                           data-theme="outline"
+                           data-text="signin_with"
+                           data-size="large"
+                           data-logo_alignment="left"
+                         ></div>
+                       </div>
                     )}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h3 className="font-semibold">❌ Not Authenticated</h3>
-                  <p className="text-sm text-muted-foreground">You are not logged in</p>
-                  <div className="mt-4">
-                    <Link href="/api/auth/login">
-                      <Button>Log In</Button>
-                    </Link>
-                  </div>
-                </div>
+                   </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
-          
-          {/* Access Token Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Access Token</CardTitle>
-              <CardDescription>JWT token from the server-side session</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {typedUser ? (
-                <>
-                  {tokenError ? (
-                    <div className="text-red-500">
-                      <h3 className="font-semibold">Error retrieving token</h3>
-                      <p>{tokenError}</p>
-                    </div>
-                  ) : token ? (
-                    <div>
-                      <h3 className="font-semibold">✅ Token Retrieved</h3>
-                      <div className="mt-2">
-                        <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md">
-                          <div className="text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap break-all">
-                            {token}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <h3 className="font-semibold">⏳ Click to retrieve token</h3>
-                      <Button onClick={getTokenInfo} className="mt-2">
-                        Get Access Token
-                      </Button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p>Log in to view your access token</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Cookie Debug Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Cookie Information</CardTitle>
-            <CardDescription>Check browser cookies related to authentication</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={checkCookies}>Check Cookies</Button>
-            
-            {cookieInfo && (
-              <div className="mt-4">
-                <h3 className="font-semibold mb-2">Current Cookies:</h3>
-                <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md">
-                  <pre className="text-xs font-mono overflow-auto max-h-40 whitespace-pre-wrap">
-                    {cookieInfo}
-                  </pre>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        {/* Navigation Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Navigation Test</CardTitle>
-            <CardDescription>Test navigation to protected routes</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Link href="/user-dashboard">
-                <Button variant="outline" className="w-full">
-                  Go to User Dashboard
-                </Button>
-              </Link>
-              <Link href="/user-dashboard-simple">
-                <Button variant="outline" className="w-full">
-                  Go to Simple User Dashboard
-                </Button>
-              </Link>
-              <Link href="/admin-dashboard">
-                <Button variant="outline" className="w-full">
-                  Go to Admin Dashboard
-                </Button>
-              </Link>
-              <Link href="/api/auth/logout">
-                <Button variant="destructive" className="w-full">
-                  Log Out
-                </Button>
-              </Link>
             </div>
           </CardContent>
         </Card>
-        
-        {/* Raw Auth Debug */}
-        {typedUser && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Raw User Object</CardTitle>
-              <CardDescription>Complete user information from Auth0</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-slate-100 dark:bg-slate-800 p-3 rounded-md">
-                <pre className="text-xs font-mono overflow-auto max-h-96 whitespace-pre-wrap">
-                  {JSON.stringify(typedUser, null, 2)}
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
-    </RequireAuth>
+    </>
   );
 } 

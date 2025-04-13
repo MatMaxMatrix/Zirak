@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+// Remove Auth0 import
+// import { useUser } from '@auth0/nextjs-auth0/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { getSupabase } from '@/utils/supabase';
+// Adjust Supabase import if getSupabase is replaced
+// import { getSupabase } from '@/utils/supabase'; 
+import { createClient } from '@/utils/supabase/client'; // Use standard client
+import { useAuth } from '@/components/AuthProvider'; // Import useAuth
 import { Users, CreditCard, Activity, Clock } from 'lucide-react';
 
 interface StatsData {
@@ -16,7 +20,8 @@ interface StatsData {
 }
 
 export default function AdminStats() {
-  const { user } = useUser();
+  // Use our auth context
+  const { user } = useAuth(); 
   const [stats, setStats] = useState<StatsData>({
     totalUsers: 0,
     activeSubscriptions: 0,
@@ -30,18 +35,29 @@ export default function AdminStats() {
 
   useEffect(() => {
     async function fetchStats() {
-      if (!user) return;
+      // Check if user exists and is admin
+      if (!user || user.role !== 'admin') { 
+        setError("Unauthorized to fetch admin stats.");
+        setIsLoading(false);
+        return;
+      }
       
       try {
         setIsLoading(true);
-        const supabase = getSupabase(user.accessToken as string);
+        setError(null);
+        // Use the standard Supabase client. 
+        // Assumes RLS policies using is_admin() grant necessary access.
+        const supabase = createClient(); 
         
         // Get total users
         const { count: totalUsers, error: usersError } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
           
-        if (usersError) throw usersError;
+        if (usersError) {
+          console.error('Error fetching total users:', JSON.stringify(usersError, null, 2));
+          throw usersError;
+        }
         
         // Get active subscriptions
         const { count: activeSubscriptions, error: subsError } = await supabase
@@ -49,12 +65,22 @@ export default function AdminStats() {
           .select('*', { count: 'exact', head: true })
           .eq('status', 'active');
           
+        if (subsError) {
+          console.error('Error fetching subscriptions:', JSON.stringify(subsError, null, 2));
+          throw subsError;
+        }
+
         // Get total revenue
         const { data: payments, error: paymentsError } = await supabase
           .from('payments')
           .select('amount')
           .eq('status', 'succeeded');
           
+        if (paymentsError) {
+          console.error('Error fetching payments:', JSON.stringify(paymentsError, null, 2));
+          throw paymentsError;
+        }
+
         // Get login activity for the past 7 days
         const past7Days = new Date();
         past7Days.setDate(past7Days.getDate() - 7);
@@ -64,6 +90,11 @@ export default function AdminStats() {
           .select('*', { count: 'exact', head: true })
           .gte('login_at', past7Days.toISOString());
           
+        if (loginError) {
+          console.error('Error fetching login activity:', JSON.stringify(loginError, null, 2));
+          throw loginError;
+        }
+
         // Get signups today
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -73,15 +104,25 @@ export default function AdminStats() {
           .select('*', { count: 'exact', head: true })
           .gte('created_at', today.toISOString());
           
+        if (signupsError) {
+          console.error('Error fetching signups:', JSON.stringify(signupsError, null, 2));
+          throw signupsError;
+        }
+
         // Get popular subscription plans
         const { data: subscriptionPlans, error: plansError } = await supabase
           .from('subscriptions')
           .select(`
             plan_id,
-            subscription_plans(name)
+            subscription_plans:plan_id(name)
           `)
           .eq('status', 'active');
           
+        if (plansError) {
+          console.error('Error fetching subscription plans:', JSON.stringify(plansError, null, 2));
+          throw plansError;
+        }
+
         // Calculate total revenue
         const totalRevenue = payments?.reduce((sum, payment) => sum + Number(payment.amount), 0) || 0;
         
@@ -90,13 +131,18 @@ export default function AdminStats() {
         
         if (subscriptionPlans) {
           subscriptionPlans.forEach(sub => {
-            if (sub.subscription_plans) {
-              const planName = (sub.subscription_plans as any).name;
-              if (!planCounts[planName]) {
-                planCounts[planName] = { name: planName, count: 0 };
-              }
-              planCounts[planName].count++;
+            let planName = 'Unknown Plan'; // Default plan name
+            // Check if subscription_plans is an object and has a name property
+            if (sub.subscription_plans && typeof sub.subscription_plans === 'object' && 'name' in sub.subscription_plans) {
+              planName = (sub.subscription_plans as { name: string }).name;
+            } else {
+              console.warn("Subscription plan name missing or invalid format for sub:", sub.plan_id);
             }
+            
+            if (!planCounts[planName]) {
+              planCounts[planName] = { name: planName, count: 0 };
+            }
+            planCounts[planName].count++;
           });
         }
         
@@ -112,15 +158,15 @@ export default function AdminStats() {
         });
         
       } catch (error: any) {
-        console.error('Error fetching stats:', error);
-        setError(error.message || 'Failed to load statistics');
+        console.error('Error fetching admin stats:', JSON.stringify(error, null, 2));
+        setError(`Failed to load statistics: ${error?.message || error?.code || 'Unknown error'}`);
       } finally {
         setIsLoading(false);
       }
     }
     
     fetchStats();
-  }, [user]);
+  }, [user]); // Depend on the user object from useAuth
 
   // Format currency
   const formatCurrency = (amount: number) => {

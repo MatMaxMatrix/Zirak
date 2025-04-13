@@ -13,7 +13,7 @@ import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
-import { useUser } from "@auth0/nextjs-auth0/client";
+import { useAuth } from '@/components/AuthProvider';
 
 // Add these new animations
 const containerVariants = {
@@ -28,9 +28,9 @@ const itemVariants = {
 
 export default function Home() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [githubUrl, setGithubUrl] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -64,7 +64,7 @@ export default function Home() {
 
   const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isLoading) return;
+    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isSubmitting) return;
     
     // Check for preferred API key
     const { key, provider } = getPreferredApiKey();
@@ -76,7 +76,7 @@ export default function Home() {
       return;
     }
     
-    setIsLoading(true);
+    setIsSubmitting(true);
     try {
       localStorage.setItem('initial_prompt', input);
       localStorage.setItem('api_provider', provider || 'openai'); // Store the preferred provider
@@ -108,7 +108,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error processing request:', error);
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -237,7 +237,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
       {/* Enhanced Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-[500px] -left-[500px] w-[1000px] h-[1000px] bg-radial-gradient from-purple-500/20 to-transparent rounded-full blur-3xl opacity-30 animate-pulse-slow" />
@@ -254,7 +254,7 @@ export default function Home() {
             transition={{ duration: 0.5 }}
             className="text-4xl md:text-6xl font-bold text-center mb-6 text-white"
           >
-            Welcome to <span className="text-red-500">Zirak</span>
+             <span className="text-red-500">Zirak</span>
           </motion.h1>
           
           <motion.p 
@@ -273,24 +273,125 @@ export default function Home() {
             className="w-full max-w-3xl"
           >
             <div className="flex flex-col gap-4">
-              <div className="bg-gradient-to-r from-black/70 to-gray-900/50 p-6 rounded-xl border-2 border-purple-500/30 shadow-lg shadow-purple-500/10 backdrop-blur-md">
-                <h3 className="text-xl font-semibold mb-4 text-white">Tell me what you want to build</h3>
-                <div className="flex gap-3">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Describe your project or ask a question..."
-                    className="flex-1 bg-black/70 border-gray-700 text-white placeholder-gray-400 py-6 text-lg"
-                  />
-                  <Button 
-                    onClick={handleInitialPrompt}
-                    disabled={isLoading}
-                    className="bg-red-500 hover:bg-red-600 text-white px-6 py-6 text-lg"
-                  >
-                    {isLoading ? "Processing..." : "Start"}
-                  </Button>
+              {/* Enhanced Kurdish flag themed container with modern chat interface */}
+              <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-green-600/30 backdrop-blur-md border border-white/30 hover:shadow-red-600/30 transition-all duration-500 kurdish-flag-container">
+                {/* Kurdish flag inspired background with animated gradient */}
+                <div className="absolute inset-0 bg-gradient-to-b from-red-600 via-white to-green-600 opacity-80 kurdish-flag-background"></div>
+                <div className="absolute inset-0 bg-gradient-to-r from-red-600/40 to-transparent opacity-30 animate-pulse-slow"></div>
+                
+                {/* Enhanced decorative elements */}
+                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-600 via-white to-red-600"></div>
+                <div className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-green-600"></div>
+                
+                {/* Kurdish sun emblem with improved animation */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full bg-yellow-500 opacity-25 animate-pulse-slow kurdish-sun-emblem"></div>
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 kurdish-sun-emblem">
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {Array.from({ length: 21 }).map((_, i) => (
+                      <div 
+                        key={i} 
+                        className="absolute w-1 h-9 bg-yellow-500 opacity-25"
+                        style={{ 
+                          transform: `rotate(${i * (360 / 21)}deg)`,
+                          transformOrigin: 'bottom center',
+                          bottom: '50%'
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <p className="mt-3 text-sm text-gray-400">Build AI applications, websites, games, and more with our intelligent assistants</p>
+                
+                {/* Modern chat interface container */}
+                <div className="relative p-8 bg-black/40 backdrop-blur-md kurdish-flag-content">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-white drop-shadow-md">Tell me what you want to build</h3>
+                    <div className="flex space-x-2">
+                      <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse"></span>
+                      <span className="h-3 w-3 rounded-full bg-white delay-100 animate-pulse"></span>
+                      <span className="h-3 w-3 rounded-full bg-green-500 delay-200 animate-pulse"></span>
+                    </div>
+                  </div>
+                  
+                  {/* Chat message bubbles */}
+                  <div className="mb-4 space-y-3 max-h-[120px] overflow-y-auto custom-scrollbar p-2 -mx-2">
+                    <div className="flex items-start space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold shadow-md">Z</div>
+                      <div className="bg-black/30 backdrop-blur-sm rounded-xl rounded-tl-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble">
+                        Hello! I'm Zirak, your AI assistant. How can I help you build something amazing today?
+                      </div>
+                    </div>
+                    <div className="flex items-start space-x-2 justify-end">
+                      <div className="bg-green-600/80 backdrop-blur-sm rounded-xl rounded-tr-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble kurdish-user-bubble">
+                        I need a website with user authentication.
+                      </div>
+                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-green-600 text-xs font-bold shadow-md">U</div>
+                    </div>
+                    <div className="flex items-start space-x-2">
+                      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold shadow-md">Z</div>
+                      <div className="bg-black/30 backdrop-blur-sm rounded-xl rounded-tl-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble">
+                        Great! I can help you build a website with authentication. Let's get started.
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Modern input area with special effects */}
+                  <div className="flex gap-3 relative">
+                    <Input
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Describe your project or ask a question..."
+                      className="flex-1 bg-black/50 border-white/30 text-white placeholder-gray-300 py-6 text-lg focus:border-green-500 focus:ring-2 focus:ring-green-500/50 rounded-xl pr-12 kurdish-input"
+                    />
+                    <div className="absolute right-20 top-1/2 -translate-y-1/2 flex space-x-2">
+                      <button className="text-white/70 hover:text-white transition-colors">
+                        <Paperclip className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <Button 
+                      onClick={handleInitialPrompt}
+                      disabled={isSubmitting}
+                      className="relative overflow-hidden bg-gradient-to-br from-red-600 to-red-700 text-white px-8 py-6 text-lg border-none shadow-md hover:shadow-lg rounded-xl group"
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center">
+                          <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2"></div>
+                          <span>Processing...</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <span>Start</span>
+                          <ArrowUp className="ml-2 h-5 w-5 group-hover:-translate-y-1 transition-transform" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    </Button>
+                  </div>
+                  <p className="mt-3 text-sm text-white/90 drop-shadow-md">Build AI applications, websites, games, and more with our intelligent assistants</p>
+                  
+                  {/* Chat features indicator */}
+                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
+                    <div className="flex items-center space-x-1">
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
+                        <BrainCircuit className="h-3 w-3 mr-1" />
+                        AI Powered
+                      </span>
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
+                        <Shield className="h-3 w-3 mr-1" />
+                        Secure
+                      </span>
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
+                        <Zap className="h-3 w-3 mr-1" />
+                        Fast
+                      </span>
+                    </div>
+                    <div className="text-xs text-white/60 kurdish-status-text">
+                      <span className="inline-flex items-center">
+                        <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
+                        Online
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -499,10 +600,10 @@ export default function Home() {
               >
                 ✨ Features
               </motion.span>
-              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent">
+              <h2 className="text-4xl font-bold mb-4 bg-gradient-to-r from-emerald-400 to-blue-400 bg-clip-text text-transparent feature-text">
                 Everything You Need to Build Better Software
               </h2>
-              <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+              <p className="text-xl text-gray-300 max-w-2xl mx-auto feature-text">
                 Our AI-powered platform combines multiple specialized agents to help you develop faster and smarter
               </p>
             </motion.div>
@@ -520,8 +621,8 @@ export default function Home() {
                   <div className="h-12 w-12 rounded-lg bg-blue-500/20 flex items-center justify-center mb-6">
                     <MessageSquare className="h-6 w-6 text-blue-400" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Intelligent Chat Interface</h3>
-                  <p className="text-gray-400 mb-4">
+                  <h3 className="text-xl font-semibold mb-3 feature-text">Intelligent Chat Interface</h3>
+                  <p className="text-gray-400 mb-4 feature-text">
                     Communicate with multiple AI agents through a streamlined chat interface. Ask questions, request features, and get real-time responses.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -545,8 +646,8 @@ export default function Home() {
                   <div className="h-12 w-12 rounded-lg bg-green-500/20 flex items-center justify-center mb-6">
                     <Code className="h-6 w-6 text-green-400" />
                   </div>
-                  <h3 className="text-xl font-semibold mb-3">Smart Code Generation</h3>
-                  <p className="text-gray-400 mb-4">
+                  <h3 className="text-xl font-semibold mb-3 feature-text">Smart Code Generation</h3>
+                  <p className="text-gray-400 mb-4 feature-text">
                     Generate production-ready code based on your requirements. Our AI understands context and produces optimized, secure implementations.
                   </p>
                   <div className="flex flex-wrap gap-2">
@@ -729,17 +830,12 @@ export default function Home() {
                   <h3 className="text-sm font-semibold text-white mb-4">Contact Us</h3>
                   <ul className="space-y-2">
                     <li>
-                      <button 
-                        onClick={() => {
-                          const subject = "Inquiry about Zirak";
-                          const body = "Hello,\n\nI am interested in learning more about Zirak. Please provide more information about:\n\n";
-                          const mailtoLink = `mailto:azimipanah.mobin@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                          window.location.href = mailtoLink;
-                        }}
+                      <Link 
+                        href="/contact"
                         className="text-sm text-gray-300 hover:text-red-500 transition-colors"
                       >
-                        Email Support
-                      </button>
+                        Contact Support
+                      </Link>
                     </li>
                   </ul>
                 </div>
@@ -760,6 +856,29 @@ export default function Home() {
           </footer>
         </div>
       </main>
+
+      {/* Add custom scrollbar styles at the bottom of the component */}
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(255, 255, 255, 0.2);
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(255, 255, 255, 0.3);
+        }
+        .delay-100 {
+          animation-delay: 100ms;
+        }
+        .delay-200 {
+          animation-delay: 200ms;
+        }
+      `}</style>
     </div>
   );
 }

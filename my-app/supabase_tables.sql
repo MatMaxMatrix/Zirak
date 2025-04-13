@@ -13,15 +13,22 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- Next, run the profiles table creation
-CREATE TABLE IF NOT EXISTS public.profiles (
-    id TEXT PRIMARY KEY, -- This matches Auth0 user.sub
-    email TEXT UNIQUE,
-    username TEXT UNIQUE,
-    full_name TEXT,
-    avatar_url TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- Create profiles table
+CREATE TABLE IF NOT EXISTS profiles (
+  id TEXT PRIMARY KEY, -- This matches Supabase auth.users.id
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  picture TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Create user_roles table
+CREATE TABLE IF NOT EXISTS user_roles (
+  user_id TEXT PRIMARY KEY REFERENCES profiles(id),
+  role TEXT NOT NULL DEFAULT 'user',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
 -- Add updated_at trigger

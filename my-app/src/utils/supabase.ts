@@ -1,43 +1,26 @@
-import { createClient } from '@supabase/supabase-js';
+'use client';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_URL');
-}
-
-if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-  throw new Error('Missing environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY');
-}
+import { createClient as createBrowserClient } from '@/utils/supabase/client';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Create an anonymous Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: false
-  }
-});
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+// Use a singleton pattern for the Supabase instance
+let supabaseInstance: ReturnType<typeof createBrowserClient> | null = null;
 
 /**
- * Create a Supabase client with Auth0 token
+ * Get a Supabase client instance with singleton pattern
+ * to prevent multiple initializations
  * 
- * @param accessToken Auth0 JWT access token
- * @returns Supabase client with Auth0 authentication
+ * @returns Supabase client
  */
-export function getSupabase(accessToken?: string) {
-  if (!accessToken) {
-    return supabase; // Return anonymous client if no token
+export function getSupabase() {
+  if (!supabaseInstance) {
+    supabaseInstance = createBrowserClient();
   }
-  
-  // Create a Supabase client with the Auth0 token in the Authorization header
-  return createClient(supabaseUrl, supabaseAnonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-    auth: {
-      persistSession: false
-    }
-  });
+  return supabaseInstance;
 } 

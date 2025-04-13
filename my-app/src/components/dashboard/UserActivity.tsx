@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useAuth } from '@/components/AuthProvider';
 import { getSupabase } from '@/utils/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -31,7 +31,7 @@ type ActivityRecord = {
 };
 
 export default function UserActivity() {
-  const { user, isLoading: isUserLoading } = useUser();
+  const { user, isLoading: isUserLoading } = useAuth();
   const [loginHistory, setLoginHistory] = useState<LoginRecord[]>([]);
   const [activityHistory, setActivityHistory] = useState<ActivityRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,13 +53,13 @@ export default function UserActivity() {
     setError(null);
 
     try {
-      const supabase = getSupabase(user?.accessToken as string | undefined);
+      const supabase = getSupabase();
       
       // Fetch login history
       const { data: loginData, error: loginError } = await supabase
         .from('login_history')
         .select('*')
-        .eq('user_id', user?.sub)
+        .eq('user_id', user?.id)
         .order('login_at', { ascending: false })
         .limit(10);
       
@@ -73,7 +73,7 @@ export default function UserActivity() {
       const { data: activityData, error: activityError } = await supabase
         .from('user_activity')
         .select('*')
-        .eq('user_id', user?.sub)
+        .eq('user_id', user?.id)
         .order('created_at', { ascending: false })
         .limit(20);
       
