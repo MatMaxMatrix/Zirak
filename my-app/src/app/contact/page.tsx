@@ -119,7 +119,7 @@ export default function ContactPage() {
     return (
       <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern flex items-center justify-center">
         <div className="bg-background/80 backdrop-blur-sm p-8 rounded-lg shadow-lg max-w-md w-full">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         </div>
       </div>
     );
@@ -129,19 +129,19 @@ export default function ContactPage() {
     return (
       <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern flex items-center justify-center">
         <div className="bg-background/80 backdrop-blur-sm p-8 rounded-lg shadow-lg max-w-md w-full">
-          <motion.div 
+        <motion.div 
             className="p-8 rounded-xl border border-green-500/30 text-center max-w-md"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
-            <h1 className="text-2xl font-bold mb-2">Message Sent!</h1>
-            <p className="text-muted-foreground mb-6">
-              Thank you for reaching out. We'll get back to you as soon as possible.
-            </p>
-            <p className="text-sm text-muted-foreground">Redirecting you to the home page...</p>
-          </motion.div>
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+        >
+          <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Message Sent!</h1>
+          <p className="text-muted-foreground mb-6">
+            Thank you for reaching out. We'll get back to you as soon as possible.
+          </p>
+          <p className="text-sm text-muted-foreground">Redirecting you to the home page...</p>
+        </motion.div>
         </div>
       </div>
     );
