@@ -6,11 +6,20 @@ import { KEY_PROVIDER_OPENAI, KEY_PROVIDER_ANTHROPIC, getDecryptedApiKey } from 
 // This endpoint securely proxies requests to external APIs requiring API keys
 // It prevents API keys from being exposed to the client
 
+// Define the context type explicitly for clarity
+interface RouteContext {
+  params: {
+    provider: string;
+    endpoint: string;
+  };
+}
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { provider: string; endpoint: string } }
+  context: RouteContext // Use the context object directly
 ) {
-  const { provider, endpoint } = params;
+  // Destructure params inside the function body
+  const { provider, endpoint } = context.params;
   
   // Validate provider
   if (![KEY_PROVIDER_OPENAI, KEY_PROVIDER_ANTHROPIC].includes(provider)) {
