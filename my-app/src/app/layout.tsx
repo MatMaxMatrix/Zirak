@@ -8,6 +8,7 @@ import { AuthProvider } from "@/components/AuthProvider";
 import { ProfileSync } from "@/components/auth/ProfileSync";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
+import { CSRFProvider } from "@/components/CSRFProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -33,18 +34,20 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            <WebSocketProvider>
-              <div className="flex flex-col min-h-screen bg-grid-pattern">
-                <NavBar />
-                <main className="flex-grow">
-                  {children}
-                </main>
-              </div>
-              <ProfileSync />
-            </WebSocketProvider>
-            <Toaster />
-          </AuthProvider>
+          <CSRFProvider>
+            <AuthProvider>
+              <WebSocketProvider>
+                <div className="flex flex-col min-h-screen bg-grid-pattern">
+                  <NavBar />
+                  <main className="flex-grow">
+                    {children}
+                  </main>
+                </div>
+                <ProfileSync />
+              </WebSocketProvider>
+              <Toaster />
+            </AuthProvider>
+          </CSRFProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -15,6 +15,7 @@ import Script from "next/script";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { fetchWithCSRF } from "@/lib/csrf-client";
 
 // Define types for Google Identity Services
 declare global {
@@ -67,19 +68,74 @@ export default function Login() {
     setIsSubmitting(true);
     setErrorMessage(null);
     
+    let retryCount = 0;
+    const maxRetries = 2;
+    
+    const attemptSignIn = async (): Promise<Response> => {
+      try {
+        return await fetchWithCSRF('/api/auth/signin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+      } catch (error) {
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Retrying sign-in attempt (${retryCount}/${maxRetries})...`);
+          
+          // Small delay before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return attemptSignIn();
+        }
+        throw error;
+      }
+    };
+    
     try {
-      // Call our API endpoint
-      const response = await fetch('/api/auth/signin', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      // Call our API endpoint with CSRF protection and retry mechanism
+      const response = await attemptSignIn();
       
       const data = await response.json();
       
       if (!response.ok) {
+        // Special handling for CSRF token errors
+        if (response.status === 403 && data.error?.includes('CSRF')) {
+          console.log('CSRF token issue detected, refreshing token...');
+          
+          // Force refresh the CSRF token
+          try {
+            await import('@/lib/csrf-client').then(m => m.initCSRF());
+            
+            // Try one more time after refreshing token
+            const retryResponse = await fetchWithCSRF('/api/auth/signin', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ email, password }),
+            });
+            
+            const retryData = await retryResponse.json();
+            
+            if (!retryResponse.ok) {
+              setErrorMessage(retryData.error || 'An error occurred during sign in');
+              setIsSubmitting(false);
+              return;
+            }
+            
+            // Success on retry
+            await handleSuccessfulSignIn();
+            return;
+          } catch (csrfError) {
+            console.error('Failed to refresh CSRF token:', csrfError);
+            setErrorMessage('Authentication error. Please try again.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+        
         setErrorMessage(data.error || 'An error occurred during sign in');
         setIsSubmitting(false);
         return;
