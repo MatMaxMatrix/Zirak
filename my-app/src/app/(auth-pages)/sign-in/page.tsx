@@ -15,6 +15,7 @@ import Script from "next/script";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { fetchWithCSRF } from "@/lib/csrf-client";
 
 // Define types for Google Identity Services
 declare global {
@@ -68,8 +69,8 @@ export default function Login() {
     setErrorMessage(null);
     
     try {
-      // Call our API endpoint
-      const response = await fetch('/api/auth/signin', {
+      // Call our API endpoint using fetchWithCSRF instead of regular fetch
+      const response = await fetchWithCSRF('/api/auth/signin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -113,8 +114,8 @@ export default function Login() {
 
       if (data?.user) {
         try {
-          // Record login history using the API
-          await fetch('/api/auth/login-history', {
+          // Record login history using the API with CSRF protection
+          await fetchWithCSRF('/api/auth/login-history', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

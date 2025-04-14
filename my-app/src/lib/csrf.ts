@@ -69,11 +69,32 @@ export async function csrfProtection(request: Request) {
     return { valid: true };
   }
   
+  // In development mode, be more lenient with CSRF validation
+  if (process.env.NODE_ENV === 'development') {
+    // Log but do not block requests in development
+    const csrfToken = request.headers.get(CSRF_HEADER_NAME);
+    
+    if (!csrfToken) {
+      console.warn('CSRF token missing in development mode - would block in production');
+      return { valid: true, warning: 'CSRF token missing (allowed in development)' };
+    }
+    
+    const isValid = validateCSRFToken(csrfToken, request);
+    if (!isValid) {
+      console.warn('Invalid CSRF token in development mode - would block in production');
+      return { valid: true, warning: 'Invalid CSRF token (allowed in development)' };
+    }
+    
+    return { valid: true };
+  }
+  
+  // Production validation
   try {
     // Get the token from the request header
     const csrfToken = request.headers.get(CSRF_HEADER_NAME);
     
     if (!csrfToken) {
+      console.error('CSRF token missing in production mode');
       return { 
         valid: false, 
         error: 'CSRF token missing' 
@@ -84,6 +105,7 @@ export async function csrfProtection(request: Request) {
     const isValid = validateCSRFToken(csrfToken, request);
     
     if (!isValid) {
+      console.error('Invalid CSRF token in production mode');
       return { 
         valid: false, 
         error: 'Invalid CSRF token' 
