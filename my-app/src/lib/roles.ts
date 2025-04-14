@@ -1,9 +1,9 @@
 // Define roles and permissions for the application
 
 export enum UserRole {
+  USER = 'user',
   ADMIN = 'admin',
   MANAGER = 'manager',
-  USER = 'user',
 }
 
 export type Permission =
@@ -172,4 +172,41 @@ export const getRoleLabel = (role: string): string => {
     default:
       return 'Guest';
   }
+};
+
+// Function to check if a user has a specific role
+export const hasRole = (userRole: string | undefined, requiredRole: UserRole): boolean => {
+  if (!userRole) return false;
+  
+  // If checking for USER role, any authenticated user passes
+  if (requiredRole === UserRole.USER) return true;
+  
+  // For admin role, only admin can access
+  if (requiredRole === UserRole.ADMIN) return userRole === UserRole.ADMIN;
+  
+  // For manager role, both admin and manager can access
+  if (requiredRole === UserRole.MANAGER) 
+    return userRole === UserRole.ADMIN || userRole === UserRole.MANAGER;
+  
+  return false;
+};
+
+// Function to get role display name
+export const getRoleName = (role: string | undefined): string => {
+  switch (role) {
+    case UserRole.ADMIN:
+      return 'Administrator';
+    case UserRole.MANAGER:
+      return 'Manager';
+    case UserRole.USER:
+      return 'User';
+    default:
+      return 'Guest';
+  }
+};
+
+export default {
+  UserRole,
+  hasRole,
+  getRoleName
 };
