@@ -5,32 +5,16 @@ import { NextRequest, NextResponse } from 'next/server'
 export const createClient = (request: NextRequest) => {
   // Create a Supabase client for Server Components
   try {
-    // Get Supabase configuration, with fallbacks
-    const supabaseUrl = process.env.SUPABASE_URL || 
-                        process.env.NEXT_PUBLIC_SUPABASE_URL;
-    
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || 
-                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    // Enhanced logging for debugging
-    console.log('[Middleware] Supabase client initializing');
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error(
-        `Missing Supabase credentials in middleware: ${!supabaseUrl ? 'URL' : ''} ${!supabaseKey ? 'Key' : ''}`
-      );
-    }
-    
     const supabase = createServerClient(
-      supabaseUrl,
-      supabaseKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           get(name: string) {
             try {
               return request.cookies.get(name)?.value
             } catch (error) {
-              console.error(`[Middleware] Error getting cookie ${name}:`, error)
+              console.error(`Error getting cookie ${name}:`, error)
               return undefined
             }
           },
@@ -43,7 +27,7 @@ export const createClient = (request: NextRequest) => {
                 options.expires = options.expires.toUTCString()
               }
             } catch (error) {
-              console.error(`[Middleware] Error setting cookie ${name}:`, error)
+              console.error(`Error setting cookie ${name}:`, error)
             }
           },
           remove(name: string, options: any) {
@@ -51,7 +35,7 @@ export const createClient = (request: NextRequest) => {
             try {
               // Nothing to do here since we're not modifying the response directly
             } catch (error) {
-              console.error(`[Middleware] Error removing cookie ${name}:`, error)
+              console.error(`Error removing cookie ${name}:`, error)
             }
           },
         },
@@ -67,7 +51,7 @@ export const createClient = (request: NextRequest) => {
 
     return { supabase, response }
   } catch (error) {
-    console.error("[Middleware] Error creating Supabase client:", error)
+    console.error("Error creating Supabase client in middleware:", error)
     
     // Return a fallback response to prevent crashes
     const response = NextResponse.next({
