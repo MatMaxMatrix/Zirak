@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     // Record login history
     try {
       if (data.user) {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/login-history`, {
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev"}/api/auth/login-history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: data.user.id }),

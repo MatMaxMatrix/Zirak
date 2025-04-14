@@ -39,7 +39,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
       style-src 'self' 'unsafe-inline';
       img-src 'self' data:;
       font-src 'self';
-      connect-src 'self' https://*.supabase.co ws://localhost:*;
+      connect-src 'self' https://*.supabase.co wss://api.zirak.dev:* ws://localhost:*;
       frame-src 'self';
       object-src 'none';
       base-uri 'self';
