@@ -63,7 +63,9 @@
     "tailwindcss-animate": "^1.0.7",
     "ua-parser-js": "^1.0.40",
     "uuid": "^9.0.1",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "express-rate-limit": "^7.1.5",
+    "@upstash/redis": "^1.28.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

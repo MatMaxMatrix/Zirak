@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
+import { createClient } from "@/utils/supabase/middleware";
 
 // Public routes that don't require authentication
 const publicRoutes = ['/', '/about', '/pricing', '/features'];
@@ -8,7 +9,7 @@ const publicRoutes = ['/', '/about', '/pricing', '/features'];
 const apiRoutes = ['/api/auth', '/api/debug-token', '/api/admin/debug-profiles'];
 
 // Routes to test without session check (temporary for debugging)
-const bypassAuthRoutes = ['/user-dashboard-simple', '/user-dashboard', '/auth-debug'];
+const bypassAuthRoutes = ['/user-dashboard-simple'];
 
 // Protected routes that require authentication and should redirect to login with returnTo
 const protectedRoutes = ['/chat', '/dashboard', '/debug', '/test-auth'];
@@ -29,8 +30,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
   
-  // Allow access to bypassed auth routes for debugging
-  if (bypassAuthRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
+  // Allow access to bypassed auth routes for debugging (remove this in production)
+  if (process.env.NODE_ENV !== 'production' && 
+      bypassAuthRoutes.some(route => pathname === route || pathname.startsWith(`${route}/`))) {
     console.log(`[Middleware] Bypassing auth check for debugging: ${pathname}`);
     return NextResponse.next();
   }
@@ -41,9 +43,28 @@ export async function middleware(req: NextRequest) {
   );
 
   if (isProtectedRoute) {
-    // TODO: Add Supabase authentication check here
-    // For now, we'll just allow access
-    return NextResponse.next();
+    try {
+      const { supabase, response } = createClient(req);
+      
+      // Check if we have a session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        // Redirect to login with return URL
+        const redirectUrl = new URL('/login', req.url);
+        redirectUrl.searchParams.set('returnTo', pathname);
+        return NextResponse.redirect(redirectUrl);
+      }
+      
+      return response;
+    } catch (error) {
+      console.error('[Middleware] Authentication error:', error);
+      
+      // Redirect to login with error on critical failure
+      const redirectUrl = new URL('/login', req.url);
+      redirectUrl.searchParams.set('error', 'auth_failure');
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return NextResponse.next();

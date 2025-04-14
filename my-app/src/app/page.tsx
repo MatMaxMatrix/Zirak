@@ -7,7 +7,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
 import Link from 'next/link';
-import { hasAnyApiKey, getPreferredApiKey } from '@/utils/apiKey';
+import { getPreferredApiKey } from '@/utils/apiKey';
 import { Chat } from '@/components/chat/Chat';
 import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
@@ -44,8 +44,8 @@ export default function Home() {
     // Check if the user has any API key configured
     const checkApiKey = async () => {
       if (user && user.id) { // Only check if user is loaded
-        const result = await hasAnyApiKey(user.id); 
-        setHasApiKey(result);
+        const preferredKey = await getPreferredApiKey(user.id);
+        setHasApiKey(preferredKey.provider !== null);
       }
     };
     if (!isAuthLoading) { // Ensure auth state is resolved

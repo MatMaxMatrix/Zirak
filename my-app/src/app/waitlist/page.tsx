@@ -66,7 +66,7 @@ export default function WaitlistPage() {
   }
 
   return (
-    <div className="min-h-screen dark-bg p-4 md:p-8">
+    <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern p-4 md:p-8">
       <div className="max-w-4xl mx-auto">
         <Card className="dark-card">
           <CardHeader>

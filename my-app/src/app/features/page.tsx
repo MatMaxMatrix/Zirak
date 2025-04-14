@@ -12,7 +12,7 @@ export default function FeaturesPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden bg-grid-pattern">
       {/* Hero Section */}
       <section className="py-20 px-4">
         <div className="max-w-5xl mx-auto text-center">

@@ -11,8 +11,10 @@ export default function LoginRedirect() {
   }, [router]);
   
   return (
-    <div className="flex items-center justify-center min-h-screen">
-      <p className="text-lg">Redirecting to login page...</p>
+    <div className="flex items-center justify-center min-h-screen relative overflow-x-hidden bg-grid-pattern">
+      <div className="p-6 rounded-lg bg-background/80 backdrop-blur-sm">
+        <p className="text-lg">Redirecting to login page...</p>
+      </div>
     </div>
   );
 } 

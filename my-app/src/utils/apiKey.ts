@@ -29,65 +29,59 @@ export async function hasApiKey(userId: string, provider: string): Promise<boole
   }
 }
 
-// Get the active API key (with proper security handling)
-export async function getApiKey(userId: string, provider: string): Promise<string | null> {
-  if (!userId) return null;
+// IMPORTANT: This function should ONLY be used server-side in secure API routes
+// It should never be exposed to the client
+export async function getDecryptedApiKey(userId: string, provider: string): Promise<string | null> {
+  // This should ONLY be called from server-side code
+  if (typeof window !== 'undefined') {
+    console.error('API key decryption attempted on client side! This is a security risk.');
+    return null;
+  }
   
   try {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('api_keys')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('key_name', provider)
-      .eq('is_active', true)
-      .single();
-      
-    if (error) {
-      if (error.code !== 'PGRST116') {
-        console.error(`Error fetching ${provider} API key:`, error);
-      }
-      return null;
+    // Make a call to a secure server endpoint that handles decryption
+    const response = await fetch(`/api/internal/decrypt-key`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Include an internal API key for additional security
+        'X-Internal-API-Key': process.env.INTERNAL_API_KEY || '',
+      },
+      body: JSON.stringify({ userId, provider }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to decrypt key: ${response.statusText}`);
     }
     
-    // NOTE: You can't actually return the API key since we only store a hash
-    // In practice, you would need to handle API calls server-side where the real keys are stored
-    // or implement a secure way to request the real key from your backend
-    
-    // This would typically be handled through a secure proxy API
-    return data ? 'secure-placeholder-value' : null;
+    const data = await response.json();
+    return data.key || null;
   } catch (error) {
-    console.error(`Error fetching ${provider} API key:`, error);
+    console.error(`Error decrypting ${provider} API key:`, error);
     return null;
   }
 }
 
-// Check if user has any API key
-export async function hasAnyApiKey(userId: string): Promise<boolean> {
-  if (!userId) return false;
-  
+// Client-safe function to proxied API calls that need API keys
+export async function makeSecureApiCall(provider: string, endpoint: string, payload: any): Promise<Response> {
   try {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('api_keys')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .limit(1);
-      
-    if (error) {
-      console.error('Error checking for any API key:', error);
-      return false;
-    }
+    // Make request to our secure proxy endpoint
+    const response = await fetch(`/api/secure-proxy/${provider}/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
     
-    return data && data.length > 0;
+    return response;
   } catch (error) {
-    console.error('Error checking for any API key:', error);
-    return false;
+    console.error(`Error making secure API call to ${provider}/${endpoint}:`, error);
+    throw error;
   }
 }
 
-// Get preferred API key (OpenAI first, then Anthropic)
+// Get preferred API key provider (OpenAI first, then Anthropic)
 export async function getPreferredApiKey(userId: string): Promise<{ provider: 'openai' | 'anthropic' | null }> {
   if (!userId) return { provider: null };
   
