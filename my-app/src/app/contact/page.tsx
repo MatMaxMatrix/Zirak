@@ -113,37 +113,43 @@ export default function ContactPage() {
     { value: "partnership", label: "Partnership Opportunity" },
   ];
 
+  const isSubmitting = form.formState.isSubmitting;
+
   if (isLoading) {
     return (
-      <div className="min-h-screen dark-bg flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern flex items-center justify-center">
+        <div className="bg-background/80 backdrop-blur-sm p-8 rounded-lg shadow-lg max-w-md w-full">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
       </div>
     );
   }
 
   if (submitted) {
     return (
-      <div className="min-h-screen dark-bg flex items-center justify-center">
-        <motion.div 
-          className="p-8 rounded-xl border border-green-500/30 dark-card text-center max-w-md"
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Message Sent!</h1>
-          <p className="text-muted-foreground mb-6">
-            Thank you for reaching out. We'll get back to you as soon as possible.
-          </p>
-          <p className="text-sm text-muted-foreground">Redirecting you to the home page...</p>
-        </motion.div>
+      <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern flex items-center justify-center">
+        <div className="bg-background/80 backdrop-blur-sm p-8 rounded-lg shadow-lg max-w-md w-full">
+          <motion.div 
+            className="p-8 rounded-xl border border-green-500/30 text-center max-w-md"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <CheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Message Sent!</h1>
+            <p className="text-muted-foreground mb-6">
+              Thank you for reaching out. We'll get back to you as soon as possible.
+            </p>
+            <p className="text-sm text-muted-foreground">Redirecting you to the home page...</p>
+          </motion.div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen dark-bg py-20">
-      <div className="max-w-2xl mx-auto px-4">
+    <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern py-20">
+      <div className="max-w-4xl mx-auto p-8 bg-background/80 backdrop-blur-sm rounded-lg shadow-lg">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -258,9 +264,9 @@ export default function ContactPage() {
               <Button 
                 type="submit" 
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-lg"
-                disabled={form.formState.isSubmitting}
+                disabled={isSubmitting}
               >
-                {form.formState.isSubmitting ? (
+                {isSubmitting ? (
                   <span className="flex items-center">
                     <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

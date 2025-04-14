@@ -35,7 +35,7 @@ export default function RootLayout({
         >
           <AuthProvider>
             <WebSocketProvider>
-              <div className="flex flex-col min-h-screen">
+              <div className="flex flex-col min-h-screen bg-grid-pattern">
                 <NavBar />
                 <main className="flex-grow">
                   {children}

@@ -500,16 +500,43 @@ nav.bg-background.border-b > div {
     @apply bg-gray-100 border-gray-200;
   }
   
+  /* Make dark-bg a global class */
   .dark-bg {
     @apply bg-black text-white;
+    /* Inherit grid pattern */
+    position: relative; 
+    overflow: hidden; 
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px), 
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+      radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 2px); 
+    background-size: 
+      10px 10px, 
+      10px 10px, 
+      40px 40px; 
+    background-position: 
+      0 0, 
+      0 0, 
+      0 0; 
+    animation: twinkle-pixels 15s infinite linear;
   }
   
   html.dark .dark-bg {
     @apply bg-gray-900 text-white;
+    /* Dark mode grid */
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), 
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 2px);
   }
   
   html.light .dark-bg {
     @apply bg-white text-gray-900;
+    /* Light mode grid - darker lines */
+    background-image: 
+      linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px), 
+      linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+      radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 2px);
   }
 }
 

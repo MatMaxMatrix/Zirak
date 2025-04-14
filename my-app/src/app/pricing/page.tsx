@@ -51,7 +51,7 @@ export default function ComingSoonPage() {
   ];
 
   return (
-    <div className="min-h-screen dark-bg">
+    <div className="min-h-screen relative overflow-x-hidden bg-grid-pattern">
       {/* Hero Section */}
       <div className="pt-20 pb-10 px-4 text-center max-w-4xl mx-auto">
         <motion.div
