@@ -69,6 +69,29 @@ export async function csrfProtection(request: Request) {
     return { valid: true };
   }
   
+  // In development, allow missing CSRF tokens for easier testing
+  if (process.env.NODE_ENV !== 'production') {
+    const csrfToken = request.headers.get(CSRF_HEADER_NAME);
+    
+    if (!csrfToken) {
+      console.warn('CSRF token missing in development environment');
+      // Allow in development for easier testing
+      return { valid: true };
+    }
+    
+    // Validate the token
+    const isValid = validateCSRFToken(csrfToken, request);
+    
+    if (!isValid) {
+      console.warn('Invalid CSRF token in development environment');
+      // Allow in development for easier testing
+      return { valid: true };
+    }
+    
+    return { valid: true };
+  }
+  
+  // Production validation
   try {
     // Get the token from the request header
     const csrfToken = request.headers.get(CSRF_HEADER_NAME);
