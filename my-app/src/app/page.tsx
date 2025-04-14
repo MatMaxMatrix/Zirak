@@ -42,8 +42,16 @@ export default function Home() {
 
   useEffect(() => {
     // Check if the user has any API key configured
-    setHasApiKey(hasAnyApiKey());
-  }, []);
+    const checkApiKey = async () => {
+      if (user && user.id) { // Only check if user is loaded
+        const result = await hasAnyApiKey(user.id); 
+        setHasApiKey(result);
+      }
+    };
+    if (!isAuthLoading) { // Ensure auth state is resolved
+      checkApiKey();
+    }
+  }, [user, isAuthLoading]); // Add dependencies
 
   useEffect(() => {
     // Auto-rotate demos every 5 seconds
@@ -67,20 +75,18 @@ export default function Home() {
     e.preventDefault();
     if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isSubmitting) return;
     
-    // Check for preferred API key
-    const { key, provider } = getPreferredApiKey();
-    if (!key) {
-      toast.error("No API key configured. Redirecting to settings...");
-      setTimeout(() => {
-        router.push("/user-dashboard/profile/api-settings");
-      }, 1500);
+    if (!user || !user.id) { // Ensure user is loaded before proceeding
+      toast.error("Please log in to continue.");
+      router.push('/api/auth/login?returnTo=/waitlist'); 
       return;
     }
-    
+
+    // TEMPORARILY BYPASS API KEY CHECK FOR DEVELOPMENT PHASE
+    // Skip API key check and redirect directly to waitlist
     setIsSubmitting(true);
     try {
-      localStorage.setItem('initial_prompt', input);
-      localStorage.setItem('api_provider', provider || 'openai'); // Store the preferred provider
+      localStorage.setItem('initial_prompt', input || 'No prompt provided');
+      localStorage.setItem('api_provider', 'default'); // Set a default value
       
       if (uploadedFiles.length > 0) {
         const formData = new FormData();
@@ -99,14 +105,9 @@ export default function Home() {
         localStorage.setItem('github_url', githubUrl);
       }
       
-      // Check if user is authenticated before redirecting
-      if (user) {
-        // If authenticated, redirect to waitlist
-        router.push('/waitlist');
-      } else {
-        // If not authenticated, redirect to login page
-        router.push('/api/auth/login?returnTo=/waitlist');
-      }
+      // Always redirect to waitlist
+      router.push('/waitlist');
+      
     } catch (error) {
       console.error('Error processing request:', error);
       setIsSubmitting(false);
@@ -238,7 +239,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden">
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-hidden bg-grid-pattern">
       {/* Enhanced Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-[500px] -left-[500px] w-[1000px] h-[1000px] bg-radial-gradient from-purple-500/20 to-transparent rounded-full blur-3xl opacity-30 animate-pulse-slow" />
@@ -274,17 +275,16 @@ export default function Home() {
             className="w-full max-w-3xl"
           >
             <div className="flex flex-col gap-4">
-              {/* Enhanced Kurdish flag themed container with modern chat interface */}
-              <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-green-600/30 backdrop-blur-md border border-white/30 hover:shadow-red-600/30 transition-all duration-500 kurdish-flag-container">
-                {/* Kurdish flag inspired background with animated gradient */}
+              {/* Container: Removed background/blur, kept structure */}
+              <div className="relative rounded-xl overflow-hidden shadow-lg border border-gray-700/50 transition-all duration-500">
+                {/* Commented out flag elements */}
+                {/*
                 <div className="absolute inset-0 bg-gradient-to-b from-red-600 via-white to-green-600 opacity-80 kurdish-flag-background"></div>
                 <div className="absolute inset-0 bg-gradient-to-r from-red-600/40 to-transparent opacity-30 animate-pulse-slow"></div>
                 
-                {/* Enhanced decorative elements */}
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-green-600 via-white to-red-600"></div>
                 <div className="absolute bottom-0 left-0 w-full h-2 bg-gradient-to-r from-red-600 via-white to-green-600"></div>
                 
-                {/* Kurdish sun emblem with improved animation */}
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 rounded-full bg-yellow-500 opacity-25 animate-pulse-slow kurdish-sun-emblem"></div>
                 <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-28 kurdish-sun-emblem">
                   <div className="absolute inset-0 flex items-center justify-center">
@@ -301,93 +301,111 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+                */}
                 
-                {/* Modern chat interface container */}
-                <div className="relative p-8 bg-black/40 backdrop-blur-md kurdish-flag-content">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-semibold text-white drop-shadow-md">Tell me what you want to build</h3>
-                    <div className="flex space-x-2">
-                      <span className="h-3 w-3 rounded-full bg-red-500 animate-pulse"></span>
-                      <span className="h-3 w-3 rounded-full bg-white delay-100 animate-pulse"></span>
-                      <span className="h-3 w-3 rounded-full bg-green-500 delay-200 animate-pulse"></span>
+                {/* Content: Padding remains */}
+                <div className="relative p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-100">Tell me what you want to build</h3>
+                    {/* Changed traffic light colors */}
+                    <div className="flex space-x-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-gray-600"></span>
+                      <span className="h-2.5 w-2.5 rounded-full bg-gray-500"></span>
+                      <span className="h-2.5 w-2.5 rounded-full bg-gray-400"></span>
                     </div>
                   </div>
                   
                   {/* Chat message bubbles */}
-                  <div className="mb-4 space-y-3 max-h-[120px] overflow-y-auto custom-scrollbar p-2 -mx-2">
+                  <div className="mb-4 space-y-2 max-h-[120px] overflow-y-auto custom-scrollbar pr-2">
                     <div className="flex items-start space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold shadow-md">Z</div>
-                      <div className="bg-black/30 backdrop-blur-sm rounded-xl rounded-tl-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble">
+                      {/* Changed Z avatar color and size */}
+                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0">Z</div>
+                      {/* Removed kurdish-chat-bubble class & updated styles */}
+                      <div className="bg-gray-800/60 backdrop-blur-sm rounded-lg rounded-tl-none p-2.5 text-gray-200 text-sm max-w-[80%] shadow-sm border border-gray-700/50">
                         Hello! I'm Zirak, your AI assistant. How can I help you build something amazing today?
                       </div>
                     </div>
                     <div className="flex items-start space-x-2 justify-end">
-                      <div className="bg-green-600/80 backdrop-blur-sm rounded-xl rounded-tr-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble kurdish-user-bubble">
+                      {/* Changed user bubble color & removed kurdish-chat-bubble kurdish-user-bubble classes & updated styles */}
+                      <div className="bg-blue-700/70 backdrop-blur-sm rounded-lg rounded-tr-none p-2.5 text-white text-sm max-w-[80%] shadow-sm border border-blue-600/50">
                         I need a website with user authentication.
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-green-600 text-xs font-bold shadow-md">U</div>
+                      {/* Changed U avatar color and size */}
+                      <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-gray-700 text-xs font-bold shadow-sm flex-shrink-0">U</div>
                     </div>
                     <div className="flex items-start space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white text-xs font-bold shadow-md">Z</div>
-                      <div className="bg-black/30 backdrop-blur-sm rounded-xl rounded-tl-none p-3 text-white text-sm max-w-[80%] shadow-md border border-white/10 kurdish-chat-bubble">
+                      {/* Changed Z avatar color and size */}
+                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shadow-sm flex-shrink-0">Z</div>
+                      {/* Removed kurdish-chat-bubble class & updated styles */}
+                      <div className="bg-gray-800/60 backdrop-blur-sm rounded-lg rounded-tl-none p-2.5 text-gray-200 text-sm max-w-[80%] shadow-sm border border-gray-700/50">
                         Great! I can help you build a website with authentication. Let's get started.
                       </div>
                     </div>
                   </div>
                   
-                  {/* Modern input area with special effects */}
-                  <div className="flex gap-3 relative">
+                  {/* Add a subtle separator - adjusted for light/dark */}
+                  <hr className="border-gray-300 dark:border-gray-700/50 my-4" />
+
+                  {/* Modern input area - Use accent border for high visibility */}
+                  <div className="flex gap-2 relative bg-gray-100 dark:bg-gray-800/95 rounded-lg p-3 border border-blue-500 dark:border-blue-600 shadow-inner">
+                    {/* Input field styles adjusted for light/dark */}
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       placeholder="Describe your project or ask a question..."
-                      className="flex-1 bg-black/50 border-white/30 text-white placeholder-gray-300 py-6 text-lg focus:border-green-500 focus:ring-2 focus:ring-green-500/50 rounded-xl pr-12 kurdish-input"
+                      className="flex-1 bg-white dark:bg-gray-900/70 border border-gray-300 dark:border-gray-600/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 py-3 px-4 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 dark:focus:border-blue-500 dark:focus:ring-blue-500/50 rounded-lg pr-10"
                     />
-                    <div className="absolute right-20 top-1/2 -translate-y-1/2 flex space-x-2">
-                      <button className="text-white/70 hover:text-white transition-colors">
-                        <Paperclip className="h-5 w-5" />
+                    <div className="absolute right-14 top-1/2 -translate-y-1/2 flex space-x-1">
+                      {/* Paperclip button adjusted for light/dark */}
+                      <button className="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white transition-colors p-1">
+                        <Paperclip className="h-4 w-4" />
                       </button>
                     </div>
                     <Button 
                       onClick={handleInitialPrompt}
                       disabled={isSubmitting}
-                      className="relative overflow-hidden bg-gradient-to-br from-red-600 to-red-700 text-white px-8 py-6 text-lg border-none shadow-md hover:shadow-lg rounded-xl group"
+                      // Changed button gradient and style & size
+                      className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-blue-700 text-white px-5 py-3 text-base border-none shadow-sm hover:shadow-md rounded-lg group"
                     >
                       {isSubmitting ? (
                         <div className="flex items-center">
                           <div className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin mr-2"></div>
-                          <span>Processing...</span>
+                          Processing...
                         </div>
                       ) : (
                         <div className="flex items-center">
-                          <span>Start</span>
-                          <ArrowUp className="ml-2 h-5 w-5 group-hover:-translate-y-1 transition-transform" />
+                          Start
+                          <ArrowUp className="ml-1.5 h-4 w-4 group-hover:-translate-y-0.5 transition-transform" />
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                     </Button>
                   </div>
-                  <p className="mt-3 text-sm text-white/90 drop-shadow-md">Build AI applications, websites, games, and more with our intelligent assistants</p>
+                  <p className="mt-2 text-xs text-gray-400">Build AI applications, websites, games, and more with our intelligent assistants</p>
                   
                   {/* Chat features indicator */}
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-700/50">
                     <div className="flex items-center space-x-1">
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
-                        <BrainCircuit className="h-3 w-3 mr-1" />
+                      {/* Changed badge style & removed kurdish-feature-badge class */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-700/50 text-gray-300">
+                        <BrainCircuit className="h-3 w-3 mr-1 text-blue-400" />
                         AI Powered
                       </span>
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
-                        <Shield className="h-3 w-3 mr-1" />
+                      {/* Changed badge style & removed kurdish-feature-badge class */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-700/50 text-gray-300">
+                        <Shield className="h-3 w-3 mr-1 text-green-400" />
                         Secure
                       </span>
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-black/30 text-white kurdish-feature-badge">
-                        <Zap className="h-3 w-3 mr-1" />
+                      {/* Changed badge style & removed kurdish-feature-badge class */}
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-700/50 text-gray-300">
+                        <Zap className="h-3 w-3 mr-1 text-yellow-400" />
                         Fast
                       </span>
                     </div>
-                    <div className="text-xs text-white/60 kurdish-status-text">
+                    {/* Removed kurdish-status-text class & updated styles */}
+                    <div className="text-xs text-gray-500">
                       <span className="inline-flex items-center">
-                        <span className="inline-block h-2 w-2 rounded-full bg-green-500 mr-1 animate-pulse"></span>
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 mr-1 animate-pulse"></span>
                         Online
                       </span>
                     </div>
