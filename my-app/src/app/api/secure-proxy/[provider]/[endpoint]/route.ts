@@ -6,11 +6,10 @@ import { KEY_PROVIDER_OPENAI, KEY_PROVIDER_ANTHROPIC, getDecryptedApiKey } from 
 // This endpoint securely proxies requests to external APIs requiring API keys
 // It prevents API keys from being exposed to the client
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { provider: string; endpoint: string } }
-) {
-  const { provider, endpoint } = params;
+// Bypass strict typing since Next.js 15.2.4 appears to have issues with the type signatures
+export async function POST(request: NextRequest, { params }: any) {
+  const provider = params.provider as string;
+  const endpoint = params.endpoint as string;
   
   // Validate provider
   if (![KEY_PROVIDER_OPENAI, KEY_PROVIDER_ANTHROPIC].includes(provider)) {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
 import { useSupabaseClient } from '@/lib/supabase';
-import { isAdmin } from '@/lib/auth';
+import { hasRole, UserRole } from '@/lib/roles';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +59,7 @@ export default function AdminDashboard() {
   const { user, isLoading: isAuth0Loading } = useUser();
   const { supabase, isLoading: isSupabaseLoading } = useSupabaseClient();
   const [loading, setLoading] = useState(true);
+  const [currentUserRole, setCurrentUserRole] = useState<string | undefined>(undefined);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -66,18 +67,45 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     async function fetchData() {
-      if (isAuth0Loading || isSupabaseLoading) return;
+      if (isAuth0Loading || isSupabaseLoading || !user || !supabase) return;
       
       try {
         setLoading(true);
         setError(null);
         const supabaseClient = await supabase;
+        const auth0UserId = user.sub;
+
+        if (!auth0UserId) {
+          throw new Error("Auth0 user ID not found.");
+        }
         
-        // For debugging - log some info about the user
-        console.log('Fetching data as user:', user?.email);
-        console.log('Admin status:', isAdmin(user));
+        const { data: currentUserProfile, error: profileError } = await supabaseClient
+          .from('profiles')
+          .select('role')
+          .eq('id', auth0UserId)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching current user profile:', profileError);
+          if (profileError.code === 'PGRST116') { 
+             setError('Your user profile could not be found.');
+          } else {
+            throw profileError;
+          }
+          setCurrentUserRole(undefined);
+        } else if (currentUserProfile) {
+          setCurrentUserRole(currentUserProfile.role);
+        } else {
+           setCurrentUserRole(undefined); 
+           console.warn("Current user profile found, but role is missing.");
+        }
+
+        if (!hasRole(currentUserRole, UserRole.ADMIN)) {
+            setError("Access Denied: You don't have permission to view this page.");
+            setLoading(false);
+            return;
+        }
         
-        // Fetch profiles
         const { data: profilesData, error: profilesError } = await supabaseClient
           .from('profiles')
           .select('*')
@@ -87,11 +115,8 @@ export default function AdminDashboard() {
           console.error('Error fetching profiles:', profilesError);
           throw profilesError;
         }
-        
-        console.log(`Found ${profilesData?.length || 0} profiles`);
         setProfiles(profilesData || []);
         
-        // Fetch subscriptions
         const { data: subscriptionsData, error: subscriptionsError } = await supabaseClient
           .from('subscriptions')
           .select('*, profiles(email)')
@@ -100,7 +125,6 @@ export default function AdminDashboard() {
         if (subscriptionsError) throw subscriptionsError;
         setSubscriptions(subscriptionsData || []);
         
-        // Fetch payments
         const { data: paymentsData, error: paymentsError } = await supabaseClient
           .from('payments')
           .select('*, profiles(email)')
@@ -108,9 +132,10 @@ export default function AdminDashboard() {
           
         if (paymentsError) throw paymentsError;
         setPayments(paymentsData || []);
-      } catch (error: any) {
-        console.error('Error fetching admin data:', error);
-        setError(error.message || 'Failed to fetch data');
+
+      } catch (err: any) {
+        console.error('Error fetching admin data:', err);
+        setError(err.message || 'Failed to fetch admin data');
       } finally {
         setLoading(false);
       }
@@ -119,8 +144,8 @@ export default function AdminDashboard() {
     fetchData();
   }, [supabase, isAuth0Loading, isSupabaseLoading, user]);
   
-  if (isAuth0Loading || isSupabaseLoading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  if (isAuth0Loading || isSupabaseLoading || loading) {
+    return <div className="flex items-center justify-center min-h-screen">Loading admin data...</div>;
   }
   
   if (!user) {
@@ -135,11 +160,11 @@ export default function AdminDashboard() {
     );
   }
   
-  if (!isAdmin(user)) {
+  if (!hasRole(currentUserRole, UserRole.ADMIN)) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p>You don't have permission to access the admin dashboard.</p>
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4 p-4">
+        <h1 className="text-2xl font-bold text-red-600">Access Denied</h1>
+        <p className="text-center">{error || "You don't have permission to access the admin dashboard."}</p>
         <Link href="/">
           <Button variant="outline">Back to Home</Button>
         </Link>

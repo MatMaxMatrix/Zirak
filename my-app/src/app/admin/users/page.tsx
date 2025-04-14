@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@auth0/nextjs-auth0/client';
-import { getSupabase } from '@/utils/supabase';
+import { useSupabaseClient } from '@/lib/supabase';
 import {
   Table,
   TableBody,
@@ -60,6 +60,7 @@ type User = {
 
 export default function UsersAdminPage() {
   const { user, isLoading: isUserLoading } = useUser();
+  const { supabase, isLoading: isSupabaseLoading } = useSupabaseClient();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,29 +74,33 @@ export default function UsersAdminPage() {
   const [newUsersThisMonth, setNewUsersThisMonth] = useState(0);
 
   useEffect(() => {
-    if (isUserLoading) return;
+    if (isUserLoading || isSupabaseLoading) return;
     if (!user) {
       redirect('/api/auth/login?returnTo=/admin/users');
       return;
     }
 
-    // Check if user is admin (in a real app, you'd check roles)
     if (user.email !== 'admin@example.com') {
       redirect('/dashboard');
       return;
     }
-
-    fetchUsers();
-  }, [user, isUserLoading]);
+    
+    if (supabase) {
+        fetchUsers();
+    }
+  }, [user, isUserLoading, supabase, isSupabaseLoading]);
 
   const fetchUsers = async () => {
+    if (!supabase) {
+        setError("Supabase client not available.");
+        setIsLoading(false);
+        return;
+    }
+    
     setIsLoading(true);
     setError(null);
 
     try {
-      const supabase = getSupabase(user?.accessToken as string | undefined);
-      
-      // Get all users
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
@@ -138,11 +143,12 @@ export default function UsersAdminPage() {
   };
 
   const handleSaveUser = async () => {
-    if (!editingUser) return;
+    if (!editingUser || !supabase) {
+        setError("Cannot save user: Supabase client not available or no user selected.");
+        return;
+    }
     
     try {
-      const supabase = getSupabase(user?.accessToken as string | undefined);
-      
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -191,8 +197,8 @@ export default function UsersAdminPage() {
     }
   };
 
-  if (isUserLoading || isLoading) {
-    return <div className="p-8 text-center">Loading users...</div>;
+  if (isUserLoading || isSupabaseLoading || isLoading) {
+    return <div className="p-8 text-center">Loading...</div>;
   }
 
   if (error) {
