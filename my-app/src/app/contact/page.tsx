@@ -18,11 +18,13 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { motion } from "framer-motion";
-import { ArrowLeft, Send, CheckCircle } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, AlertTriangle } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/AuthProvider";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import Link from "next/link";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -43,7 +45,7 @@ export default function ContactPage() {
   const router = useRouter();
   const [submitted, setSubmitted] = useState(false);
   const { theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -59,6 +61,11 @@ export default function ContactPage() {
   useEffect(() => {
     if (user?.email) {
       form.setValue('email', user.email);
+      
+      // Also set name if we know it from the user object
+      if (user.user_metadata?.full_name) {
+        form.setValue('name', user.user_metadata.full_name);
+      }
     }
   }, [user, form]);
 
@@ -66,19 +73,22 @@ export default function ContactPage() {
     try {
       const supabase = createClient();
       
-      // Insert the contact query
+      // Insert the contact query with name and email as separate columns
       const { data, error } = await supabase
         .from('contact_queries')
         .insert({
-          user_id: user?.id || null,
+          user_id: user?.id || null, // Use user ID if available, otherwise null
+          name: values.name, // Store name in its own column
+          email: values.email, // Store email in its own column
           topic: values.topic,
-          message: values.message,
-          status: 'new', // Set initial status as 'new'
+          message: values.message, // Just store the message content
+          status: 'new',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
       
       if (error) {
+        console.error('Supabase error details:', error);
         throw error;
       }
       
@@ -102,6 +112,14 @@ export default function ContactPage() {
     { value: "feedback", label: "General Feedback" },
     { value: "partnership", label: "Partnership Opportunity" },
   ];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen dark-bg flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   if (submitted) {
     return (

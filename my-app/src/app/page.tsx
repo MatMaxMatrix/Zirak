@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
+import { ThemeToggleSimple } from "@/components/theme-toggle";
 
 // Add these new animations
 const containerVariants = {
@@ -849,6 +850,7 @@ export default function Home() {
                     <Link href="https://github.com" className="text-gray-300 hover:text-red-500 transition-colors">
                       <Github className="h-5 w-5" />
                     </Link>
+                    <ThemeToggleSimple />
                   </div>
                 </div>
               </div>
