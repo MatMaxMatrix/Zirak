@@ -54,13 +54,14 @@ import {
 interface ContactQuery {
   id: number;
   user_id: string | null;
+  name: string;
+  email: string;
   topic: string;
   message: string;
   status: string;
   admin_response: string | null;
   created_at: string;
   updated_at: string;
-  userEmail?: string;
 }
 
 export default function ContactQueries() {
@@ -99,51 +100,7 @@ export default function ContactQueries() {
         throw queriesError;
       }
       
-      if (!queriesData || queriesData.length === 0) {
-        setQueries([]);
-        setLoading(false);
-        return;
-      }
-      
-      // Create an array to hold the enhanced queries
-      const enhancedQueries: ContactQuery[] = [...queriesData];
-      
-      // Get a list of unique user IDs that aren't null
-      const userIdsToFetch: string[] = [];
-      for (const query of queriesData) {
-        if (query.user_id && !userIdsToFetch.includes(query.user_id)) {
-          userIdsToFetch.push(query.user_id);
-        }
-      }
-      
-      // If we have user IDs to fetch, get their emails
-      if (userIdsToFetch.length > 0) {
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, email')
-          .in('id', userIdsToFetch);
-          
-        if (profilesData && profilesData.length > 0) {
-          // Create a map of user_id to email
-          const emailMap: Record<string, string> = {};
-          for (const profile of profilesData) {
-            emailMap[profile.id] = profile.email;
-          }
-          
-          // Attach emails to the queries
-          for (let i = 0; i < enhancedQueries.length; i++) {
-            const query = enhancedQueries[i];
-            if (query.user_id && emailMap[query.user_id]) {
-              enhancedQueries[i] = {
-                ...query,
-                userEmail: emailMap[query.user_id]
-              };
-            }
-          }
-        }
-      }
-      
-      setQueries(enhancedQueries);
+      setQueries(queriesData || []);
     } catch (err: any) {
       setError(err.message);
       toast.error('Failed to load contact queries');
@@ -219,8 +176,10 @@ export default function ContactQueries() {
     }
   };
 
-  // Get unique topics for filter
-  const uniqueTopics = Array.from(new Set(queries.map(q => q.topic)));
+  // Get unique topics for filter - filter out empty topics
+  const uniqueTopics = Array.from(
+    new Set(queries.map(q => q.topic))
+  ).filter(topic => topic && topic.trim() !== '');
 
   // Render status badge with appropriate color
   const renderStatusBadge = (status: string) => {
@@ -310,6 +269,7 @@ export default function ContactQueries() {
               <TableRow>
                 <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead>User</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Topic</TableHead>
                 <TableHead>Message</TableHead>
                 <TableHead className="w-[120px]">Date</TableHead>
@@ -323,10 +283,11 @@ export default function ContactQueries() {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <UserCircle className="h-4 w-4 text-muted-foreground" />
-                      {query.userEmail || 'Anonymous User'}
+                      {query.name || 'Anonymous'}
                     </div>
                   </TableCell>
-                  <TableCell className="font-medium">{query.topic}</TableCell>
+                  <TableCell>{query.email || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{query.topic || 'General Inquiry'}</TableCell>
                   <TableCell>
                     <span className="line-clamp-1">{query.message}</span>
                   </TableCell>
@@ -373,7 +334,7 @@ export default function ContactQueries() {
                 {selectedQuery?.admin_response ? 'Edit Response' : 'Respond to Query'}
               </DialogTitle>
               <DialogDescription>
-                From: {selectedQuery?.userEmail || 'Anonymous User'}<br />
+                From: {selectedQuery?.name} ({selectedQuery?.email})<br />
                 Topic: {selectedQuery?.topic}<br />
                 Sent: {selectedQuery ? new Date(selectedQuery.created_at).toLocaleString() : ''}
               </DialogDescription>

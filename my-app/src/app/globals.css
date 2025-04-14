@@ -68,19 +68,54 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Ensure body takes full height for potential background effects */
+    min-height: 100vh; 
   }
 }
 
-/* Grid Pattern Background */
+/* Grid Pattern Background with Twinkling Pixels */
 .bg-grid-pattern {
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-  background-size: 24px 24px;
+  position: relative; 
+  overflow: hidden; 
+  /* Layer 1 & 2: Base Grid (Dark lines for Light Theme) */
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px), 
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    /* Layer 3: Twinkling Dots (Dark dots for Light Theme) */
+    radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 2px); 
+  background-size: 
+    10px 10px, /* Base grid size */
+    10px 10px, /* Base grid size */
+    40px 40px; /* Twinkle dot spacing */
+  background-position: 
+    0 0, /* Base grid position */
+    0 0, /* Base grid position */
+    0 0; /* Initial twinkle position */
+  animation: twinkle-pixels 15s infinite linear;
 }
 
+/* Remove the ::before rule for the old light effect */
+/* .bg-grid-pattern::before { ... } */
+
 .dark .bg-grid-pattern {
-  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  /* Adjust opacities for dark mode (Light lines/dots) */
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), 
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 2px);
+  /* Sizes and animation remain the same */
+}
+
+/* Remove the old moving light animation */
+/* @keyframes move-light { ... } */
+
+/* Define the new twinkling animation */
+@keyframes twinkle-pixels {
+  0% { background-position: 0 0, 0 0, 0 0; }
+  25% { background-position: 0 0, 0 0, 10px 10px; } 
+  50% { background-position: 0 0, 0 0, 0px 20px; } 
+  75% { background-position: 0 0, 0 0, -10px 10px; } 
+  100% { background-position: 0 0, 0 0, 0 0; }
 }
 
 /* Terminal Scrollbar */
