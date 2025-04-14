@@ -9,6 +9,7 @@ import { ProfileSync } from "@/components/auth/ProfileSync";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import { CSRFProvider } from "@/components/CSRFProvider";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -49,6 +50,7 @@ export default function RootLayout({
             </AuthProvider>
           </CSRFProvider>
         </ThemeProvider>
+        <Analytics />
       </body>
     </html>
   );
