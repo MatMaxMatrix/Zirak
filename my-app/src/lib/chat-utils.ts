@@ -198,6 +198,13 @@ export function diagnoseWebSocketIssues() {
         diagnostics.portBlocked = true;
         diagnostics.suggestions.push('Cannot connect to backend server port (5001). Make sure your backend server is running.');
       });
+  } else if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // In production, assume backend is at api.zirak.dev
+    fetch('https://api.zirak.dev/health', { mode: 'no-cors' })
+      .catch(() => {
+        diagnostics.portBlocked = true;
+        diagnostics.suggestions.push('Cannot connect to backend API server. Please check your network connection.');
+      });
   }
 
   // Detect potential proxy issues
@@ -234,7 +241,10 @@ export function diagnoseWebSocketIssues() {
   // CORS detection is challenging, but we can look for symptoms
   try {
     // Try to connect to backend using WebSocket directly
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+        ? 'http://localhost:5001' 
+        : 'https://api.zirak.dev';
     const wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const wsUrl = `${wsProtocol}://${backendUrl.replace(/^https?:\/\//, '')}/socket.io/?transport=websocket`;
     

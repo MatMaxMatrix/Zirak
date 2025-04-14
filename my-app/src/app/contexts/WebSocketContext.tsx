@@ -132,20 +132,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     setConnectionAttempted(true);
     
     // Get the backend URL from environment variables or generate based on current URL
-    let backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-    
-    if (!backendUrl) {
-      // Fallback to a URL derived from the current domain
-      const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-      const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-      
-      // If running on localhost, use the default port
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
-        backendUrl = 'http://localhost:5001';
-      } else {
-        // For production, try to use the same domain with a different port or path
-        backendUrl = `${protocol}://${hostname}:5001`;
-      }
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    let backendUrl = '';
+
+    // If running on localhost, use the local development backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      backendUrl = 'http://localhost:5001';
+    } else {
+      // In production, use the production backend URL
+      backendUrl = 'https://api.zirak.dev'; // Update this to your actual backend URL
     }
     
     console.log('Connecting to backend at:', backendUrl);

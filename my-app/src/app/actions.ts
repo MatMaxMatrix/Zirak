@@ -38,7 +38,7 @@ export const signInAction = async (formData: FormData) => {
     // Record login history using the API route
     try {    
       if (data.user) {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/auth/login-history`, {
+        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev"}/api/auth/login-history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: data.user.id }),
@@ -83,7 +83,7 @@ export const signUpAction = async (formData: FormData) => {
   
   try {
     const supabase = await createClient();
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev";
     
     console.log("[SignUp] Using redirect URL:", `${origin}/auth/callback`);
 
@@ -156,7 +156,7 @@ export const forgotPasswordAction = async (formData: FormData) => {
 
   try {
     const supabase = await createClient();
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev";
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${origin}/auth/callback?redirect_to=/reset-password`,

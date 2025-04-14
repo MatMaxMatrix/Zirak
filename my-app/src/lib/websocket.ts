@@ -70,7 +70,10 @@ class DefaultWebSocketService implements WebSocketService {
   private socket: Socket | null = null;
   private url: string;
   
-  constructor(url: string = 'http://localhost:5001') {
+  constructor(url: string = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
+      ? 'http://localhost:5001' 
+      : 'https://api.zirak.dev') {
     this.url = url;
   }
   

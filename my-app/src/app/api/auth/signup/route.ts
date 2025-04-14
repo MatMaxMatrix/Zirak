@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     }
     
     const supabase = await createClient();
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev";
     
     console.log("[API SignUp] Using redirect URL:", `${origin}/auth/callback`);
 
