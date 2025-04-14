@@ -5,44 +5,26 @@ import { cookies } from "next/headers";
 
 export async function createClient() {
   try {
-    // Get Supabase configuration, with fallbacks
-    const supabaseUrl = process.env.SUPABASE_URL || 
-                         process.env.NEXT_PUBLIC_SUPABASE_URL;
-    
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || 
-                         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    // Enhanced logging for debugging
-    console.log('[Supabase Server] Initializing with:');
-    console.log(`- URL: ${supabaseUrl ? supabaseUrl.substring(0, 20) + '...' : 'Missing URL'}`);
-    console.log(`- Key: ${supabaseKey ? 'Valid Key (masked)' : 'Missing Key'}`);
-    
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error(
-        `Missing Supabase credentials: ${!supabaseUrl ? 'URL' : ''} ${!supabaseKey ? 'Key' : ''}`
-      );
-    }
+    // Log Supabase configuration
+    console.log('[Supabase Server] Initialized with URL:', 
+      process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Valid URL' : 'Missing URL',
+      'and key:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Valid Key' : 'Missing Key');
     
     return createServerClient(
-      supabaseUrl,
-      supabaseKey,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           async get(name) {
-            try {
-              const cookieStore = await cookies();
-              return cookieStore.get(name)?.value;
-            } catch (error) {
-              console.error('[Supabase Server] Error getting cookie:', error);
-              return undefined;
-            }
+            const cookieStore = await cookies();
+            return cookieStore.get(name)?.value;
           },
           async set(name, value, options) {
             try {
               const cookieStore = await cookies();
               cookieStore.set(name, value, options);
             } catch (error) {
-              console.error('[Supabase Server] Error setting cookie:', error);
+              console.error('Error setting cookie:', error);
             }
           },
           async remove(name, options) {
@@ -50,7 +32,7 @@ export async function createClient() {
               const cookieStore = await cookies();
               cookieStore.set(name, '', { ...options, maxAge: 0 });
             } catch (error) {
-              console.error('[Supabase Server] Error removing cookie:', error);
+              console.error('Error removing cookie:', error);
             }
           },
         },
