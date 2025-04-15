@@ -800,7 +800,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 className="relative overflow-hidden bg-gradient-to-r from-purple-500 to-blue-500 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg shadow-purple-500/20"
-                onClick={() => user ? router.push('/waitlist') : router.push('/api/auth/login?returnTo=/waitlist')}
+                onClick={() => router.push('/waitlist')}
               >
                 <span className="relative z-10">Join Early Access</span>
                 <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
@@ -808,7 +808,7 @@ export default function Home() {
               
               <Button 
                 className="relative overflow-hidden bg-transparent border-2 border-white/20 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg group"
-                onClick={() => router.push('/api/auth/login?prompt=signup')}
+                onClick={() => router.push('/sign-up')}
               >
                 <span className="relative z-10">Sign Up</span>
                 <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
