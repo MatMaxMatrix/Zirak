@@ -37,14 +37,13 @@ export default function Login() {
   const router = useRouter();
   const supabase = createClient();
   const { refreshUser } = useAuth();
-  const [googleButtonReady, setGoogleButtonReady] = useState(false);
-  const [googleButtonError, setGoogleButtonError] = useState(false);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const googleButtonContainerRef = useRef<HTMLDivElement>(null);
+  const [googleButtonLoading, setGoogleButtonLoading] = useState(true);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const scriptLoadedRef = useRef(false);
 
   // Successful sign-in handler that updates auth state and redirects
   const handleSuccessfulSignIn = async () => {
@@ -191,58 +190,51 @@ export default function Login() {
     }
   }
 
-  // Make the function available globally for Google's callback
+  // Initialize Google button function (similar to sign-up page)
+  const initializeGoogleButton = () => {
+    if (!googleButtonRef.current) return;
+    if (!window.google?.accounts?.id) {
+      setTimeout(initializeGoogleButton, 200); // Retry if Google API not ready
+      return;
+    }
+
+    try {
+      window.google.accounts.id.initialize({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
+        callback: handleSignInWithGoogle,
+        use_fedcm_for_prompt: false,
+      });
+      
+      window.google.accounts.id.renderButton(
+        googleButtonRef.current,
+        { theme: "outline", size: "large", width: 250, type: "standard" } // Added type: standard
+      );
+      
+      setGoogleButtonLoading(false);
+    } catch (err) {
+      console.error('Error initializing Google Sign-In:', err);
+      setGoogleButtonLoading(false);
+    }
+  };
+
+  // Make the function available globally and manage script loading
   useEffect(() => {
     window.handleSignInWithGoogle = handleSignInWithGoogle;
+    
+    // Check if script is already loaded or button is ready
+    if (window.google?.accounts?.id && googleButtonRef.current) {
+      initializeGoogleButton();
+    } else if (scriptLoadedRef.current && googleButtonRef.current) {
+      initializeGoogleButton();
+    }
+
+    return () => {
+      // Clean up on unmount
+      // No specific cleanup needed for Google Sign-In button at this point
+    };
   }, []);
 
-  // Initialize Google Sign-In button once script is loaded
-  useEffect(() => {
-    if (!scriptLoaded || !googleButtonContainerRef.current) return;
-    
-    try {
-      if (window.google && window.google.accounts && window.google.accounts.id) {
-        // Initialize button
-        window.google.accounts.id.initialize({
-          client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '',
-          callback: handleSignInWithGoogle,
-          use_fedcm_for_prompt: false,
-        });
-        
-        // Render button
-        window.google.accounts.id.renderButton(
-          googleButtonContainerRef.current,
-          { theme: "outline", size: "large", width: 250, type: "standard" }
-        );
-        
-        setGoogleButtonReady(true);
-      } else {
-        setGoogleButtonError(true);
-      }
-    } catch (error) {
-      console.error("[Google Sign-In] Initialization error:", error);
-      setGoogleButtonError(true);
-    }
-  }, [scriptLoaded]);
-
-  // Retry loading the button if it fails
-  const handleRetry = () => {
-    // Clear existing button if any
-    if (googleButtonContainerRef.current) {
-      googleButtonContainerRef.current.innerHTML = '';
-    }
-    
-    setGoogleButtonError(false);
-    setGoogleButtonReady(false);
-    setScriptLoaded(false);
-    
-    // Small delay before reloading script
-    setTimeout(() => {
-      setScriptLoaded(true);
-    }, 500);
-  };
-  
-  // Get error from URL if present (for redirects from other pages)
+  // Get error from URL if present
   useEffect(() => {
     const urlError = searchParams.get('error');
     if (urlError) {
@@ -252,18 +244,22 @@ export default function Login() {
 
   return (
     <>
-      {/* Load Google script directly in component instead of layout */}
-      <Script
-        src="https://accounts.google.com/gsi/client"
+      <Script 
+        src="https://accounts.google.com/gsi/client" 
         strategy="afterInteractive"
-        onLoad={() => setScriptLoaded(true)}
-        onError={() => setGoogleButtonError(true)}
+        onLoad={() => {
+          console.log('Google Identity Services script loaded on Sign-In page');
+          scriptLoadedRef.current = true;
+          if (googleButtonRef.current) {
+            initializeGoogleButton();
+          }
+        }}
       />
       
       <form className="flex-1 flex flex-col min-w-64" onSubmit={handleSubmit}>
         <h1 className="text-2xl font-medium">Sign in</h1>
         <p className="text-sm text-foreground mb-6">
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link className="text-foreground font-medium underline" href="/sign-up">
             Sign up
           </Link>
@@ -272,70 +268,47 @@ export default function Login() {
         <div className="flex flex-col gap-2 [&>input]:mb-3">
           {/* Google Sign-In Button */}
           <div className="flex justify-center mb-6">
-            {!googleButtonReady && !googleButtonError ? (
-              <div className="flex items-center justify-center w-[250px] h-10 mt-4 border border-gray-300 rounded-md">
-                <div className="animate-pulse w-5 h-5 rounded-full bg-gray-300 mr-2"></div>
-                <span>Loading Google Sign-In...</span>
+            {googleButtonLoading && (
+              <div className="text-sm text-gray-500 animate-pulse flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading Google Sign-in...
               </div>
-            ) : googleButtonError ? (
-              <Button 
-                variant="outline" 
-                className="w-[250px] h-10 mt-4" 
-                onClick={handleRetry}
-              >
-                Reload Google Sign-In
-              </Button>
-            ) : null}
+            )}
             {/* Button container for direct rendering */}
-            <div 
-              ref={googleButtonContainerRef}
-              id="googleButton" 
-              className={`mt-4 ${googleButtonReady ? 'block' : 'hidden'}`}
-            ></div>
+            <div id="googleButton" ref={googleButtonRef} className={`mt-4 ${googleButtonLoading ? 'hidden' : ''}`}></div>
           </div>
 
           <Separator className="my-4">
             <span className="mx-2 text-xs text-muted-foreground">Or continue with email</span>
           </Separator>
-
+          
           <Label htmlFor="email">Email</Label>
-          <Input 
-            id="email"
-            name="email" 
-            type="email"
+          <Input
+            name="email"
+            placeholder="you@example.com"
+            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com" 
-            required 
           />
-          <div className="flex justify-between items-center">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              className="text-xs text-foreground underline"
-              href="/forgot-password"
-            >
-              Forgot Password?
-            </Link>
-          </div>
+          <Label htmlFor="password">Password</Label>
           <Input
-            id="password"
             type="password"
             name="password"
+            placeholder="Enter your password"
+            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
-            required
           />
           
-          {/* Error message */}
+          {/* Display error message */}
           {errorMessage && (
             <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
           )}
           
-          {/* Submit button */}
-          <Button 
-            type="submit" 
-            className="w-full" 
+          {/* Submit Button */}
+          <Button
+            type="submit"
+            className="w-full mt-4"
             disabled={isSubmitting}
           >
             {isSubmitting ? (
@@ -343,8 +316,19 @@ export default function Login() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Signing In...
               </>
-            ) : 'Sign in with Email'}
+            ) : (
+              'Sign in'
+            )}
           </Button>
+          
+          <Link
+            className="text-sm text-foreground text-right mt-2 underline"
+            href="/forgot-password"
+          >
+            Forgot password?
+          </Link>
+          
+          <FormMessage message={null} />
         </div>
       </form>
     </>
