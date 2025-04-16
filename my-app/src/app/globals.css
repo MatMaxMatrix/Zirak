@@ -5,25 +5,25 @@
 
 @layer base {
   :root {
-    /* Light theme - improved contrast for better visibility */
-    --background: 0 0% 100%;
-    --foreground: 0 0% 10%; /* Darker text for better visibility */
-    --card: 0 0% 98%;
-    --card-foreground: 0 0% 10%; /* Darker text for better visibility */
-    --popover: 0 0% 98%;
+    /* Light theme - subtle white background */
+    --background: 0 0% 98%; /* Slightly off-white */
+    --foreground: 0 0% 10%; 
+    --card: 0 0% 96%; /* Adjust card slightly */
+    --card-foreground: 0 0% 10%; 
+    --popover: 0 0% 96%; /* Adjust popover slightly */
     --popover-foreground: 0 0% 10%;
-    --primary: 0 80% 45%; /* Deeper red for better contrast */
+    --primary: 0 80% 45%; 
     --primary-foreground: 0 0% 100%;
-    --secondary: 45 100% 45%; /* Deeper yellow for better contrast */
+    --secondary: 45 100% 45%; 
     --secondary-foreground: 0 0% 10%;
     --muted: 0 0% 90%;
-    --muted-foreground: 0 0% 25%; /* Darker muted text for better visibility */
+    --muted-foreground: 0 0% 25%; 
     --accent: 0 80% 45%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 80% 45%;
     --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 80%;
-    --input: 0 0% 80%;
+    --border: 0 0% 85%; /* Slightly darker border */
+    --input: 0 0% 85%; /* Slightly darker input */
     --ring: 0 80% 45%;
     --radius: 0.5rem;
     --chart-1: 0 80% 45%;
@@ -34,7 +34,7 @@
   }
 
   .dark {
-    /* Dark theme - pure black with yellow/red/white accents */
+    /* Dark theme - pure black with slightly visible grid */
     --background: 0 0% 0%;
     --foreground: 60 100% 100%;
     --card: 0 0% 3%;
@@ -77,20 +77,20 @@
 .bg-grid-pattern {
   position: relative; 
   overflow: hidden; 
-  /* Layer 1 & 2: Base Grid (Dark lines for Light Theme) */
+  /* Layer 1 & 2: Base Grid (Subtle dark lines for Light Theme) */
   background-image: 
-    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px), 
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-    /* Layer 3: Twinkling Dots (Dark dots for Light Theme) */
-    radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 2px); 
+    linear-gradient(to right, rgba(0, 0, 0, 0.04) 1px, transparent 1px), 
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    /* Layer 3: Twinkling Dots (Subtle dark dots for Light Theme) */
+    radial-gradient(circle, rgba(0, 0, 0, 0.03) 1px, transparent 2px); 
   background-size: 
-    10px 10px, /* Base grid size */
-    10px 10px, /* Base grid size */
-    40px 40px; /* Twinkle dot spacing */
+    10px 10px, 
+    10px 10px, 
+    40px 40px; 
   background-position: 
-    0 0, /* Base grid position */
-    0 0, /* Base grid position */
-    0 0; /* Initial twinkle position */
+    0 0, 
+    0 0, 
+    0 0; 
   animation: twinkle-pixels 15s infinite linear;
 }
 
@@ -98,11 +98,11 @@
 /* .bg-grid-pattern::before { ... } */
 
 .dark .bg-grid-pattern {
-  /* Adjust opacities for dark mode (Light lines/dots) */
+  /* Dark mode grid (Subtle light lines/dots) */
   background-image: 
     linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px), 
     linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-    radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 2px);
+    radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 2px);
   /* Sizes and animation remain the same */
 }
 
