@@ -235,7 +235,7 @@ const NavBar = () => {
   }
 
   return (
-    <nav className="bg-background border-b">
+    <nav className="fixed top-0 left-0 right-0 z-40 bg-transparent backdrop-blur-sm border-b border-white/10">
       <div className="w-full px-4 sm:px-6 lg:px-10">
         <div className="flex justify-between h-16">
           {/* Left side with logo and project selector */}
@@ -248,9 +248,8 @@ const NavBar = () => {
               {/* Project selector for chat page */}
               {isChatPage && (
                 <div className="flex items-center">
-                  <span className="text-gray-400 mx-2">&gt;</span>
-                  <div className="flex items-center px-2 py-1 rounded bg-[#262626] border border-[#333333]">
-                    <span className="hidden xs:inline-block text-xs text-gray-400 mr-1">Select Project:</span>
+                  <span className="ml-4 text-gray-500">/</span>
+                  <div className="ml-4">
                     <DynamicProjectSelector 
                       currentProject={fileSystem.currentProject} 
                       onSelect={fileSystem.handleProjectSelect}
