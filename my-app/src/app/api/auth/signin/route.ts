@@ -9,6 +9,12 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+/**
+ * Handle sign-in API requests
+ * 
+ * @param request - The incoming request object
+ * @returns Response with sign-in result
+ */
 export async function POST(request: Request) {
   // Extract request info for logging
   const requestInfo = extractRequestInfo(request);
@@ -28,7 +34,16 @@ export async function POST(request: Request) {
       ...requestInfo,
       context: { action: 'login_attempt', result: 'rate_limited' }
     });
-    return rateLimitResult.response;
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please try again later.' }, 
+      { 
+        status: 429,
+        headers: {
+          'Retry-After': '600',
+          ...rateLimitResult.response.headers
+        } 
+      }
+    );
   }
   
   // Validate CSRF token
@@ -42,11 +57,33 @@ export async function POST(request: Request) {
         error: csrfResult.error
       }
     });
-    return NextResponse.json({ error: csrfResult.error }, { status: 403 });
+    return NextResponse.json(
+      { error: csrfResult.error }, 
+      { 
+        status: 403,
+        headers: {
+          'X-CSRF-Error': 'true'
+        }
+      }
+    );
   }
   
   try {
-    const body = await request.json();
+    // Parse and validate request body
+    let body;
+    try {
+      body = await request.json();
+    } catch (parseError) {
+      Logger.warn('Invalid JSON in login request', {
+        ...requestInfo,
+        context: { action: 'login_attempt', result: 'invalid_json' }
+      });
+      return NextResponse.json(
+        { error: 'Invalid request format' },
+        { status: 400 }
+      );
+    }
+    
     const { email, password } = body;
     
     // Input validation
@@ -72,6 +109,7 @@ export async function POST(request: Request) {
       );
     }
     
+    // Attempt authentication with Supabase
     const supabase = await createClient();
     
     Logger.info('Attempting to sign in user', {
@@ -85,6 +123,9 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      // Add delay to prevent timing attacks that could reveal valid email addresses
+      await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+      
       Logger.security('Login failure', {
         ...requestInfo,
         context: { 
@@ -94,21 +135,41 @@ export async function POST(request: Request) {
           error: error.message
         }
       });
+      
       // Use generic error message for security
       return NextResponse.json(
         { error: 'Invalid email or password' },
-        { status: 400 }
+        { status: 401 }
       );
     }
 
     // Record login history
     try {
       if (data.user) {
-        await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev"}/api/auth/login-history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: data.user.id }),
-        });
+        const loginHistoryResponse = await fetch(
+          `${process.env.NEXT_PUBLIC_SITE_URL || "https://zirak.dev"}/api/auth/login-history`, 
+          {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              // Add an internal API key or signature if available in production
+              ...(process.env.INTERNAL_API_KEY ? { 'X-Internal-Key': process.env.INTERNAL_API_KEY } : {})
+            },
+            body: JSON.stringify({ 
+              userId: data.user.id,
+              source: 'api',
+              success: true
+            }),
+          }
+        );
+        
+        if (!loginHistoryResponse.ok) {
+          Logger.warn('Failed to record login history', {
+            ...requestInfo,
+            userId: data.user.id,
+            context: { error: await loginHistoryResponse.text() }
+          });
+        }
         
         // Log successful login
         Logger.security('Login successful', {
@@ -127,12 +188,28 @@ export async function POST(request: Request) {
         userId: data.user?.id,
         context: { error: historyError }
       });
+      // Continue processing despite history error
     }
 
     // If we got here, sign-in was successful
     return NextResponse.json(
-      { success: true, user: { id: data.user.id, email: data.user.email } },
-      { status: 200 }
+      { 
+        success: true, 
+        user: { 
+          id: data.user.id, 
+          email: data.user.email 
+        } 
+      },
+      { 
+        status: 200,
+        headers: {
+          // Add cache control headers to prevent caching of this response
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store'
+        }
+      }
     );
   } catch (unexpectedError) {
     Logger.error('Unexpected error during sign in', {

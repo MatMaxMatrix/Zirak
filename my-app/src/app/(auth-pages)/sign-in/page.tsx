@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/utils/supabase/client";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import Script from "next/script";
 import { toast } from "sonner";
@@ -44,28 +44,44 @@ export default function Login() {
   const [googleButtonLoading, setGoogleButtonLoading] = useState(true);
   const googleButtonRef = useRef<HTMLDivElement>(null);
   const scriptLoadedRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   // Successful sign-in handler that updates auth state and redirects
-  const handleSuccessfulSignIn = async () => {
-    // First refresh the user data in the auth context
-    await refreshUser();
+  const handleSuccessfulSignIn = useCallback(async () => {
+    if (!isMountedRef.current) return;
     
-    // Then show success message
-    toast.success('Signed in successfully');
-    
-    // Then redirect and refresh the router
-    router.push('/');
-    router.refresh();
-    
-    // Force a page reload to update all components with the new auth state
-    window.location.href = '/';
-  };
+    try {
+      // First refresh the user data in the auth context
+      await refreshUser();
+      
+      // Then show success message
+      toast.success('Signed in successfully');
+      
+      // Then redirect and refresh the router
+      router.push('/');
+      router.refresh();
+    } catch (error) {
+      console.error('[Login] Error during post-login process:', error);
+      
+      // Fallback to direct navigation if the refresh process fails
+      window.location.href = '/';
+    }
+  }, [refreshUser, router]);
 
   // Handle form submission using the API endpoint
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isSubmitting) return; // Prevent duplicate submissions
+    
     setIsSubmitting(true);
     setErrorMessage(null);
+    
+    if (!email.trim() || !password) {
+      setErrorMessage('Email and password are required');
+      setIsSubmitting(false);
+      return;
+    }
     
     let retryCount = 0;
     const maxRetries = 2;
@@ -119,8 +135,10 @@ export default function Login() {
             const retryData = await retryResponse.json();
             
             if (!retryResponse.ok) {
-              setErrorMessage(retryData.error || 'An error occurred during sign in');
-              setIsSubmitting(false);
+              if (isMountedRef.current) {
+                setErrorMessage(retryData.error || 'An error occurred during sign in');
+                setIsSubmitting(false);
+              }
               return;
             }
             
@@ -129,14 +147,18 @@ export default function Login() {
             return;
           } catch (csrfError) {
             console.error('Failed to refresh CSRF token:', csrfError);
-            setErrorMessage('Authentication error. Please try again.');
-            setIsSubmitting(false);
+            if (isMountedRef.current) {
+              setErrorMessage('Authentication error. Please try again.');
+              setIsSubmitting(false);
+            }
             return;
           }
         }
         
-        setErrorMessage(data.error || 'An error occurred during sign in');
-        setIsSubmitting(false);
+        if (isMountedRef.current) {
+          setErrorMessage(data.error || 'An error occurred during sign in');
+          setIsSubmitting(false);
+        }
         return;
       }
       
@@ -144,12 +166,14 @@ export default function Login() {
       await handleSuccessfulSignIn();
     } catch (error) {
       console.error('[Email Sign In] Error:', error);
-      setErrorMessage('An error occurred during sign in');
-      setIsSubmitting(false);
+      if (isMountedRef.current) {
+        setErrorMessage('An error occurred during sign in');
+        setIsSubmitting(false);
+      }
     }
-  };
+  }, [email, password, isSubmitting, handleSuccessfulSignIn]);
 
-  async function handleSignInWithGoogle(response: any) {
+  const handleSignInWithGoogle = useCallback(async (response: any) => {
     try {
       if (!response?.credential) {
         console.error('[Google Sign In] Invalid response received');
@@ -188,11 +212,11 @@ export default function Login() {
     } catch (err) {
       console.error('[Google Sign In] Error during authentication');
     }
-  }
+  }, [supabase, handleSuccessfulSignIn]);
 
-  // Initialize Google button function (similar to sign-up page)
-  const initializeGoogleButton = () => {
-    if (!googleButtonRef.current) return;
+  // Initialize Google button function
+  const initializeGoogleButton = useCallback(() => {
+    if (!googleButtonRef.current || !isMountedRef.current) return;
     if (!window.google?.accounts?.id) {
       setTimeout(initializeGoogleButton, 200); // Retry if Google API not ready
       return;
@@ -207,18 +231,23 @@ export default function Login() {
       
       window.google.accounts.id.renderButton(
         googleButtonRef.current,
-        { theme: "outline", size: "large", width: 250, type: "standard" } // Added type: standard
+        { theme: "outline", size: "large", width: 250, type: "standard" }
       );
       
-      setGoogleButtonLoading(false);
+      if (isMountedRef.current) {
+        setGoogleButtonLoading(false);
+      }
     } catch (err) {
       console.error('Error initializing Google Sign-In:', err);
-      setGoogleButtonLoading(false);
+      if (isMountedRef.current) {
+        setGoogleButtonLoading(false);
+      }
     }
-  };
+  }, [handleSignInWithGoogle]);
 
   // Make the function available globally and manage script loading
   useEffect(() => {
+    isMountedRef.current = true;
     window.handleSignInWithGoogle = handleSignInWithGoogle;
     
     // Check if script is already loaded or button is ready
@@ -227,20 +256,25 @@ export default function Login() {
     } else if (scriptLoadedRef.current && googleButtonRef.current) {
       initializeGoogleButton();
     }
-
-    return () => {
-      // Clean up on unmount
-      // No specific cleanup needed for Google Sign-In button at this point
-    };
-  }, []);
-
-  // Get error from URL if present
-  useEffect(() => {
+    
+    // Extract error from URL if present
     const urlError = searchParams.get('error');
     if (urlError) {
       setErrorMessage(urlError);
     }
-  }, [searchParams]);
+
+    return () => {
+      // Clean up on unmount
+      isMountedRef.current = false;
+    };
+  }, [handleSignInWithGoogle, initializeGoogleButton, searchParams]);
+
+  // Keyboard shortcut for form submission
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isSubmitting) {
+      handleSubmit(e);
+    }
+  }, [handleSubmit, isSubmitting]);
 
   return (
     <>
@@ -284,25 +318,34 @@ export default function Login() {
           
           <Label htmlFor="email">Email</Label>
           <Input
+            id="email"
             name="email"
+            type="email"
+            autoComplete="email"
             placeholder="you@example.com"
             required
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value.trim())}
+            onKeyDown={handleKeyDown}
+            className="mb-4"
           />
           <Label htmlFor="password">Password</Label>
           <Input
+            id="password"
             type="password"
             name="password"
+            autoComplete="current-password"
             placeholder="Enter your password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="mb-4"
           />
           
           {/* Display error message */}
           {errorMessage && (
-            <div className="text-red-500 text-sm mt-2">{errorMessage}</div>
+            <div className="text-red-500 text-sm mt-2 mb-4">{errorMessage}</div>
           )}
           
           {/* Submit Button */}
