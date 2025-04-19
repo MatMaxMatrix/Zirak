@@ -62,44 +62,26 @@ export default function Home() {
 
   const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if ((!input.trim() && uploadedFiles.length === 0 && !githubUrl) || isSubmitting) return;
-    
-    if (!user || !user.id) { // Ensure user is loaded before proceeding
-      toast.error("Please log in to continue.");
-      router.push('/api/auth/login?returnTo=/waitlist'); 
-      return;
-    }
-
-    // TEMPORARILY BYPASS API KEY CHECK FOR DEVELOPMENT PHASE
-    // Skip API key check and redirect directly to waitlist
     setIsSubmitting(true);
+    
+    // Store the input in localStorage if needed
+    if (input.trim()) {
+      localStorage.setItem('initial_prompt', input);
+    }
+    
+    // Redirect to waitlist regardless of input or user state
     try {
-      localStorage.setItem('initial_prompt', input || 'No prompt provided');
-      localStorage.setItem('api_provider', 'default'); // Set a default value
-      
-      if (uploadedFiles.length > 0) {
-        const formData = new FormData();
-        uploadedFiles.forEach(file => {
-          formData.append('files', file);
-        });
-        for (const file of uploadedFiles) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            localStorage.setItem(`file_${file.name}`, reader.result as string);
-          };
-          reader.readAsDataURL(file);
-        }
-      }
-      if (githubUrl) {
-        localStorage.setItem('github_url', githubUrl);
-      }
-      
-      // Always redirect to waitlist
-      router.push('/waitlist');
-      
+      router.push('/waitlist?from=chat');
     } catch (error) {
-      console.error('Error processing request:', error);
+      console.error('Error redirecting to waitlist:', error);
       setIsSubmitting(false);
+    }
+  };
+
+  // Handle Enter key press in the input field
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isSubmitting) {
+      handleInitialPrompt(e);
     }
   };
 
@@ -169,6 +151,7 @@ export default function Home() {
                     <Input
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={handleKeyDown}
                       placeholder="Describe your project or ask a question..."
                       className="flex-1 bg-white dark:bg-gray-900/70 border border-gray-300 dark:border-gray-600/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 py-3 px-4 text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500/50 dark:focus:border-blue-500 dark:focus:ring-blue-500/50 rounded-lg pr-10"
                     />
