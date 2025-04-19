@@ -18,18 +18,29 @@ export default function WaitlistPage() {
   const searchParams = useSearchParams();
   const fromChat = searchParams.get('from') === 'chat';
   const { theme } = useTheme();
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is on waitlist (you'll need to implement this check with your backend)
+    // Get user input from localStorage if it exists
+    const savedPrompt = localStorage.getItem('initial_prompt');
+    if (savedPrompt) {
+      setInitialPrompt(savedPrompt);
+    }
+    
+    // Check if user is on waitlist
     if (user) {
       // TODO: Make API call to check if user is on waitlist
       // For now, we'll just set it to true if user is logged in
       setIsOnWaitlist(true);
     }
     
-    // Show toast if redirected from chat
+    // Show toast for users coming from the chat
     if (fromChat) {
       toast.info("Chat is currently only available for waitlisted users");
+    } else if (savedPrompt) {
+      // If they have a prompt stored but didn't come through the 'from=chat' parameter,
+      // they likely used the chat on the homepage
+      toast.info("Thank you for your interest! Our AI assistant is currently in early access.");
     }
   }, [user, fromChat]);
 
@@ -79,6 +90,14 @@ export default function WaitlistPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {initialPrompt && (
+              <div className="mb-6 p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                <p className="text-sm text-gray-400 mb-2">You asked:</p>
+                <p className="text-gray-200">{initialPrompt}</p>
+                <p className="text-sm text-gray-400 mt-4">We'll answer your question once you get access to our AI assistant.</p>
+              </div>
+            )}
+            
             {!user ? (
               <div className="space-y-6">
                 <p>

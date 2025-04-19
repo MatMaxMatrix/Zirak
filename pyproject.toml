@@ -7,7 +7,7 @@ name = "ce3"
 version = "0.1.0"
 description = "A self-improving assistant framework with tool creation capabilities"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Your Name", email = "your.email@example.com" }]
 classifiers = [
@@ -52,6 +52,7 @@ dependencies = [
     "duckduckgo-search>=7.5.1",
     "autogen>=0.8.1",
     "flask-socketio>=5.5.1",
+    "mcp[cli]>=1.6.0",
 ]
 
 [project.optional-dependencies]

@@ -1,7 +1,7 @@
 import re
 
 import requests
-from Agents.tools.base import BaseTool
+from .base import BaseTool
 from bs4 import BeautifulSoup, Comment
 
 
