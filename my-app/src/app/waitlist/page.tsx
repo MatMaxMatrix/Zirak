@@ -23,7 +23,7 @@ export default function WaitlistPage() {
   useEffect(() => {
     // Get user input from localStorage if it exists
     const savedPrompt = localStorage.getItem('initial_prompt');
-    if (savedPrompt) {
+    if (savedPrompt && fromChat) {
       setInitialPrompt(savedPrompt);
     }
     
@@ -37,7 +37,7 @@ export default function WaitlistPage() {
     // Show toast for users coming from the chat
     if (fromChat) {
       toast.info("Chat is currently only available for waitlisted users");
-    } else if (savedPrompt) {
+    } else if (savedPrompt && fromChat) {
       // If they have a prompt stored but didn't come through the 'from=chat' parameter,
       // they likely used the chat on the homepage
       toast.info("Thank you for your interest! Our AI assistant is currently in early access.");
