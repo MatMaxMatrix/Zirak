@@ -300,6 +300,10 @@ export default function Home() {
             <Github className="h-4 w-4 mr-2" />
             GitHub
           </Button>
+          <div className="flex items-center ml-1">
+            <span className="text-gray-400 text-sm mr-2">Theme:</span>
+            <ThemeToggleSimple />
+          </div>
         </div>
         
         {/* Copyright */}
