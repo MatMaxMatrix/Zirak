@@ -180,6 +180,17 @@ const NavBar = () => {
   // Check if we're on the chat page
   const isChatPage = pathname?.startsWith('/chat');
 
+  // Close mobile menu on path change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+  
+  // Create a navigation handler for mobile menu links
+  const handleMobileNavigation = (path: string) => {
+    setMobileMenuOpen(false);
+    router.push(path);
+  };
+
   useEffect(() => {
     const supabase = createClient();
     
@@ -225,6 +236,7 @@ const NavBar = () => {
   }, [user]);
 
   const handleSignOut = async () => {
+    setMobileMenuOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/');
@@ -346,7 +358,10 @@ const NavBar = () => {
                 <span className="text-xs font-medium text-gray-500">Project:</span>
                 <DynamicProjectSelector 
                   currentProject={fileSystem.currentProject} 
-                  onSelect={fileSystem.handleProjectSelect}
+                  onSelect={(project) => {
+                    setMobileMenuOpen(false);
+                    return fileSystem.handleProjectSelect(project);
+                  }}
                   onCreateProject={fileSystem.handleCreateProject}
                   onConfigureProject={fileSystem.refreshFileSystem}
                   navbarMode={true}
@@ -355,28 +370,46 @@ const NavBar = () => {
             </div>
           )}
           <div className="pt-2 pb-3 space-y-1">
-            <Link href="/" className="bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+            <button 
+              onClick={() => handleMobileNavigation('/')}
+              className="w-full text-left bg-indigo-50 border-indigo-500 text-indigo-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+            >
               Home
-            </Link>
-            <Link href="/features" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+            </button>
+            <button 
+              onClick={() => handleMobileNavigation('/features')}
+              className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+            >
               Features
-            </Link>
-            <Link href="/pricing" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+            </button>
+            <button 
+              onClick={() => handleMobileNavigation('/pricing')}
+              className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+            >
               Pricing
-            </Link>
-            <Link href="/contact" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+            </button>
+            <button 
+              onClick={() => handleMobileNavigation('/contact')}
+              className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+            >
               Contact
-            </Link>
+            </button>
             {user && (
               <>
-                <Link href="/user-dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                <button 
+                  onClick={() => handleMobileNavigation('/user-dashboard')}
+                  className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                >
                   My Dashboard
-                </Link>
+                </button>
                 {/* Show admin dashboard link only if user is an admin */}
                 {isAdmin(user) && (
-                  <Link href="/admin-dashboard" className="border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium">
+                  <button 
+                    onClick={() => handleMobileNavigation('/admin-dashboard')}
+                    className="w-full text-left border-transparent text-gray-500 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-700 block pl-3 pr-4 py-2 border-l-4 text-base font-medium"
+                  >
                     Admin Dashboard
-                  </Link>
+                  </button>
                 )}
               </>
             )}
@@ -385,16 +418,19 @@ const NavBar = () => {
           <div className="pt-4 pb-3 border-t border-gray-200">
             {!isLoading && !user && (
               <div className="mt-3 px-2 space-y-1">
-                <Button asChild className="w-full mb-2 bg-blue-600 hover:bg-blue-700">
-                  <Link href="/waitlist">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Join Waitlist
-                  </Link>
+                <Button 
+                  className="w-full mb-2 bg-blue-600 hover:bg-blue-700"
+                  onClick={() => handleMobileNavigation('/waitlist')}
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Join Waitlist
                 </Button>
-                <Button asChild className="w-full" variant="outline">
-                  <Link href="/sign-in">
-                    Sign in
-                  </Link>
+                <Button 
+                  className="w-full" 
+                  variant="outline"
+                  onClick={() => handleMobileNavigation('/sign-in')}
+                >
+                  Sign in
                 </Button>
               </div>
             )}
@@ -414,33 +450,33 @@ const NavBar = () => {
                   </div>
                 </div>
                 <div className="mt-3 space-y-1 px-2">
-                  <Link 
-                    href="/user-dashboard/profile" 
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  <button 
+                    onClick={() => handleMobileNavigation('/user-dashboard/profile')}
+                    className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   >
                     <div className="flex items-center">
                       <UserIcon className="mr-2 h-4 w-4" />
                       Your Profile
                     </div>
-                  </Link>
-                  <Link 
-                    href="/user-dashboard" 
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  </button>
+                  <button 
+                    onClick={() => handleMobileNavigation('/user-dashboard')}
+                    className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   >
                     <div className="flex items-center">
                       <Settings className="mr-2 h-4 w-4" />
                       Dashboard
                     </div>
-                  </Link>
-                  <Link 
-                    href="/contact" 
-                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                  </button>
+                  <button 
+                    onClick={() => handleMobileNavigation('/contact')}
+                    className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-700"
                   >
                     <div className="flex items-center">
                       <MessageSquare className="mr-2 h-4 w-4" />
                       Contact Us
                     </div>
-                  </Link>
+                  </button>
                   <MobileThemeToggle />
                   <button
                     onClick={handleSignOut}
