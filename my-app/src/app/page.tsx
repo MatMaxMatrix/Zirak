@@ -240,7 +240,11 @@ export default function Home() {
           <div className="mt-16 mb-8 flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 className="relative bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-700 px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg"
-              onClick={() => router.push('/waitlist')}
+                onClick={() => {
+                  // Clear any stored prompt when directly accessing waitlist
+                  localStorage.removeItem('initial_prompt');
+                  router.push('/waitlist');
+                }}
               >
                 <span className="relative z-10">Join Early Access</span>
               </Button>
