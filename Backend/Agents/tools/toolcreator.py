@@ -1,8 +1,8 @@
 import re
 from pathlib import Path
 
-from Agents.config import Config
-from Agents.tools.base import BaseTool
+from Backend.Agents.config import Config
+from .base import BaseTool
 from dotenv import load_dotenv
 from openai import OpenAI
 from rich.console import Console

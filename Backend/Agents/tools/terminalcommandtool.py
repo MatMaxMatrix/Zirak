@@ -4,7 +4,7 @@ import subprocess
 import sys
 from typing import Optional, Union
 
-from Agents.tools.base import BaseTool
+from .base import BaseTool
 
 
 class TerminalCommandTool(BaseTool):
