@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import { useAuth } from '@/components/AuthProvider';
 import { ThemeToggleSimple } from "@/components/theme-toggle";
+import { WaitlistForm } from "@/components/waitlist/WaitlistForm";
 
 // Add these new animations
 const containerVariants = {
@@ -236,22 +237,23 @@ export default function Home() {
             ))}
           </motion.div>
 
-          {/* Simple Call to Action */}
-          <div className="mt-16 mb-8 flex flex-col sm:flex-row gap-4 justify-center">
-              <Button 
-                className="relative bg-gray-200 dark:bg-gray-800 text-gray-900 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-700 px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg"
-                onClick={() => {
-                  // Clear any stored prompt when directly accessing waitlist
-                  localStorage.removeItem('initial_prompt');
-                  router.push('/waitlist');
-                }}
-              >
-                <span className="relative z-10">Join Early Access</span>
-              </Button>
-              
+          {/* Waitlist Section */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.6 }}
+            className="mt-16 mb-8 w-full max-w-md mx-auto"
+          >
+            <div className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-6 backdrop-blur-sm">
+              <WaitlistForm variant="embedded" source="home_featured" />
+            </div>
+          </motion.div>
+
+          {/* Call to Action Buttons */}
+          <div className="mt-8 mb-8 flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 className="relative overflow-hidden bg-transparent border-2 border-white/20 text-white px-8 py-6 text-lg rounded-xl hover:scale-105 transition-transform duration-300 shadow-lg group"
-              onClick={() => router.push('/sign-up')}
+                onClick={() => router.push('/sign-up')}
               >
                 <span className="relative z-10">Sign Up</span>
                 <div className="absolute inset-0 opacity-0 hover:opacity-30 transition-opacity bg-gradient-to-r from-white/10 to-transparent" />
