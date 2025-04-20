@@ -6,6 +6,10 @@ import click
 from typing import Dict, List, Union, Any, Optional
 from pathlib import Path
 import sys
+import uvicorn
+from starlette.applications import Starlette
+from starlette.routing import Mount, Route
+from mcp.server.sse import SseServerTransport
 
 # Add parent directory to path
 current_dir = Path(__file__).resolve().parent.parent.parent
@@ -155,19 +159,21 @@ async def run(read_stream, write_stream, initialization_options):
 # 2. With the MCP CLI: mcp dev mcp_server.py (which calls the run() function)
 
 if __name__ == "__main__":
-    import uvicorn
-    from starlette.applications import Starlette
-    from starlette.routing import Mount, Route
-    from mcp.server.sse import SseServerTransport
-
     # Set up SSE transport
     sse = SseServerTransport("/messages/")
 
+    # sse.connect_see does two big things:
+    # 1. Handshake: Replies with HTTP headers (200 OK, Content-Type: text/event-stream, etc.) that tell the browser “okay, we’re opening an SSE channel.”
+    # 2. Mailbox set‑up: Behind the scenes it creates two in‑memory queues (think two pipes): Inbound pipe (for messages coming from the client into your MCP server) AND Outbound pipe (for messages going from your MCP server back out to the client).
     async def handle_sse(request):
         """Handle SSE connections."""
         async with sse.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
+            # streams[0] (the first pipe) is now the place where incoming JSON‑RPC requests will arrive.
+
+            # streams[1] (the second pipe) is where your MCP server writes its JSON‑RPC responses and notifications.
+            # app.run(...) starts the MCP protocol loop, reading requests from the first pipe and writing responses into the second.
             await server.run(
                 streams[0], streams[1], server.create_initialization_options()
             )
