@@ -55,6 +55,8 @@ class MCPClient:
             streams = await self.exit_stack.enter_async_context(
                 sse_client(self.server_url)
             )
+            print(f"\n\n streams: {streams} \n\n")
+            # Stream[0] is the inbound pipe and Stream[1] is the outbound pipe becausae we need a bidirectional communication between the client and the server to enable asynchronous communication.
             self.session = await self.exit_stack.enter_async_context(
                 ClientSession(streams[0], streams[1])
             )
@@ -74,7 +76,7 @@ class MCPClient:
         try:
             logger.info("Fetching available tools from the server...")
             tools_result = await self.session.list_tools()
-            logger.debug(f"Raw tools response type: {type(tools_result)}")
+            logger.info(f"Raw tools response type: {type(tools_result)}")
 
             # Extract tools from result
             mcp_tools = self._extract_from_result(tools_result, "tools")
@@ -180,6 +182,7 @@ class MCPClient:
             }
             for tool in self.available_tools
         ]
+        logger.info(f"OpenAI tools spec: {openai_tools_spec}")
 
         # Create a system prompt that includes information about using tools
         system_prompt = (

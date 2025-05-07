@@ -11,6 +11,7 @@ from starlette.applications import Starlette
 from starlette.routing import Mount, Route
 from mcp.server.sse import SseServerTransport
 
+print(Path(__file__))
 # Add parent directory to path
 current_dir = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(current_dir))
@@ -42,6 +43,7 @@ tools_instances = {
     "terminalcommandtool": TerminalCommandTool(),
     "screenshottool": ScreenshotTool(),
 }
+
 
 # Create a single server instance
 server = Server("employee-tools-mcp-server")
@@ -187,9 +189,12 @@ if __name__ == "__main__":
         ],
     )
 
+    # with the import click, we can use the command line to run the script. for example: python mcp_server.py --port 3001 --host 0.0.0.0
     # Parse command line arguments
     @click.command()
-    @click.option("--port", default=3001, help="Port to listen on")
+    @click.option(
+        "--port", default=3001, help="Port to listen on"
+    )  # if the port is not provided, it will use the default port 3001, and when users run the --help command, it will show the help message.
     @click.option("--host", default="0.0.0.0", help="Host to bind to")
     def main(port, host):
         """Run the MCP server."""
