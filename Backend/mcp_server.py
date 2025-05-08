@@ -11,16 +11,11 @@ from starlette.applications import Starlette
 from starlette.routing import Mount, Route
 from mcp.server.sse import SseServerTransport
 
-print(Path(__file__))
-# Add parent directory to path
-current_dir = Path(__file__).resolve().parent.parent.parent
-sys.path.append(str(current_dir))
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("mcp_server.log")],
+    handlers=[logging.StreamHandler(), logging.FileHandler("backend_mcp_server.log")],
 )
 logger = logging.getLogger(__name__)
 
@@ -28,25 +23,40 @@ logger = logging.getLogger(__name__)
 import mcp.types as types
 from mcp.server.lowlevel import Server
 
-# Import tool classes
-from Backend.Agents.tools.webscrapertool import WebScraperTool
-from Backend.Agents.tools.uvpackagemanager import UVPackageManager
-from Backend.Agents.tools.toolcreator import ToolCreatorTool
-from Backend.Agents.tools.terminalcommandtool import TerminalCommandTool
-from Backend.Agents.tools.screenshottool import ScreenshotTool
+# Import tool classes from Backend
+from Agents.tools.webscrapertool import WebScraperTool
+from Agents.tools.uvpackagemanager import UVPackageManager
+from Agents.tools.terminalcommandtool import TerminalCommandTool
+from Agents.tools.screenshottool import ScreenshotTool
+from Agents.tools.duckduckgotool import DuckduckgoTool
+from Agents.tools.e2bcodetool import E2bCodeTool
+from Agents.tools.filecontentreadertool import FileContentReaderTool
+from Agents.tools.filecreatortool import FileCreatorTool
+from Agents.tools.fileedittool import FileEditTool
+from Agents.tools.lintingtool import LintingTool
+from Agents.tools.createfolderstool import CreateFoldersTool
+from Agents.tools.diffeditortool import DiffEditorTool
+from Agents.tools.browsertool import BrowserTool
 
 # Create tool instances
 tools_instances = {
     "webscrapertool": WebScraperTool(),
     "uvpackagemanager": UVPackageManager(),
-    "toolcreator": ToolCreatorTool(),
     "terminalcommandtool": TerminalCommandTool(),
     "screenshottool": ScreenshotTool(),
+    "duckduckgotool": DuckduckgoTool(),
+    "e2bcodetool": E2bCodeTool(),
+    "filecontentreadertool": FileContentReaderTool(),
+    "filecreatortool": FileCreatorTool(),
+    "fileedittool": FileEditTool(),
+    "lintingtool": LintingTool(),
+    "createfolderstool": CreateFoldersTool(),
+    "diffeditortool": DiffEditorTool(),
+    "browsertool": BrowserTool(),
 }
 
-
 # Create a single server instance
-server = Server("employee-tools-mcp-server")
+server = Server("zirak-backend-mcp-server")
 
 
 @server.list_tools()
@@ -69,6 +79,26 @@ async def list_tools() -> List[types.Tool]:
                 "properties": input_schema.get("properties", {}),
             }
 
+        # Determine tool annotations based on tool type
+        read_only = name in [
+            "webscrapertool",
+            "screenshottool",
+            "duckduckgotool",
+            "filecontentreadertool",
+        ]
+        destructive = name in [
+            "terminalcommandtool",
+            "fileedittool",
+            "filecreatortool",
+            "createfolderstool",
+        ]
+        open_world = name in [
+            "webscrapertool",
+            "terminalcommandtool",
+            "browsertool",
+            "duckduckgotool",
+        ]
+
         tool_definition = types.Tool(
             name=tool_instance.name,
             description=(
@@ -83,10 +113,10 @@ async def list_tools() -> List[types.Tool]:
                     if hasattr(tool_instance, "name")
                     else name.capitalize()
                 ),
-                "readOnlyHint": name == "webscrapertool" or name == "screenshottool",
-                "destructiveHint": name == "terminalcommandtool",
+                "readOnlyHint": read_only,
+                "destructiveHint": destructive,
                 "idempotentHint": False,
-                "openWorldHint": name in ["webscrapertool", "terminalcommandtool"],
+                "openWorldHint": open_world,
             },
         )
         tools.append(tool_definition)
@@ -122,11 +152,11 @@ async def call_tool(
         ):
             # Return the image directly as MCP image content
             return [
-                {
-                    "type": "image",
-                    "data": result[0]["source"]["data"],
-                    "mimeType": result[0]["source"]["media_type"],
-                }
+                types.ImageContent(
+                    type="image",
+                    data=result[0]["source"]["data"],
+                    mimeType=result[0]["source"]["media_type"],
+                )
             ]
 
         # For text-based tools, convert the result to TextContent
@@ -164,18 +194,13 @@ if __name__ == "__main__":
     # Set up SSE transport
     sse = SseServerTransport("/messages/")
 
-    # sse.connect_see does two big things:
-    # 1. Handshake: Replies with HTTP headers (200 OK, Content-Type: text/event-stream, etc.) that tell the browser “okay, we’re opening an SSE channel.”
-    # 2. Mailbox set‑up: Behind the scenes it creates two in‑memory queues (think two pipes): Inbound pipe (for messages coming from the client into your MCP server) AND Outbound pipe (for messages going from your MCP server back out to the client).
     async def handle_sse(request):
         """Handle SSE connections."""
         async with sse.connect_sse(
             request.scope, request.receive, request._send
         ) as streams:
-            # streams[0] (the first pipe) is now the place where incoming JSON‑RPC requests will arrive.
-
-            # streams[1] (the second pipe) is where your MCP server writes its JSON‑RPC responses and notifications.
-            # app.run(...) starts the MCP protocol loop, reading requests from the first pipe and writing responses into the second.
+            # streams[0] is the inbound pipe for incoming JSON-RPC requests
+            # streams[1] is the outbound pipe for JSON-RPC responses and notifications
             await server.run(
                 streams[0], streams[1], server.create_initialization_options()
             )
@@ -189,16 +214,13 @@ if __name__ == "__main__":
         ],
     )
 
-    # with the import click, we can use the command line to run the script. for example: python mcp_server.py --port 3001 --host 0.0.0.0
     # Parse command line arguments
     @click.command()
-    @click.option(
-        "--port", default=3001, help="Port to listen on"
-    )  # if the port is not provided, it will use the default port 3001, and when users run the --help command, it will show the help message.
+    @click.option("--port", default=3002, help="Port to listen on")
     @click.option("--host", default="0.0.0.0", help="Host to bind to")
     def main(port, host):
         """Run the MCP server."""
-        logger.info(f"Starting MCP server on {host}:{port}")
+        logger.info(f"Starting Backend MCP server on {host}:{port}")
         logger.info("Available endpoints:")
         logger.info(f"- /sse (SSE connection endpoint)")
         logger.info(f"- /messages/ (Message handling endpoint)")

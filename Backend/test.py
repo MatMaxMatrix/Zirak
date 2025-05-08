@@ -64,7 +64,8 @@ async def test_full_workflow(user_input, timeout=1800):
 
         # Run the conversation workflow with a timeout
         success, result = await asyncio.wait_for(
-            conversation_workflow(group_chat), timeout=timeout
+            conversation_workflow(group_chat.context["user_input"], group_chat.context),
+            timeout=timeout,
         )
 
         if success:
