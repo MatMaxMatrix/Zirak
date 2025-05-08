@@ -12,7 +12,7 @@ console = Console()
 
 # Initialize all agents
 UserProxyAgent = UserProxyAgent()
-LLM_agent = LLM_Agent()
+LLM_agent = LLM_Agent(mcp_server_url="http://localhost:3002/sse")
 CentralAgent = CentralAgent()
 
 # Define the agent list for the group chat
