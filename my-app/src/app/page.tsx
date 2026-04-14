@@ -64,17 +64,19 @@ export default function Home() {
   const handleInitialPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
-    // Store the input in localStorage if needed
+
     if (input.trim()) {
       localStorage.setItem('initial_prompt', input);
     }
-    
-    // Redirect to waitlist regardless of input or user state
+
     try {
-      router.push('/waitlist?from=chat');
+      if (user) {
+        router.push('/chat');
+      } else {
+        router.push('/sign-in?returnTo=/chat');
+      }
     } catch (error) {
-      console.error('Error redirecting to waitlist:', error);
+      console.error('Error redirecting to chat:', error);
       setIsSubmitting(false);
     }
   };
@@ -276,7 +278,7 @@ export default function Home() {
           <Button 
             variant="ghost" 
             className="text-gray-300 hover:text-white hover:bg-gray-800/50"
-            onClick={() => router.push('/waitlist')}
+            onClick={() => router.push(user ? '/chat' : '/sign-in?returnTo=/chat')}
           >
             Chat Interface
           </Button>

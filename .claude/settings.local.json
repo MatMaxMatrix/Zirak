@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs wc:*)",
+      "Bash(du:*)",
+      "Bash(ls:*)",
+      "Bash(python -m py_compile Backend/server.py)",
+      "Bash(python -m py_compile Backend/Agents/config.py)",
+      "Bash(python -m py_compile Backend/Agents/agent_manager.py)",
+      "Bash(python -m py_compile Backend/Agents/conversation_workflow.py)",
+      "Bash(python -m py_compile Backend/Agents/User_Proxy_Agent.py)",
+      "Bash(python -m py_compile Backend/Agents/Central_Agent.py)",
+      "Bash(sed -i 's/from \\\\.config import Config/from ..config import Config/g' app/agents/llm_agent.py)",
+      "Bash(sed -i 's/from \\\\.prompts\\\\.revised_prompt import SystemPrompts/from .prompts.revised_prompt import SystemPrompts/g' app/agents/llm_agent.py)",
+      "Bash(cp Agents/prompts/revised_prompt.py app/agents/prompts/revised_prompt.py)",
+      "Bash(cp Agents/prompts/system_prompts.py app/agents/prompts/system_prompts.py)",
+      "Bash(cp Agents/mcp_client.py app/agents/mcp_client.py)",
+      "Bash(cp Agents/tools/base.py app/agents/tools/base.py)",
+      "Bash(cp Agents/tools/webscrapertool.py app/agents/tools/web_scraper_tool.py)",
+      "Bash(cp Agents/tools/terminalcommandtool.py app/agents/tools/terminal_command_tool.py)",
+      "Bash(cp Agents/tools/screenshottool.py app/agents/tools/screenshot_tool.py)",
+      "Bash(cp Agents/tools/uvpackagemanager.py app/agents/tools/uv_package_manager.py)",
+      "Bash(python -m py_compile app/__init__.py app/config.py app/extensions.py app/agents/__init__.py app/agents/central_agent.py app/agents/user_proxy_agent.py app/agents/agent_manager.py app/agents/workflow.py app/routes/__init__.py app/routes/http.py app/routes/socket.py main.py)",
+      "Bash(python -m py_compile tests/conftest.py tests/unit/agents/test_central_agent.py tests/unit/agents/test_workflow.py tests/unit/tools/test_tools.py tests/integration/test_http.py)",
+      "Bash(python -m py_compile mcp_server.py)",
+      "Bash(pip --version)",
+      "Bash(pip3 --version)",
+      "Read(//mnt/c/Users/mobin.azimipanah/Desktop/SideGIT/**)",
+      "Bash(cp -r Backend/app src/app)",
+      "Bash(cp -r Backend/tests/* tests/)",
+      "Bash(cp 'C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/Backend/tests/unit/agents/*.py' C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/tests/unit/agents/)",
+      "Bash(cp 'C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/Backend/tests/unit/tools/*.py' C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/tests/unit/tools/)",
+      "Bash(cp 'C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/Backend/tests/integration/*.py' C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/tests/integration/)",
+      "Bash(node:*)",
+      "Bash(wsl:*)"
+    ]
+  }
+}

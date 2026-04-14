@@ -1,120 +1,226 @@
-# Zirak AI Assistant with Real-time Communication
+# Zirak – AI Agent Workspace
 
-This project integrates a Backend Agentic Workflow system with a React Frontend using WebSockets for real-time communication. The system allows for live monitoring of the agentic workflow, handling of user input requests, and visualization of the conversation flow.
+A multi-agent AI assistant with a real-time collaborative workspace.  
+Users submit a natural-language task; a pipeline of AutoGen agents analyses,
+decomposes, and executes it using 13+ built-in tools (file ops, terminal,
+web search, code execution, …) while the frontend streams every step live via
+WebSocket.
 
-## Project Structure
+---
 
-The project consists of two main components:
+## Architecture
 
-1. **Backend**: Python-based agentic workflow system using AutoGen
-2. **Frontend**: React-based UI with WebSocket communication
+```
+┌────────────────────────────────────────────────┐
+│  Next.js 15 Frontend  (my-app/)                │
+│                                                │
+│  /chat ─── Socket.IO ──▶  Flask-SocketIO       │
+└────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────┐
+│  Flask Backend  (Backend/)                     │
+│                                                │
+│  server.py                                     │
+│   └─ conversation_workflow()                   │
+│       └─ AutoGen GroupChat                     │
+│           ├─ UserProxyAgent  (user I/O)        │
+│           ├─ CentralAgent    (analyse / plan)  │
+│           └─ LLM_Agent       (execute via MCP) │
+│                │                               │
+│                ▼ SSE                           │
+│        mcp_server.py  (:3002)                  │
+│         └─ 13 tools                            │
+└────────────────────────────────────────────────┘
+                        │
+                        ▼
+         Supabase  (auth + PostgreSQL)
+```
 
-## Setup and Installation
+### Agent roles
 
-### Backend Setup
+| Agent | Responsibility |
+|---|---|
+| `UserProxyAgent` | Collects queries; surfaces clarification questions back via WebSocket |
+| `CentralAgent` | Analyses the request, resolves ambiguities, produces a step-by-step execution plan, evaluates LLM output |
+| `LLM_Agent` | Executes each step by calling tools through the MCP server |
 
-1. Navigate to the Backend directory:
-   ```
-   cd Backend
-   ```
+### Tool catalogue
 
-2. Create a virtual environment (if not already created):
-   ```
-   python -m venv .venv
-   ```
+`BrowserTool` · `CreateFoldersTool` · `DiffEditorTool` · `DuckDuckGoTool` ·
+`E2bCodeTool` · `FileContentReaderTool` · `FileCreatorTool` · `FileEditTool` ·
+`LintingTool` · `ScreenshotTool` · `TerminalCommandTool` · `UVPackageManager` ·
+`WebScraperTool`
 
-3. Activate the virtual environment:
-   - Windows: `.venv\Scripts\activate`
-   - macOS/Linux: `source .venv/bin/activate`
+---
 
-4. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+## Prerequisites
 
-5. Make sure you have set up your `.env` file with the necessary API keys (see `.env.example`).
+| Tool | Min version |
+|---|---|
+| Python | 3.10 |
+| Node.js | 18 |
+| [uv](https://docs.astral.sh/uv/) | latest |
 
-### Frontend Setup
+---
 
-1. Navigate to the my-app directory:
-   ```
-   cd my-app
-   ```
+## Quick start
 
-2. Install dependencies:
-   ```
-   npm install
-   ```
+### 1 – Clone
 
-## Running the Application
+```bash
+git clone https://github.com/<you>/zirak.git
+cd zirak
+```
 
-### Start the Backend Server
+### 2 – Configure environment variables
 
-1. Ensure your virtual environment is activated
-2. From the Backend directory, run:
-   ```
-   python server.py
-   ```
-   This will start the Flask server with SocketIO on port 5001.
+```bash
+# Backend
+cp Backend/.env.example Backend/.env
+# → fill in OPENAI_API_KEY + SECRET_KEY at minimum
 
-### Start the Frontend Development Server
+# Frontend
+cp my-app/.env.example my-app/.env.local
+# → fill in NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
 
-1. From the my-app directory, run:
-   ```
-   npm run dev
-   ```
-   This will start the Next.js development server.
+### 3 – Install dependencies
 
-2. Open your browser and navigate to:
-   ```
-   http://localhost:3000
-   ```
+```bash
+# Backend (uv resolves from pyproject.toml)
+uv sync
 
-## Secrets Management
+# Frontend
+cd my-app && npm install && cd ..
+```
 
-We follow strict security practices to protect sensitive information:
+### 4 – Start the MCP tool server
 
-1. **Environment Variables**:
-   - Never commit `.env` files to the repository
-   - Use `.env.example` as a template with dummy values
-   - Store actual secrets in `.env.local` or other gitignored files
+```bash
+cd Backend
+python mcp_server.py          # listens on :3002
+```
 
-2. **Git Hooks**:
-   - Run `./install-hooks.sh` to install pre-commit hooks that scan for secrets
-   - These hooks prevent accidental commits of sensitive information
+### 5 – Start the Flask backend
 
-3. **Best Practices**:
-   - Never use `git add .` or `git add *` - add files individually
-   - Always check what you're committing with `git diff --staged`
-   - Rotate API keys regularly
-   - Use minimal permissions for all API keys
+```bash
+# in a new terminal
+cd Backend
+python main.py                # listens on :5001
+```
 
-For more detailed information, see `SECRETS_MANAGEMENT.md`.
+### 6 – Start the Next.js frontend
 
-## How It Works
+```bash
+# in a new terminal
+cd my-app
+npm run dev                   # listens on :3000
+```
 
-1. The frontend connects to the backend via WebSockets.
-2. When a user sends a message, it's transmitted to the backend via WebSocket.
-3. The backend initiates the agentic workflow and streams real-time updates back to the frontend.
-4. If the workflow requires user input (from UserProxyAgent), the frontend will display an input prompt.
-5. The workflow continues once the user provides the requested input.
+Open [http://localhost:3000/chat](http://localhost:3000/chat) — sign in and
+start chatting.
 
-## Key Features
+---
 
-- Real-time streaming of agent messages and workflow steps
-- Interactive user input when required by the workflow
-- Visual representation of the agent workflow
-- File and terminal output display
+## Environment variables
 
-## Troubleshooting
+### Backend (`Backend/.env`)
 
-- If you encounter connection issues, ensure both servers are running and check browser console for errors
-- For backend issues, check the terminal running the server for error logs
-- Make sure your `.env` file contains valid API keys
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `OPENAI_API_KEY` | ✅ | – | OpenAI API key |
+| `ANTHROPIC_API_KEY` | – | – | Anthropic key (if switching to Claude) |
+| `DEEPSEEK_API_KEY` | – | – | DeepSeek key (swap provider in `config.py`) |
+| `MCP_SERVER_URL` | – | `http://localhost:3002/sse` | Running MCP server |
+| `PORT` | – | `5001` | Flask listen port |
+| `DEBUG` | – | `false` | Flask debug mode |
+| `SECRET_KEY` | ✅ | random bytes | Flask session secret |
+| `ALLOWED_ORIGINS` | – | `*` | Comma-separated CORS origins |
+| `E2B_API_KEY` | – | – | [E2B](https://e2b.dev) sandbox (optional) |
+| `LOG_LEVEL` | – | `INFO` | Python log level |
 
-## Development Notes
+### Frontend (`my-app/.env.local`)
 
-- The backend uses Flask-SocketIO for WebSocket communication
-- The frontend implements WebSocket using socket.io-client
-- User input is handled using asynchronous event-based communication
-- The agentic workflow is modified to track and stream its progress in real-time
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+
+---
+
+## Project structure
+
+```
+Zirak/
+├── Backend/
+│   ├── main.py                        # Entry point: python main.py
+│   ├── mcp_server.py                  # MCP SSE tool server (:3002)
+│   ├── app/
+│   │   ├── __init__.py                # Flask app factory (create_app)
+│   │   ├── config.py                  # Centralised config (env-var backed)
+│   │   ├── extensions.py              # Flask-SocketIO singleton
+│   │   ├── agents/
+│   │   │   ├── central_agent.py       # Analyse / plan / evaluate
+│   │   │   ├── llm_agent.py           # Tool-calling execution agent
+│   │   │   ├── user_proxy_agent.py    # User-facing proxy agent
+│   │   │   ├── agent_manager.py       # GroupChat construction
+│   │   │   ├── workflow.py            # Conversation orchestration
+│   │   │   ├── tools/                 # 13 MCP tool implementations
+│   │   │   └── prompts/               # System prompt strings
+│   │   └── routes/
+│   │       ├── http.py                # REST Blueprint (/, /health, /api/query)
+│   │       └── socket.py              # SocketIO event handlers + workflow state
+│   ├── tests/
+│   │   ├── conftest.py                # Shared fixtures (Flask app, mock OpenAI)
+│   │   ├── unit/
+│   │   │   ├── agents/
+│   │   │   │   ├── test_central_agent.py  # analyse / transform / decompose / evaluate
+│   │   │   │   └── test_workflow.py       # workflow orchestration
+│   │   │   └── tools/
+│   │   │       └── test_tools.py          # MCP tool implementations
+│   │   └── integration/
+│   │       └── test_http.py               # HTTP endpoint behaviour
+│   └── .env.example
+│
+└── my-app/                            # Next.js 15 frontend
+    ├── src/
+    │   ├── app/
+    │   │   ├── chat/page.tsx           # Main AI workspace
+    │   │   ├── dashboard/              # User dashboard
+    │   │   ├── (auth-pages)/           # Sign-in / sign-up / reset
+    │   │   ├── contexts/
+    │   │   │   └── WebSocketContext.tsx # Socket.IO state + backend URL resolution
+    │   │   └── api/                    # Next.js API routes
+    │   ├── components/chat/            # Chat UI components
+    │   └── utils/supabase/             # Supabase client helpers
+    └── .env.example
+```
+
+---
+
+## Development notes
+
+**Concurrency** – The AutoGen group chat currently uses shared agent
+instances.  Only one workflow should run at a time.  For multi-tenant
+concurrency, instantiate fresh agents inside `conversation_workflow`.
+
+**Switching LLM provider** – Edit the three lines under *Active LLM
+configuration* in `Backend/Agents/config.py` to point at DeepSeek or
+Anthropic credentials.
+
+**Adding a tool** – Subclass `BaseTool` in `Backend/Agents/tools/`, then add
+an instance to the `tools_instances` dict in `mcp_server.py`.
+
+**Security** – Never commit `Backend/OAI_CONFIG_LIST` or any `.env` file.
+Both are gitignored.  Rotate API keys if they were previously committed.
+
+---
+
+## Contributing
+
+Pull requests are welcome.  For major changes please open an issue first.
+
+## License
+
+MIT

@@ -40,20 +40,31 @@ export default function ChatInterface() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const workflowEndRef = useRef<HTMLDivElement>(null);
 
-  // Send initial prompt from localStorage on component mount
+  // Send initial prompt from localStorage once the socket is connected
+  const initialPromptSentRef = useRef(false);
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const initialPrompt = localStorage.getItem('initial_prompt');
-      if (initialPrompt) {
-        webSocket.sendMessage(initialPrompt);
-        localStorage.removeItem('initial_prompt');
-      }
+    if (!webSocket.connected || initialPromptSentRef.current) return;
+    if (typeof window === 'undefined') return;
+
+    const initialPrompt = localStorage.getItem('initial_prompt');
+    if (initialPrompt) {
+      initialPromptSentRef.current = true;
+      localStorage.removeItem('initial_prompt');
+      webSocket.sendMessage(initialPrompt);
     }
-  }, []);
+  }, [webSocket.connected]);
 
   // Scroll to bottom whenever messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [webSocket.messages]);
+
+  // Clear loading state as soon as any assistant message arrives
+  useEffect(() => {
+    const msgs = webSocket.messages;
+    if (msgs.length > 0 && msgs[msgs.length - 1].role !== 'user') {
+      setIsLoading(false);
+    }
   }, [webSocket.messages]);
 
   // Scroll workflow to bottom whenever steps change
