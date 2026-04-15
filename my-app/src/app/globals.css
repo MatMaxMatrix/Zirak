@@ -4,61 +4,34 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* Light theme - subtle white background */
-    --background: 0 0% 98%; /* Slightly off-white */
-    --foreground: 0 0% 10%; 
-    --card: 0 0% 96%; /* Adjust card slightly */
-    --card-foreground: 0 0% 10%; 
-    --popover: 0 0% 96%; /* Adjust popover slightly */
-    --popover-foreground: 0 0% 10%;
-    --primary: 0 80% 45%; 
-    --primary-foreground: 0 0% 100%;
-    --secondary: 45 100% 45%; 
-    --secondary-foreground: 0 0% 10%;
-    --muted: 0 0% 90%;
-    --muted-foreground: 0 0% 25%; 
-    --accent: 0 80% 45%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 80% 45%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 85%; /* Slightly darker border */
-    --input: 0 0% 85%; /* Slightly darker input */
-    --ring: 0 80% 45%;
-    --radius: 0.5rem;
-    --chart-1: 0 80% 45%;
-    --chart-2: 45 100% 45%;
-    --chart-3: 0 0% 10%;
-    --chart-4: 0 80% 55%;
-    --chart-5: 45 100% 55%;
-  }
-
+  /* Always dark — Zirak is a dev tool and ships dark-only */
+  :root,
   .dark {
-    /* Dark theme - pure black with slightly visible grid */
-    --background: 0 0% 0%;
-    --foreground: 60 100% 100%;
-    --card: 0 0% 3%;
-    --card-foreground: 60 100% 100%;
-    --popover: 0 0% 2%;
-    --popover-foreground: 60 100% 100%;
-    --primary: 0 100% 50%;
-    --primary-foreground: 60 100% 100%;
-    --secondary: 60 100% 50%;
-    --secondary-foreground: 0 0% 0%;
-    --muted: 0 0% 10%;
-    --muted-foreground: 60 100% 90%;
-    --accent: 0 100% 50%;
-    --accent-foreground: 60 100% 100%;
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 60 100% 100%;
-    --border: 0 0% 15%;
-    --input: 0 0% 15%;
-    --ring: 0 100% 50%;
-    --chart-1: 0 100% 50%;
-    --chart-2: 60 100% 50%;
+    --background: 0 0% 5%;        /* #0C0C0C */
+    --foreground: 0 0% 95%;       /* near-white */
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 142 71% 45%;       /* emerald-ish */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 217 91% 60%;     /* blue */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 142 71% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 16%;
+    --ring: 142 71% 45%;
+    --radius: 0.5rem;
+    --chart-1: 142 71% 45%;
+    --chart-2: 217 91% 60%;
     --chart-3: 0 0% 100%;
-    --chart-4: 0 100% 60%;
-    --chart-5: 60 100% 60%;
+    --chart-4: 38 92% 50%;
+    --chart-5: 280 65% 60%;
   }
 }
 

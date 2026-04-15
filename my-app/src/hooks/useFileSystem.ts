@@ -17,22 +17,8 @@ interface Project {
 }
 
 export function useFileSystem() {
-  const [fileSystem, setFileSystem] = useState<FileSystem[]>([
-    {
-      name: 'project',
-      type: 'directory',
-      path: '/project',
-      expanded: true,
-      children: [
-        {
-          name: 'README.md',
-          type: 'file',
-          path: '/project/README.md',
-          content: '# Project\n\nThis is a sample project.'
-        }
-      ]
-    }
-  ]);
+  // Start empty — will be populated by the backend on first load
+  const [fileSystem, setFileSystem] = useState<FileSystem[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileSystem | null>(null);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
 
@@ -74,112 +60,59 @@ export function useFileSystem() {
     }
   };
 
-  // Refresh the file system with cache-busting
+  // Refresh the file system by fetching from the Flask backend workspace endpoint.
   const refreshFileSystem = async () => {
+    const backendUrl =
+      process.env.NEXT_PUBLIC_BACKEND_URL ||
+      (typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? 'http://localhost:5001'
+        : typeof window !== 'undefined'
+        ? `https://${window.location.hostname}:5001`
+        : 'http://localhost:5001');
+
     try {
-      console.log("Starting file system refresh");
-      // Add a timestamp to prevent browser/Next.js caching
-      const timestamp = new Date().getTime();
-      const result = await fetch(`/api/filesystem?_ts=${timestamp}`, {
+      const result = await fetch(`${backendUrl}/api/workspace/files?_ts=${Date.now()}`, {
         method: 'GET',
         cache: 'no-store',
-        headers: {
-          'Pragma': 'no-cache',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
+        headers: { 'Cache-Control': 'no-cache' },
       }).then(res => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! Status: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       });
-      
+
       if (result && result.fileSystem) {
-        // Ensure we're getting a valid file system structure
         const validFileSystem = result.fileSystem.map((item: FileSystem) => ({
           ...item,
           expanded: item.type === 'directory' ? true : undefined,
-          children: item.children || []
+          children: item.children || [],
         }));
-        
+
         // Preserve expanded state from current file system
         const transferExpandedState = (newItems: FileSystem[], currentItems: FileSystem[]) => {
           for (const newItem of newItems) {
-            // Find matching item in current file system
             const currentItem = currentItems.find(item => item.path === newItem.path);
-            
-            // Transfer expanded state if it exists
             if (currentItem && newItem.type === 'directory') {
               newItem.expanded = currentItem.expanded;
             }
-            
-            // Recursively process children
-            if (newItem.children && currentItem && currentItem.children) {
+            if (newItem.children && currentItem?.children) {
               transferExpandedState(newItem.children, currentItem.children);
             }
           }
         };
-        
-        // Update the expanded state based on the current file system
         transferExpandedState(validFileSystem, fileSystem);
-        
-        // Deep comparison to avoid unnecessary re-renders
+
         const stringifiedCurrent = JSON.stringify(fileSystem);
         const stringifiedNew = JSON.stringify(validFileSystem);
-        
         if (stringifiedCurrent !== stringifiedNew) {
-          console.log('File system updated from server');
+          console.log('[FileSystem] Updated from workspace');
           setFileSystem(validFileSystem);
-        } else {
-          console.log('File system unchanged');
         }
-        
         return result.fileSystem;
       }
       return null;
     } catch (error) {
-      console.error('Failed to refresh file system:', error);
-      
-      // If the first attempt fails, try again after a short delay with different fetch options
-      try {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
-        // Use XMLHttpRequest as a fallback to bypass potential caching issues
-        const data = await new Promise<any>((resolve, reject) => {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', `/api/filesystem?fallback=true&_ts=${new Date().getTime()}`);
-          xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-          xhr.setRequestHeader('Pragma', 'no-cache');
-          xhr.setRequestHeader('Expires', '0');
-          xhr.onload = () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-              try {
-                const result = JSON.parse(xhr.responseText);
-                resolve(result);
-              } catch (e) {
-                reject(new Error('Failed to parse response'));
-              }
-            } else {
-              reject(new Error(`XHR error: ${xhr.status}`));
-            }
-          };
-          xhr.onerror = () => reject(new Error('Network error'));
-          xhr.send();
-        });
-        
-        if (data && data.fileSystem) {
-          const validFileSystem = data.fileSystem.map((item: FileSystem) => ({
-            ...item,
-            expanded: item.type === 'directory' ? true : undefined,
-            children: item.children || []
-          }));
-          setFileSystem(validFileSystem);
-          return data.fileSystem;
-        }
-      } catch (fallbackError) {
-        console.error('Fallback refresh also failed:', fallbackError);
-      }
-      
+      console.error('[FileSystem] Failed to refresh from backend:', error);
       return null;
     }
   };
@@ -457,6 +390,12 @@ export function useFileSystem() {
       return false;
     }
   };
+
+  // Load workspace from backend on mount
+  useEffect(() => {
+    refreshFileSystem().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen for external refreshes
   useEffect(() => {

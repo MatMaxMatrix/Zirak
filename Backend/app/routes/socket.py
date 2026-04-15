@@ -8,12 +8,14 @@ All handlers call ``socketio`` from app.extensions to avoid circular imports.
 import logging
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from flask import request
 from flask_socketio import emit
 
 from ..extensions import socketio
 from ..agents.workflow import conversation_workflow
+from ..config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,48 @@ def on_user_input_response(data):
 # ---------------------------------------------------------------------------
 
 
+def _build_workspace_tree() -> list | None:
+    """Return a recursive FileSystem[] tree from Config.WORKSPACE_DIR, or None on error."""
+    workspace: Path = Config.WORKSPACE_DIR
+    if not workspace.exists():
+        return None
+
+    def _recurse(directory: Path, base: Path) -> list:
+        items = []
+        try:
+            entries = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+        except PermissionError:
+            return items
+        for entry in entries:
+            rel = "/" + str(entry.relative_to(base)).replace("\\", "/")
+            if entry.is_dir():
+                items.append({
+                    "name": entry.name,
+                    "type": "directory",
+                    "path": rel,
+                    "expanded": True,
+                    "children": _recurse(entry, base),
+                })
+            else:
+                try:
+                    content = entry.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    content = ""
+                items.append({
+                    "name": entry.name,
+                    "type": "file",
+                    "path": rel,
+                    "content": content,
+                })
+        return items
+
+    try:
+        return _recurse(workspace, workspace)
+    except Exception as exc:
+        logger.warning(f"Could not build workspace tree: {exc}")
+        return None
+
+
 def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
     """Background greenlet: run workflow and emit results."""
     context = {
@@ -120,6 +164,8 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
         "get_user_input": _request_user_input,
         "log_agent_message": _log_agent_message,
         "add_to_conversation_history": _append_history,
+        "emit_workflow_step": _emit_workflow_step,
+        "emit_token_usage": _emit_token_usage,
         "user_input": user_input,
     }
     try:
@@ -127,6 +173,16 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
 
         active_workflows[workflow_id]["status"] = "completed" if success else "failed"
         user_input_queue.pop(workflow_id, None)
+
+        # Push updated file-explorer tree so the UI reflects any files the agent
+        # created or edited during this workflow run.
+        fs_tree = _build_workspace_tree()
+        if fs_tree is not None:
+            socketio.emit(
+                "workflow_update",
+                {"workflow_id": workflow_id, "fileSystem": fs_tree},
+                room=sid,
+            )
 
         socketio.emit(
             "workflow_completed",
@@ -216,3 +272,53 @@ def _log_agent_message(workflow_id: str, agent_name: str, message: str) -> None:
             },
             room=sid,
         )
+
+
+def _emit_workflow_step(
+    workflow_id: str,
+    agent_name: str,
+    message: str,
+    status: str = "complete",
+) -> None:
+    """Push a step to the workflow panel only — does NOT add to chat history."""
+    sid = active_workflows.get(workflow_id, {}).get("sid")
+    if not sid:
+        return
+    socketio.emit(
+        "workflow_update",
+        {
+            "workflow_id": workflow_id,
+            "step": {
+                "id": str(uuid.uuid4()),
+                "agent": agent_name,
+                "message": message[:300] + ("…" if len(message) > 300 else ""),
+                "timestamp": datetime.now().isoformat(),
+                "status": status,
+            },
+        },
+        room=sid,
+    )
+
+
+def _emit_token_usage(
+    workflow_id: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_used: int,
+    max_tokens: int = 325_000,
+) -> None:
+    """Push a token-usage snapshot so the UI can render a counter/bar."""
+    sid = active_workflows.get(workflow_id, {}).get("sid")
+    if not sid:
+        return
+    socketio.emit(
+        "token_usage_update",
+        {
+            "workflow_id": workflow_id,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_used": total_used,
+            "max_tokens": max_tokens,
+        },
+        room=sid,
+    )

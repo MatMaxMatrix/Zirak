@@ -98,10 +98,21 @@ class CentralAgent(ConversableAgent):
     # Step 1 – analyse user input
     # ------------------------------------------------------------------
 
+    def _emit_step(self, message: str, status: str = "complete") -> None:
+        """Emit a workflow panel step via context if available."""
+        ctx = getattr(self, "context", None)
+        if not ctx:
+            return
+        emit_fn = ctx.get("emit_workflow_step")
+        wid = ctx.get("workflow_id", "")
+        if emit_fn and wid:
+            emit_fn(wid, "CentralAgent", message, status)
+
     def _process_user_input(self, message: dict):
         user_input = message.get("content", "")
         self.state["user_input"] = user_input
 
+        self._emit_step("🔍 Analysing your request…", "active")
         analysis = self._analyze_input(user_input)
         self.state["analysis"] = analysis
 
@@ -109,14 +120,17 @@ class CentralAgent(ConversableAgent):
             questions = analysis.get("clarifying_questions", [])
             numbered = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))
             self.state["clarifications"] = questions
+            self._emit_step(f"❓ Clarification needed ({len(questions)} questions)", "complete")
             return True, {
                 "role": "assistant",
                 "content": f"I need some clarifications:\n\n{numbered}",
             }
 
+        self._emit_step("📐 Transforming request into actionable spec…", "active")
         transformed = self._transform_query(user_input)
         self.state["transformed_query"] = transformed
 
+        self._emit_step("📋 Decomposing into steps…", "active")
         step_breakdown = self._decompose_steps(transformed)
         self.state["step_breakdown"] = step_breakdown
         self.state["steps"] = step_breakdown.get("steps", {})
@@ -126,7 +140,7 @@ class CentralAgent(ConversableAgent):
         first_step = next(iter(steps.values()), transformed)
         goal = step_breakdown.get("goal", "Complete the task")
         step_summary = "\n".join(
-            f"  Step {i+1}: {desc[:100]}…" if len(desc) > 100 else f"  Step {i+1}: {desc}"
+            f"Step {i+1}: {desc[:80]}{'…' if len(desc) > 80 else ''}"
             for i, desc in enumerate(steps.values())
         )
         self.console.print(
@@ -135,6 +149,9 @@ class CentralAgent(ConversableAgent):
                 title="[bold green]Implementation Plan[/bold green]",
             )
         )
+        # Emit the full plan as a single step card in the UI
+        plan_text = f"📋 Plan — {len(steps)} step{'s' if len(steps) != 1 else ''}: {goal}\n{step_summary}"
+        self._emit_step(plan_text, "complete")
         return True, {"role": "assistant", "content": first_step}
 
     # ------------------------------------------------------------------
@@ -225,21 +242,29 @@ Task: {transformed_query}"""
                 {"step": step_keys[idx], "output": implementation}
             )
 
+        self._emit_step(f"🔎 Evaluating step {idx + 1} output…", "active")
         evaluation = self._evaluate_output(implementation)
         self.state["evaluation_results"].append(
             {"step": step_keys[idx] if idx < len(step_keys) else "unknown", "evaluation": evaluation}
+        )
+
+        eval_status = evaluation.get("evaluation", {}).get("status", "PASS")
+        self._emit_step(
+            f"{'✅' if eval_status == 'PASS' else '⚠️'} Step {idx + 1} evaluation: {eval_status}",
+            "complete",
         )
 
         idx += 1
         self.state["current_step_index"] = idx
 
         if idx >= len(step_keys):
+            self._emit_step("🎉 All steps completed", "complete")
             return True, {
                 "role": "assistant",
                 "content": "All steps completed. Is there anything else you'd like me to help with?",
             }
 
-        if evaluation.get("evaluation", {}).get("status") == "FAIL":
+        if eval_status == "FAIL":
             fb = evaluation["evaluation"].get("feedback", {})
             issues = "\n".join(f"- {i}" for i in fb.get("issues", []))
             suggestions = "\n".join(f"- {s}" for s in fb.get("suggestions", []))
@@ -249,6 +274,7 @@ Task: {transformed_query}"""
             }
 
         next_step = self.state["steps"].get(step_keys[idx], "")
+        self._emit_step(f"⚙️ Executing step {idx + 1}/{len(step_keys)}: {next_step[:80]}{'…' if len(next_step) > 80 else ''}", "active")
         return True, {"role": "assistant", "content": next_step}
 
     def _evaluate_output(self, implementation: str) -> Dict[str, Any]:

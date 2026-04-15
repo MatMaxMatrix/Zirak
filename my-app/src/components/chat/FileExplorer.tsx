@@ -94,8 +94,10 @@ export function FileExplorer({ fileSystem, selectedFile, toggleDirectory, select
     return (
       <div key={item.path}>
         <div
-          className={`flex items-center py-1 px-2 hover:bg-[#1D1D1D] cursor-pointer ${
-            isSelected ? 'bg-[#1D1D1D]' : ''
+          className={`flex items-center py-1 px-2 cursor-pointer rounded-sm transition-colors ${
+            isSelected
+              ? 'bg-[#2A2A2A] text-white'
+              : 'hover:bg-[#222] text-gray-200'
           }`}
           style={{ paddingLeft }}
           onClick={() => {
@@ -109,20 +111,20 @@ export function FileExplorer({ fileSystem, selectedFile, toggleDirectory, select
           {isDirectory ? (
             <>
               {isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-gray-400 mr-1" />
+                <ChevronDown className="h-3.5 w-3.5 text-gray-400 mr-1 shrink-0" />
               ) : (
-                <ChevronRight className="h-4 w-4 text-gray-400 mr-1" />
+                <ChevronRight className="h-3.5 w-3.5 text-gray-400 mr-1 shrink-0" />
               )}
               {isExpanded ? (
-                <FolderOpen className="h-4 w-4 text-blue-500 mr-2" />
+                <FolderOpen className="h-3.5 w-3.5 text-blue-400 mr-1.5 shrink-0" />
               ) : (
-                <FolderClosed className="h-4 w-4 text-blue-500 mr-2" />
+                <FolderClosed className="h-3.5 w-3.5 text-blue-400 mr-1.5 shrink-0" />
               )}
             </>
           ) : (
-            <File className="h-4 w-4 text-gray-400 mr-2" />
+            <File className="h-3.5 w-3.5 text-gray-400 mr-1.5 ml-4 shrink-0" />
           )}
-          <span className="text-sm text-gray-300">{item.name}</span>
+          <span className="text-sm truncate">{item.name}</span>
         </div>
         {isDirectory && isExpanded && item.children && (
           <div>
@@ -138,41 +140,46 @@ export function FileExplorer({ fileSystem, selectedFile, toggleDirectory, select
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-2 border-b border-[#1D1D1D]">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-4 w-4 text-blue-500" />
-          <span className="text-sm font-medium text-gray-300">{projectName}</span>
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-[#2A2A2A]">
+        <div className="flex items-center gap-1.5">
+          <FolderOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+          <span className="text-xs font-semibold text-white truncate">{projectName}</span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             onClick={() => handleCreate('file')}
-            className="h-6 w-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-200 hover:bg-[#1D1D1D]"
+            className="h-6 w-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
             title="New File"
           >
-            <FilePlus className="h-4 w-4" />
+            <FilePlus className="h-3.5 w-3.5" />
           </button>
           <button
             onClick={() => handleCreate('directory')}
-            className="h-6 w-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-200 hover:bg-[#1D1D1D]"
+            className="h-6 w-6 rounded flex items-center justify-center text-gray-400 hover:text-white hover:bg-[#2A2A2A] transition-colors"
             title="New Folder"
           >
-            <FolderPlus className="h-4 w-4" />
+            <FolderPlus className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto py-1">
         {isCreating && (
-          <form onSubmit={handleSubmit} className="p-2">
+          <form onSubmit={handleSubmit} className="px-2 py-1">
             <input
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={`New ${isCreating}...`}
-              className="w-full bg-[#1D1D1D] text-gray-300 text-sm px-2 py-1 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder={`New ${isCreating}…`}
+              className="w-full bg-[#2A2B32] border border-[#555] text-white text-xs px-2 py-1 rounded focus:outline-none focus:border-blue-500 placeholder:text-gray-500"
               autoFocus
             />
           </form>
+        )}
+        {fileSystem.length === 0 && !isCreating && (
+          <div className="px-3 py-4 text-xs text-gray-500 text-center select-none">
+            Workspace is empty.<br />Files created by the agent will appear here.
+          </div>
         )}
         {fileSystem.map((item) => renderItem(item))}
       </div>

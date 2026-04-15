@@ -223,15 +223,15 @@ export function ChatArea({
           {hasMessages && (
             <div className="pt-3 md:pt-6 w-full pb-16">
               {messages.map((message, index) => (
-                <div key={index} className={`px-3 md:px-6 lg:px-10 py-2 ${message.role === 'assistant' ? 'bg-[#1E1E1E]' : ''}`}>
+                <div key={index} className={`px-3 md:px-6 lg:px-10 py-3 ${message.role === 'assistant' ? 'bg-[#1C1C1E]' : message.role === 'system' ? 'bg-yellow-950/20' : ''}`}>
                   <div className="max-w-3xl mx-auto flex gap-3 md:gap-4">
-                    <div className="flex-shrink-0 pt-1">
+                    <div className="flex-shrink-0 pt-0.5">
                       {message.role === 'user' ? (
-                        <div className="w-6 h-6 rounded-full bg-gray-600 flex items-center justify-center text-white">
+                        <div className="w-6 h-6 rounded-full bg-blue-700 flex items-center justify-center text-white">
                           <User size={14} />
                         </div>
                       ) : message.role === 'assistant' ? (
-                        <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white">
+                        <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center text-white">
                           <Bot size={14} />
                         </div>
                       ) : (
@@ -240,12 +240,33 @@ export function ChatArea({
                         </div>
                       )}
                     </div>
-                    <div className="flex-1 prose prose-invert prose-sm max-w-none text-gray-200 text-sm">
+                    <div className={`flex-1 prose prose-invert prose-sm max-w-none text-sm leading-relaxed ${
+                      message.role === 'user' ? 'text-white' : 'text-gray-100'
+                    }`}>
                       {message.content}
                     </div>
                   </div>
                 </div>
               ))}
+
+              {/* Typing indicator — shown while waiting for a response */}
+              {isLoading && (
+                <div className="px-3 md:px-6 lg:px-10 py-2 bg-[#1E1E1E]">
+                  <div className="max-w-3xl mx-auto flex gap-3 md:gap-4">
+                    <div className="flex-shrink-0 pt-1">
+                      <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white">
+                        <Bot size={14} />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 h-6">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div ref={messagesEndRef} className="h-16" />
             </div>
           )}
@@ -260,7 +281,7 @@ export function ChatArea({
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder={backendMissing ? "Start the backend server first..." : connected ? (inputPrompt || "Ask anything...") : "Reconnect to send messages..."}
-                className="w-full bg-[#202123] border border-[#424242] text-white text-sm rounded-lg pl-3 pr-10 py-2 focus:outline-none"
+                className="w-full bg-[#2A2B32] border border-[#555] text-white text-sm rounded-lg pl-3 pr-10 py-2 focus:outline-none focus:border-gray-400 placeholder:text-gray-400 disabled:opacity-60"
                 disabled={isLoading || (inputRequired && !input) || !connected || backendMissing}
               />
               <button

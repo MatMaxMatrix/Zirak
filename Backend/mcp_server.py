@@ -7,15 +7,32 @@ from typing import Dict, List, Union, Any, Optional
 from pathlib import Path
 import sys
 import uvicorn
+
+# ── Workspace isolation ──────────────────────────────────────────────────────
+# All relative file paths from tools (FileCreatorTool, FileEditTool, etc.)
+# resolve against the process CWD.  Pin it to the workspace directory so
+# agent-created files land in a predictable, isolated location rather than
+# the Backend root.
+from app.config import Config as _Cfg
+
+# Resolve the Backend directory BEFORE chdir so the log file lands there, not in workspace
+_backend_dir = Path(__file__).parent
+_workspace = Path(str(_Cfg.WORKSPACE_DIR))
+_workspace.mkdir(parents=True, exist_ok=True)
+os.chdir(_workspace)
+# ─────────────────────────────────────────────────────────────────────────────
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
 from mcp.server.sse import SseServerTransport
 
-# Configure logging
+# Configure logging — log file goes to Backend dir, not workspace
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("backend_mcp_server.log")],
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(str(_backend_dir / "backend_mcp_server.log")),
+    ],
 )
 logger = logging.getLogger(__name__)
 

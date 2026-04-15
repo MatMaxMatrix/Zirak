@@ -3,10 +3,14 @@ SocketIO event handlers.
 
 Session model
 ─────────────
-Each browser connection (sid) owns a `session_histories[sid]` list that
-accumulates conversation turns across many messages.  The list is passed
-into workflow.py on every turn so the LLM has context, and updated with
-the agent's reply on completion.
+Each browser tab supplies a stable `session_key` (UUID stored in
+localStorage).  Conversation history is keyed by session_key, NOT by the
+socket sid, so reconnects and page refreshes resume the same conversation.
+
+  session_key → list of {"role", "content", "agent", "timestamp"}
+
+The mapping sid → session_key is held in `sid_to_session_key` and is
+rebuilt whenever a client calls `join_session`.
 """
 
 import logging
@@ -25,8 +29,11 @@ logger = logging.getLogger(__name__)
 # Per-session state
 # ---------------------------------------------------------------------------
 
-# sid → list of {"role": ..., "content": ..., "agent": ..., "timestamp": ...}
+# session_key → conversation history list
 session_histories: dict[str, list] = {}
+
+# sid → session_key  (reset on reconnect)
+sid_to_session_key: dict[str, str] = {}
 
 # Per-workflow metadata (for tracking active background tasks)
 active_workflows: dict[str, dict] = {}
@@ -45,8 +52,13 @@ def _evict_old_sessions() -> None:
         return
     # Remove the oldest half
     old = list(session_histories.keys())[: len(session_histories) // 2]
-    for sid in old:
-        session_histories.pop(sid, None)
+    for key in old:
+        session_histories.pop(key, None)
+
+
+def _session_key_for_sid(sid: str) -> str:
+    """Return the session_key for this socket, falling back to the sid itself."""
+    return sid_to_session_key.get(sid, sid)
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +71,39 @@ def on_connect():
     sid = request.sid
     logger.info(f"Client connected: {sid}")
     _evict_old_sessions()
-    session_histories[sid] = []           # fresh conversation per connection
+    # History is NOT pre-created here — it's created when the client calls
+    # join_session with its stable session_key.
     emit("connected", {"status": "connected"})
+
+
+@socketio.on("join_session")
+def on_join_session(data):
+    """
+    Called by the frontend immediately after connect.
+
+    data = {"session_key": "<uuid from localStorage>"}
+
+    Maps this sid to the supplied session_key so history survives reconnects.
+    Responds with the existing conversation history (if any) so the frontend
+    can restore the chat after a page refresh.
+    """
+    sid = request.sid
+    session_key = (data or {}).get("session_key") or sid
+    sid_to_session_key[sid] = session_key
+
+    if session_key not in session_histories:
+        session_histories[session_key] = []
+        logger.info(f"New session: {session_key} (sid={sid})")
+    else:
+        logger.info(f"Resumed session: {session_key} (sid={sid}), "
+                    f"{len(session_histories[session_key])} turns")
+
+    # Return existing history so the frontend can repopulate the chat
+    history = session_histories[session_key]
+    emit("session_history", {
+        "session_key": session_key,
+        "history": _format_history_for_client(history),
+    })
 
 
 @socketio.on("disconnect")
@@ -73,8 +116,8 @@ def on_disconnect():
         if meta.get("sid") == sid and meta.get("status") == "running":
             meta["status"] = "abandoned"
 
-    # Keep history so a quick reconnect can resume, but cap total sessions
-    # (history is cleared on next connect anyway)
+    # Remove sid mapping; history (keyed by session_key) is kept intact
+    sid_to_session_key.pop(sid, None)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +148,9 @@ def on_message(data):
 
     emit("workflow_started", {"workflow_id": workflow_id, "message": "Processing…"})
 
+    # Emit a "working" indicator from the eventlet greenlet (NOT from the
+    # asyncio thread) — cross-thread socketio.emit() under eventlet adds ~1.7s
+    # per call due to lock contention with the eventlet hub.
     socketio.start_background_task(
         _run_workflow, user_input, workflow_id, sid
     )
@@ -128,7 +174,8 @@ def on_user_input_response(data):
 
 def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
     """Runs in an eventlet greenlet.  Calls conversation_workflow synchronously."""
-    session_history = list(session_histories.get(sid, []))
+    session_key = _session_key_for_sid(sid)
+    session_history = list(session_histories.get(session_key, []))
 
     context = {
         "socketio": socketio,
@@ -142,36 +189,59 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
     }
 
     try:
+        # Emit a "working" step from THIS eventlet greenlet (NOT from the asyncio
+        # thread) — cross-thread socketio.emit() under eventlet is slow (~1.7 s/call).
+        from ..agents.workflow import _is_conversational
+        if not _is_conversational(user_input):
+            socketio.emit(
+                "workflow_update",
+                {
+                    "workflow_id": workflow_id,
+                    "step": {
+                        "id": f"{workflow_id}-processing",
+                        "agent": "Zirak",
+                        "message": "⚙️ Processing your request…",
+                        "timestamp": datetime.now().isoformat(),
+                        "status": "active",
+                    },
+                },
+                room=sid,
+            )
+
         success, result = conversation_workflow(user_input, context)
+        logger.info(f"[{workflow_id}] conversation_workflow returned success={success}, result_len={len(result) if result else 0}, result_preview={repr(result[:120]) if result else None}")
 
         # Sync agent's internal history (tool calls etc.) back to the session
         updated = context.get("updated_session_history")
         if updated:
-            session_histories[sid] = _trim_history(updated)
+            session_histories[session_key] = _trim_history(updated)
 
         # Emit the final assistant reply as a conversation_update.
         # This is the single authoritative path for the final response —
         # workflow_completed carries no messages so there are no duplicates.
-        if success and result:
+        if result:
             ts = datetime.now().isoformat()
+            role = "assistant" if success else "system"
             reply_msg = {
                 "id": str(uuid.uuid4()),
-                "role": "assistant",
+                "role": role,
                 "content": result,
                 "timestamp": ts,
                 "agent": "Zirak",
             }
             _add_to_session(sid, {
-                "role": "assistant",
+                "role": role,
                 "content": result,
                 "agent": "Zirak",
                 "timestamp": ts,
             })
+            logger.info(f"[{workflow_id}] Emitting conversation_update to sid={sid}")
             socketio.emit(
                 "conversation_update",
                 {"workflow_id": workflow_id, "message": reply_msg},
                 room=sid,
             )
+            logger.info(f"[{workflow_id}] conversation_update emitted OK")
 
         active_workflows[workflow_id]["status"] = "completed" if success else "failed"
 
@@ -199,10 +269,11 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
 
 
 def _add_to_session(sid: str, turn: dict) -> None:
-    if sid not in session_histories:
-        session_histories[sid] = []
-    session_histories[sid].append(turn)
-    session_histories[sid] = _trim_history(session_histories[sid])
+    key = _session_key_for_sid(sid)
+    if key not in session_histories:
+        session_histories[key] = []
+    session_histories[key].append(turn)
+    session_histories[key] = _trim_history(session_histories[key])
 
 
 def _format_history_for_client(history: list) -> list:

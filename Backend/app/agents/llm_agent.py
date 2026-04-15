@@ -459,14 +459,11 @@ class LLM_Agent(ConversableAgent):
             self.console.print(
                 f"[cyan]Executing tool '{tool_name}' via direct MCP session...[/cyan]"
             )
-            with Live(
-                Spinner("dots", text="[cyan]Tool execution in progress...[/cyan]"),
-                refresh_per_second=10,
-            ) as live:
-                raw_mcp_result = await self.mcp_session.call_tool(
-                    name=tool_name, arguments=tool_input
-                )
-                live.update("[green]MCP Tool execution completed[/green]")
+            # No Live spinner here — its refresh thread stalls under eventlet monkey-patching
+            raw_mcp_result = await self.mcp_session.call_tool(
+                name=tool_name, arguments=tool_input
+            )
+            self.console.print("[green]MCP Tool execution completed[/green]")
 
             # Process and format the result
             content_blocks = self._extract_mcp_data(raw_mcp_result, "content")
@@ -1004,21 +1001,20 @@ class LLM_Agent(ConversableAgent):
             # Prepare conversation history
             messages = self.conversation_history.copy()
 
-            # Create the completion
-            with Live(
-                Spinner("dots", text="[cyan]Thinking...[/cyan]"), refresh_per_second=10
-            ) as live:
-                response = self.client.chat.completions.create(
-                    model=Config.Model,
-                    messages=messages,
-                    max_tokens=min(
-                        Config.MAX_TOKENS,
-                        Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used,
-                    ),
-                    temperature=self.temperature,
-                    tools=formatted_tools,
-                )
-                live.update("[green]Thinking completed[/green]")
+            # Create the completion (no Live spinner — its thread.join() stalls
+            # under eventlet monkey-patching)
+            self.console.print("[cyan]Sending LLM request…[/cyan]")
+            response = self.client.chat.completions.create(
+                model=Config.Model,
+                messages=messages,
+                max_tokens=min(
+                    Config.MAX_TOKENS,
+                    Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used,
+                ),
+                temperature=self.temperature,
+                tools=formatted_tools,
+            )
+            self.console.print("[green]LLM response received.[/green]")
 
             # If assistant returns a text response (no tool calls), add it to history
             if response.choices[0].message.content:
@@ -1029,13 +1025,25 @@ class LLM_Agent(ConversableAgent):
                     }
                 )
 
-            # Update token usage stats
+            # Update token usage stats and push to UI
             if hasattr(response, "usage") and response.usage:
-                message_tokens = (
-                    response.usage.prompt_tokens + response.usage.completion_tokens
-                )
+                usage = response.usage
+                message_tokens = usage.prompt_tokens + usage.completion_tokens
                 self.total_tokens_used += message_tokens
-                self._display_token_usage(response.usage)
+                self._display_token_usage(usage)
+                # Emit to workflow panel if context is available
+                ctx = getattr(self, "context", None)
+                if ctx:
+                    emit_tok = ctx.get("emit_token_usage")
+                    wid = ctx.get("workflow_id", "")
+                    if emit_tok and wid:
+                        emit_tok(
+                            wid,
+                            usage.prompt_tokens,
+                            usage.completion_tokens,
+                            self.total_tokens_used,
+                            Config.MAX_CONVERSATION_TOKENS,
+                        )
 
             if self.total_tokens_used >= Config.MAX_CONVERSATION_TOKENS:
                 self.console.print(
@@ -1181,14 +1189,28 @@ class LLM_Agent(ConversableAgent):
         # Add plan to conversation history
         self.conversation_history.append({"role": "assistant", "content": plan_summary})
 
+        # Helper: emit a step to the workflow panel
+        def _ws_step(msg: str, status: str = "complete") -> None:
+            ctx = getattr(self, "context", None)
+            if not ctx:
+                return
+            emit_fn = ctx.get("emit_workflow_step")
+            wid = ctx.get("workflow_id", "")
+            if emit_fn and wid:
+                emit_fn(wid, "LLM_Agent", msg, status)
+
         # Execute each tool call sequentially
         for i, tool_call in enumerate(tool_calls):
             tool_name = tool_call.function.name
             tool_input = json.loads(tool_call.function.arguments)
             step_num = i + 1
+            action_desc = self._get_action_description(tool_name, tool_input)
+
+            # Emit "active" step before execution
+            _ws_step(f"🔧 [{step_num}/{len(tool_calls)}] {action_desc}", "active")
 
             # Pretty header for this step
-            step_header = f"[bold white on blue] STEP {step_num}/{len(tool_calls)} [/bold white on blue] [bold cyan]{self._get_action_description(tool_name, tool_input)}[/bold cyan]"
+            step_header = f"[bold white on blue] STEP {step_num}/{len(tool_calls)} [/bold white on blue] [bold cyan]{action_desc}[/bold cyan]"
             self.console.print(f"\n{step_header}")
 
             # Update context based on the tool
@@ -1208,6 +1230,9 @@ class LLM_Agent(ConversableAgent):
 
             tool_use = ToolUseMock(tool_name, tool_input)
             result = await self._execute_tool(tool_use)
+
+            # Emit "complete" step after execution
+            _ws_step(f"✅ [{step_num}/{len(tool_calls)}] {action_desc}", "complete")
 
             # Add the tool call to conversation history in OpenAI's expected format
             self.conversation_history.append(

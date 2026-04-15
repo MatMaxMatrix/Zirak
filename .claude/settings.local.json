@@ -32,7 +32,10 @@
       "Bash(cp 'C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/Backend/tests/unit/tools/*.py' C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/tests/unit/tools/)",
       "Bash(cp 'C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/Backend/tests/integration/*.py' C:/Users/mobin.azimipanah/Desktop/SideGIT/Zirak/tests/integration/)",
       "Bash(node:*)",
-      "Bash(wsl:*)"
+      "Bash(wsl:*)",
+      "Bash(python3 -c \" import sys, json lines = sys.stdin.read\\(\\).strip\\(\\).split\\('\\\\n'\\) for line in lines[-20:]: try: obj = json.loads\\(line\\) role = obj.get\\('role', ''\\) if role in \\('user', 'assistant'\\): content = obj.get\\('content', ''\\) if isinstance\\(content, list\\): for c in content: if isinstance\\(c, dict\\) and c.get\\('type'\\) == 'text': print\\(f'[{role}]: {c[\\\\\"text\\\\\"][:500]}'\\) elif isinstance\\(content, str\\): print\\(f'[{role}]: {content[:500]}'\\) except: pass \")",
+      "Bash(powershell -Command \"Get-Content 'C:\\\\Users\\\\mobin.azimipanah\\\\.claude\\\\projects\\\\C--Users-mobin-azimipanah-Desktop-SideGIT-Zirak\\\\26330310-6289-4cee-8113-63d31c13b6df.jsonl' -Tail 50 | Out-String\")",
+      "Bash(powershell:*)"
     ]
   }
 }

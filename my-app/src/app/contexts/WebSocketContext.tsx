@@ -47,12 +47,20 @@ export interface TerminalCommand {
   exitCode?: number;
 }
 
+export interface TokenUsage {
+  promptTokens: number;
+  completionTokens: number;
+  totalUsed: number;
+  maxTokens: number;
+}
+
 export interface WebSocketContextType {
   socket: Socket | null;
   connected: boolean;
   messages: Message[];
   activeWorkflowId: string | null;
   workflowSteps: WorkflowStep[];
+  tokenUsage: TokenUsage | null;
   fileSystem: FileSystem[];
   terminal: TerminalCommand[];
   inputRequired: boolean;
@@ -79,6 +87,7 @@ const WebSocketContext = createContext<WebSocketContextType>({
   messages: [],
   activeWorkflowId: null,
   workflowSteps: [],
+  tokenUsage: null,
   fileSystem: [],
   terminal: [],
   inputRequired: false,
@@ -109,6 +118,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([]);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsage | null>(null);
   const [fileSystem, setFileSystem] = useState<FileSystem[]>([]);
   const [terminal, setTerminal] = useState<TerminalCommand[]>([]);
   const [inputRequired, setInputRequired] = useState(false);
@@ -123,12 +133,27 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
   // and the useEffect dependencies stay stable.
   const initializedRef = useRef(false);
 
+  // Stable session key — lives in localStorage so it survives page refreshes.
+  // The backend keys conversation history by this value, not the socket sid.
+  const sessionKeyRef = useRef<string>('');
+
+  const _getOrCreateSessionKey = (): string => {
+    if (typeof window === 'undefined') return '';
+    let key = localStorage.getItem('zirak_session_key');
+    if (!key) {
+      key = crypto.randomUUID();
+      localStorage.setItem('zirak_session_key', key);
+    }
+    return key;
+  };
+
   // ── Socket initialisation (called once) ───────────────────────────────────
 
   const initializeSocket = useCallback(() => {
     if (initializedRef.current || typeof window === 'undefined') return;
     initializedRef.current = true;
     setConnectionAttempted(true);
+    sessionKeyRef.current = _getOrCreateSessionKey();
 
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -142,9 +167,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       transports: ['polling', 'websocket'],
       withCredentials: false,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 1500,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
+      timeout: 45000,       // increased — backend can be slow to start
       forceNew: true,
       path: '/socket.io/',
     });
@@ -155,6 +180,8 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('[Socket] Connected, transport:', socketInstance.io.engine.transport.name);
       setConnected(true);
       setBackendMissing(false);
+      // Register stable session key so the backend can resume history on reconnect
+      socketInstance.emit('join_session', { session_key: sessionKeyRef.current });
     });
 
     socketInstance.on('disconnect', (reason) => {
@@ -167,7 +194,9 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     socketInstance.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
+      // Transient timeouts/network blips are normal during reconnection — log as
+      // info so they don't pollute the console as unhandled errors.
+      console.info('[Socket] Connection attempt failed:', error.message, '— retrying…');
       setConnected(false);
     });
 
@@ -194,11 +223,40 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.log('[Socket] Server ack:', data);
     });
 
+    // ── Session history restore (on reconnect / page refresh) ────────────────
+    socketInstance.on('session_history', (data: {
+      session_key: string;
+      history: Array<{ id: string; role: 'user' | 'assistant' | 'system'; content: string; timestamp: string; agent: string }>;
+    }) => {
+      if (data.history && data.history.length > 0) {
+        console.log(`[Socket] Restoring ${data.history.length} messages from session history`);
+        setMessages(data.history);
+      }
+    });
+
     // ── Workflow events ──────────────────────────────────────────────────────
 
     socketInstance.on('workflow_started', (data: { workflow_id: string; message: string }) => {
       console.log('Workflow started:', data);
       setActiveWorkflowId(data.workflow_id);
+      // Clear previous steps and token usage so each new turn starts fresh
+      setWorkflowSteps([]);
+      setTokenUsage(null);
+    });
+
+    socketInstance.on('token_usage_update', (data: {
+      workflow_id: string;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_used: number;
+      max_tokens: number;
+    }) => {
+      setTokenUsage({
+        promptTokens: data.prompt_tokens,
+        completionTokens: data.completion_tokens,
+        totalUsed: data.total_used,
+        maxTokens: data.max_tokens,
+      });
     });
 
     // agent_message: only update the workflow step panel.
@@ -254,23 +312,16 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
     }) => {
       const msg = data.message;
-      // Suppress internal noise
+      // Suppress internal noise phrases
       const suppressedPhrases = ['Workflow started.', 'Processing…'];
       if (msg.role === 'system' && suppressedPhrases.some(p => msg.content === p)) return;
 
+      // conversation_update feeds the CHAT only.
+      // Workflow panel is driven by workflow_update / agent_message events.
       setMessages(prev => {
         if (prev.some(m => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
-      if (msg.role !== 'user') {
-        setWorkflowSteps(prev => [...prev, {
-          id: msg.id,
-          agent: msg.agent,
-          message: msg.content,
-          timestamp: msg.timestamp,
-          status: 'complete',
-        }]);
-      }
     });
 
     socketInstance.on('user_input_required', (data: { workflow_id: string; prompt: string }) => {
@@ -285,16 +336,15 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       setWaitingForUserInput(false);
     });
 
-    // workflow_completed is a state-reset signal only.
-    // The final assistant reply was already delivered via conversation_update,
-    // so we do NOT add any messages here (that caused duplicates).
     socketInstance.on('workflow_completed', (data: {
       workflow_id: string;
       result: string;
     }) => {
-      console.log('Workflow completed:', data.workflow_id);
+      console.log('[Socket] Workflow completed:', data.workflow_id);
       setWaitingForUserInput(false);
       setInputRequired(false);
+      // Clear workflow steps — the panel goes back to idle state after completion
+      setWorkflowSteps([]);
     });
 
     socketInstance.on('workflow_error', (data: { workflow_id: string; error: string }) => {
@@ -445,6 +495,7 @@ export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children 
       messages,
       activeWorkflowId,
       workflowSteps,
+      tokenUsage,
       fileSystem,
       terminal,
       inputRequired,

@@ -137,60 +137,28 @@ def _get_llm_agent():
 
 
 async def _run_agent(user_input: str, context: dict, session_history: list) -> str:
-    """Async: classify, optionally plan, then execute with LLM_Agent."""
-    LLM_agent = _get_llm_agent()
+    """Async: call LLM_Agent and return the response.
 
-    log = context.get("log_agent_message")
+    All socketio.emit() calls happen in the *eventlet greenlet* (_run_workflow),
+    never from here.  Calling socketio.emit() from this asyncio daemon thread
+    under eventlet monkey-patching causes ~1.7 s per emit — that was the source
+    of the 10-second stall observed between the planning step and the LLM call.
+    """
+    LLM_agent = _get_llm_agent()
     wid = context.get("workflow_id", "")
 
     # Ensure MCP connection
     await LLM_agent.connect_to_mcp_server()
 
-    # Inject session history so the agent has conversation context
+    # Inject session history so the agent has full conversation context
     LLM_agent.conversation_history = [
         {"role": m["role"], "content": m["content"]}
         for m in session_history
     ]
 
-    if _is_complex(user_input):
-        # ── Thinking / planning phase ──────────────────────────────────────
-        if log:
-            log(wid, "Zirak", "🤔 Thinking through this…")
-
-        try:
-            plan_resp = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: _client.chat.completions.create(
-                    model=Config.Model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": (
-                                "You are a concise planning assistant. "
-                                "Given the user's request, outline your approach "
-                                "in 3-5 numbered steps. Be specific and actionable. "
-                                "Start with: **Here's my plan:**"
-                            ),
-                        },
-                        {"role": "user", "content": user_input},
-                    ],
-                    max_tokens=300,
-                    temperature=0.2,
-                ),
-            )
-            plan_text = plan_resp.choices[0].message.content.strip()
-        except Exception as exc:
-            logger.warning(f"Planning step error: {exc}")
-            plan_text = None
-
-        if log and plan_text:
-            log(wid, "Zirak", plan_text)
-
-    # ── Execution phase ────────────────────────────────────────────────────
-    if log:
-        log(wid, "Zirak", "⚙️ Working on it…")
-
+    logger.info(f"[{wid}] Calling LLM_agent.chat()")
     response = await LLM_agent.chat(user_input)
+    logger.info(f"[{wid}] LLM_agent.chat() returned: type={type(response).__name__}, preview={repr(str(response)[:120]) if response else None}")
 
     # Persist updated history so the next turn has context
     context["updated_session_history"] = list(LLM_agent.conversation_history)

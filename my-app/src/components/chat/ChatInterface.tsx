@@ -67,6 +67,14 @@ export default function ChatInterface() {
     }
   }, [webSocket.messages]);
 
+  // Refresh the file explorer whenever the WebSocket context receives a
+  // file-system push from the backend (workflow_update with fileSystem payload).
+  useEffect(() => {
+    if (webSocket.fileSystem && webSocket.fileSystem.length > 0) {
+      fileSystem.setFileSystem(webSocket.fileSystem);
+    }
+  }, [webSocket.fileSystem]);
+
   // Scroll workflow to bottom whenever steps change
   useEffect(() => {
     if (showWorkflow && webSocket.workflowSteps.length > 0) {

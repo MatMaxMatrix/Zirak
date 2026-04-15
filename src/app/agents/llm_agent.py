@@ -958,21 +958,22 @@ class LLM_Agent(ConversableAgent):
             # Prepare conversation history
             messages = self.conversation_history.copy()
 
-            # Create the completion
-            with Live(
-                Spinner("dots", text="[cyan]Thinking...[/cyan]"), refresh_per_second=10
-            ) as live:
-                response = self.client.chat.completions.create(
-                    model=Config.Model,
-                    messages=messages,
-                    max_tokens=min(
-                        Config.MAX_TOKENS,
-                        Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used,
-                    ),
-                    temperature=self.temperature,
-                    tools=formatted_tools,
-                )
-                live.update("[green]Thinking completed[/green]")
+            # Create the completion.
+            # NOTE: Rich Live/Spinner was removed — it starts a refresh thread
+            # whose teardown (Live.__exit__ → thread.join()) stalls for several
+            # seconds in the asyncio daemon thread under eventlet monkey-patching.
+            self.console.print("[cyan]Sending LLM request…[/cyan]")
+            response = self.client.chat.completions.create(
+                model=Config.Model,
+                messages=messages,
+                max_tokens=min(
+                    Config.MAX_TOKENS,
+                    Config.MAX_CONVERSATION_TOKENS - self.total_tokens_used,
+                ),
+                temperature=self.temperature,
+                tools=formatted_tools,
+            )
+            self.console.print("[green]LLM response received.[/green]")
 
             # If assistant returns a text response (no tool calls), add it to history
             if response.choices[0].message.content:
@@ -1550,9 +1551,10 @@ Type 'quit' to exit
             # Get the completion
             response = await self._get_completion()
 
-            # After getting a response, verify context and directories
-            await self._ensure_directories_explored()
-            await self._check_mentioned_files()
+            # NOTE: _ensure_directories_explored() and _check_mentioned_files()
+            # were removed here.  Both made MCP / filesystem calls after every
+            # LLM response, adding 5-10 s of latency in the web-chat path where
+            # they provide no value (they were designed for a local REPL workflow).
 
             return response
 

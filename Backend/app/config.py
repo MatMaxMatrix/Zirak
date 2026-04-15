@@ -38,6 +38,9 @@ class Config:
     BASE_DIR: Path = Path(__file__).parent
     TOOLS_DIR: Path = BASE_DIR / "agents" / "tools"
     PROMPTS_DIR: Path = BASE_DIR / "agents" / "prompts"
+    # Workspace: where the agent creates/edits project files.
+    # Override with WORKSPACE_DIR env var for production deployments.
+    WORKSPACE_DIR: Path = Path(os.getenv("WORKSPACE_DIR", str(Path(__file__).parent.parent / "workspace")))
 
     # ── Model behaviour ───────────────────────────────────────────────────────
     MAX_TOKENS = 4000
