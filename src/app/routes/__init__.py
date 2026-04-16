@@ -1,1 +1,1 @@
-"""Routes package – HTTP blueprint + SocketIO event handlers."""
+"""Routes package - HTTP blueprint + SocketIO event handlers."""

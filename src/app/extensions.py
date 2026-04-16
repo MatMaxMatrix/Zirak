@@ -7,5 +7,5 @@ import them without creating circular dependencies.
 
 from flask_socketio import SocketIO
 
-# Unbound instance – call socketio.init_app(app) inside create_app()
+# Unbound instance - call socketio.init_app(app) inside create_app()
 socketio = SocketIO()

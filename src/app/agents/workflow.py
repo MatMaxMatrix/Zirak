@@ -1,16 +1,16 @@
 """
-workflow.py — Zirak conversation engine.
+workflow.py - Zirak conversation engine.
 
 Three tiers, chosen per message:
 
-  1. Conversational  – greetings, capability questions, small-talk.
+  1. Conversational  - greetings, capability questions, small-talk.
                        One direct LLM call, no tools, <1 s response.
 
-  2. Simple task     – well-defined single-step requests.
+  2. Simple task     - well-defined single-step requests.
                        LLM_Agent with full MCP tool access, no pre-planning.
 
-  3. Complex task    – multi-step, research, or build tasks.
-                       Explicit think → plan → execute with tool calls,
+  3. Complex task    - multi-step, research, or build tasks.
+                       Explicit think -> plan -> execute with tool calls,
                        every step streamed to the UI in real time.
 
 The function is synchronous so it integrates with Flask-SocketIO's
@@ -18,7 +18,6 @@ eventlet background tasks.  Async agent work runs in a dedicated OS
 thread with its own event loop to avoid eventlet/asyncio conflicts.
 """
 
-import asyncio
 import logging
 import re
 import time
@@ -79,10 +78,7 @@ def _is_conversational(text: str) -> bool:
 
 
 def _convo_response(user_input: str, context: dict, session_history: list) -> str:
-    """Single LLM turn for conversational messages — no tools, fast."""
-    wid = context.get("workflow_id", "")
-    add_history = context.get("add_to_conversation_history")
-
+    """Single LLM turn for conversational messages - no tools, fast."""
     messages = [{"role": "system", "content": _ZIRAK_SYSTEM}]
     # Carry the last few turns for context
     for turn in session_history[-6:]:
@@ -99,7 +95,10 @@ def _convo_response(user_input: str, context: dict, session_history: list) -> st
         reply = resp.choices[0].message.content.strip()
     except Exception as exc:
         logger.error(f"Convo response error: {exc}")
-        reply = "Hey! I'm Zirak, your AI dev assistant. What can I help you build today?"
+        reply = (
+            "Hey! I'm Zirak, your AI dev assistant. "
+            "What can I help you build today?"
+        )
 
     # Do NOT emit here — _run_workflow in socket.py emits the final reply
     # via conversation_update so there is exactly one message per response.
@@ -158,7 +157,12 @@ async def _run_agent(user_input: str, context: dict, session_history: list) -> s
 
     logger.info(f"[{wid}] Calling LLM_agent.chat()")
     response = await LLM_agent.chat(user_input)
-    logger.info(f"[{wid}] LLM_agent.chat() returned: type={type(response).__name__}, preview={repr(str(response)[:120]) if response else None}")
+    logger.info(
+        "[%s] LLM_agent.chat() returned: type=%s, preview=%s",
+        wid,
+        type(response).__name__,
+        repr(str(response)[:120]) if response else None,
+    )
 
     # Persist updated history so the next turn has context
     context["updated_session_history"] = list(LLM_agent.conversation_history)
@@ -193,12 +197,11 @@ def conversation_workflow(user_input: str, context: dict) -> tuple[bool, str]:
     """
     workflow_id = context.get("workflow_id", str(uuid.uuid4()))
     add_history = context.get("add_to_conversation_history")
-    log_agent = context.get("log_agent_message")
     session_history: list = context.get("session_history", [])
     start = time.time()
 
     try:
-        logger.info(f"[{workflow_id}] Message received – {user_input[:80]!r}")
+        logger.info(f"[{workflow_id}] Message received - {user_input[:80]!r}")
 
         # ── Tier 1: conversational ─────────────────────────────────────────
         if _is_conversational(user_input):
@@ -207,9 +210,8 @@ def conversation_workflow(user_input: str, context: dict) -> tuple[bool, str]:
             return True, reply
 
         # ── Tier 2 / 3: task execution ─────────────────────────────────────
-        logger.info(
-            f"[{workflow_id}] Tier-{'3 complex' if _is_complex(user_input) else '2 simple'} path"
-        )
+        tier = "3 complex" if _is_complex(user_input) else "2 simple"
+        logger.info(f"[{workflow_id}] Tier-{tier} path")
 
         reply = _execute_task(user_input, context, session_history)
 

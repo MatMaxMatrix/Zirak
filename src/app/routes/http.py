@@ -18,7 +18,7 @@ def index():
 
 @bp.route("/health")
 def health():
-    """Liveness probe – the frontend checks this before opening a socket."""
+    """Liveness probe - the frontend checks this before opening a socket."""
     return jsonify({"status": "ok"}), 200
 
 

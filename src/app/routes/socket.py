@@ -20,8 +20,8 @@ from datetime import datetime
 from flask import request
 from flask_socketio import emit
 
-from ..extensions import socketio
 from ..agents.workflow import conversation_workflow
+from ..extensions import socketio
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,8 @@ _MAX_SESSIONS = 500
 
 def _trim_history(history: list) -> list:
     """Keep the most recent turns within the token budget."""
-    return history[-(_MAX_HISTORY_TURNS * 2):]   # each turn = 2 entries (user + assistant)
+    # each turn = 2 entries (user + assistant)
+    return history[-(_MAX_HISTORY_TURNS * 2):]
 
 
 def _evict_old_sessions() -> None:
@@ -112,7 +113,7 @@ def on_disconnect():
     logger.info(f"Client disconnected: {sid}")
 
     # Mark any running workflows as abandoned
-    for wid, meta in active_workflows.items():
+    for _wid, meta in active_workflows.items():
         if meta.get("sid") == sid and meta.get("status") == "running":
             meta["status"] = "abandoned"
 
@@ -209,7 +210,13 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
             )
 
         success, result = conversation_workflow(user_input, context)
-        logger.info(f"[{workflow_id}] conversation_workflow returned success={success}, result_len={len(result) if result else 0}, result_preview={repr(result[:120]) if result else None}")
+        logger.info(
+            "[%s] conversation_workflow returned success=%s, result_len=%s, preview=%s",
+            workflow_id,
+            success,
+            len(result) if result else 0,
+            repr(result[:120]) if result else None,
+        )
 
         # Sync agent's internal history (tool calls etc.) back to the session
         updated = context.get("updated_session_history")

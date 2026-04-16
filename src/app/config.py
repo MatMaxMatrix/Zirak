@@ -26,7 +26,7 @@ class Config:
     OPENAI_MODEL = "gpt-4o"
     OPENAI_BASE_URL = "https://api.openai.com/v1"
 
-    # Active provider (change these three to switch between OpenAI / DeepSeek / Anthropic)
+    # Active provider (change these three to switch between providers)
     api_key = DEEPSEEK_API_KEY
     base_url = DEEPSEEK_BASE_URL
     Model = DEEPSEEK_MODEL

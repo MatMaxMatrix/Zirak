@@ -83,7 +83,6 @@ class UserProxyAgent(_AutoGenUserProxy):
             get_user_input(workflow_id, prompt)
 
             # Poll for response (eventlet-friendly, won't block other greenlets)
-            deadline = eventlet.getcurrent() and 300  # 5 minute timeout
             elapsed = 0
             poll_interval = 0.5
             while elapsed < 300:
@@ -99,7 +98,7 @@ class UserProxyAgent(_AutoGenUserProxy):
             return "Continue with the current task."
 
         # Fallback: automated / non-web mode
-        logger.info("No WebSocket context – returning default automated reply.")
+        logger.info("No WebSocket context - returning default automated reply.")
         return "Continue with the task."
 
     def _get_input_via_websocket(
@@ -115,7 +114,11 @@ class UserProxyAgent(_AutoGenUserProxy):
         if socketio and workflow_id:
             socketio.emit(
                 "user_input_required",
-                {"workflow_id": workflow_id, "prompt": prompt, "timestamp": datetime.now().isoformat()},
+                {
+                    "workflow_id": workflow_id,
+                    "prompt": prompt,
+                    "timestamp": datetime.now().isoformat(),
+                },
             )
 
         loop = asyncio.get_event_loop()
@@ -132,7 +135,9 @@ class UserProxyAgent(_AutoGenUserProxy):
     # Clarification handler
     # ------------------------------------------------------------------
 
-    def _handle_clarification(self, *args, messages=None, sender=None, config=None, **kwargs):
+    def _handle_clarification(  # noqa: E501
+        self, *args, messages=None, sender=None, config=None, **kwargs
+    ):
         ctx = getattr(self, "context", {})
         questions = ctx.get("clarifying_questions", [])
 
@@ -159,7 +164,9 @@ class UserProxyAgent(_AutoGenUserProxy):
 
         summary = " | ".join(qa_pairs)
         existing = ctx.get("clarifications", "")
-        ctx["clarifications"] = f"{existing}\n{summary}".strip() if existing else summary
+        ctx["clarifications"] = (
+            f"{existing}\n{summary}".strip() if existing else summary
+        )
         self.context = ctx
 
         return True, {
