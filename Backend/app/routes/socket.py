@@ -166,6 +166,7 @@ def _run_workflow(user_input: str, workflow_id: str, sid: str) -> None:
         "add_to_conversation_history": _append_history,
         "emit_workflow_step": _emit_workflow_step,
         "emit_token_usage": _emit_token_usage,
+        "emit_file_system": _emit_file_system,
         "user_input": user_input,
     }
     try:
@@ -298,6 +299,20 @@ def _emit_workflow_step(
         },
         room=sid,
     )
+
+
+def _emit_file_system(workflow_id: str) -> None:
+    """Push the current workspace tree to the client immediately."""
+    sid = active_workflows.get(workflow_id, {}).get("sid")
+    if not sid:
+        return
+    fs_tree = _build_workspace_tree()
+    if fs_tree is not None:
+        socketio.emit(
+            "workflow_update",
+            {"workflow_id": workflow_id, "fileSystem": fs_tree},
+            room=sid,
+        )
 
 
 def _emit_token_usage(

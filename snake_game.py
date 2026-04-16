@@ -64,22 +64,21 @@ class Snake:
         else:
             self.positions.pop()
         
-        return True  # Game continues
+        return True  # Still alive
     
     def grow(self):
         self.grow_pending += 1
         self.score += 10
-        self.length += 1
     
     def draw(self, surface):
         for i, p in enumerate(self.positions):
-            # Draw snake body
+            # Draw snake segment
             rect = pygame.Rect(p[0] * GRID_SIZE, p[1] * GRID_SIZE, GRID_SIZE, GRID_SIZE)
             
             # Head is a different color
             if i == 0:
                 pygame.draw.rect(surface, GREEN, rect)
-                pygame.draw.rect(surface, WHITE, rect, 1)  # Border
+                pygame.draw.rect(surface, WHITE, rect, 1)
                 
                 # Draw eyes
                 eye_size = GRID_SIZE // 5
@@ -93,25 +92,25 @@ class Snake:
                 else:  # DOWN
                     eye_pos = (rect.left + eye_size, rect.bottom - eye_size - 2)
                 
-                pygame.draw.rect(surface, BLACK, (*eye_pos, eye_size, eye_size))
+                pygame.draw.circle(surface, BLACK, eye_pos, eye_size)
                 
                 # Right eye
                 if self.direction == RIGHT:
-                    eye_pos = (rect.right - eye_size - 2, rect.bottom - eye_size * 2)
+                    eye_pos = (rect.right - eye_size - 2, rect.bottom - eye_size)
                 elif self.direction == LEFT:
-                    eye_pos = (rect.left + 2, rect.bottom - eye_size * 2)
+                    eye_pos = (rect.left + 2, rect.bottom - eye_size)
                 elif self.direction == UP:
-                    eye_pos = (rect.right - eye_size * 2, rect.top + 2)
+                    eye_pos = (rect.right - eye_size, rect.top + 2)
                 else:  # DOWN
-                    eye_pos = (rect.right - eye_size * 2, rect.bottom - eye_size - 2)
+                    eye_pos = (rect.right - eye_size, rect.bottom - eye_size - 2)
                 
-                pygame.draw.rect(surface, BLACK, (*eye_pos, eye_size, eye_size))
+                pygame.draw.circle(surface, BLACK, eye_pos, eye_size)
             else:
                 # Body segments with gradient
-                color_intensity = max(50, 255 - (i * 10))
+                color_intensity = max(100, 255 - (i * 10))
                 segment_color = (0, color_intensity, 0)
                 pygame.draw.rect(surface, segment_color, rect)
-                pygame.draw.rect(surface, WHITE, rect, 1)  # Border
+                pygame.draw.rect(surface, WHITE, rect, 1)
 
 class Food:
     def __init__(self):
@@ -128,14 +127,13 @@ class Food:
                           self.position[1] * GRID_SIZE, 
                           GRID_SIZE, GRID_SIZE)
         pygame.draw.rect(surface, self.color, rect)
-        pygame.draw.rect(surface, WHITE, rect, 1)  # Border
+        pygame.draw.rect(surface, WHITE, rect, 1)
         
         # Draw a little shine effect
-        shine_size = GRID_SIZE // 3
-        shine_rect = pygame.Rect(rect.left + shine_size // 2, 
-                                rect.top + shine_size // 2, 
-                                shine_size, shine_size)
-        pygame.draw.rect(surface, (255, 200, 200), shine_rect)
+        shine_rect = pygame.Rect(self.position[0] * GRID_SIZE + GRID_SIZE//4,
+                                self.position[1] * GRID_SIZE + GRID_SIZE//4,
+                                GRID_SIZE//4, GRID_SIZE//4)
+        pygame.draw.ellipse(surface, (255, 200, 200), shine_rect)
 
 def draw_grid(surface):
     for y in range(0, HEIGHT, GRID_SIZE):
@@ -144,38 +142,51 @@ def draw_grid(surface):
             pygame.draw.rect(surface, GRAY, rect, 1)
 
 def draw_score(surface, score, high_score):
-    font = pygame.font.SysFont('arial', 25)
+    font = pygame.font.SysFont('Arial', 25)
     score_text = font.render(f'Score: {score}', True, WHITE)
     high_score_text = font.render(f'High Score: {high_score}', True, WHITE)
-    surface.blit(score_text, (5, 5))
-    surface.blit(high_score_text, (WIDTH - high_score_text.get_width() - 5, 5))
+    surface.blit(score_text, (10, 10))
+    surface.blit(high_score_text, (WIDTH - high_score_text.get_width() - 10, 10))
 
 def draw_game_over(surface, score):
-    font_large = pygame.font.SysFont('arial', 50)
-    font_small = pygame.font.SysFont('arial', 30)
+    font_large = pygame.font.SysFont('Arial', 50)
+    font_medium = pygame.font.SysFont('Arial', 30)
     
     game_over_text = font_large.render('GAME OVER', True, RED)
-    score_text = font_small.render(f'Final Score: {score}', True, WHITE)
-    restart_text = font_small.render('Press SPACE to restart', True, GREEN)
-    quit_text = font_small.render('Press ESC to quit', True, WHITE)
+    score_text = font_medium.render(f'Final Score: {score}', True, WHITE)
+    restart_text = font_medium.render('Press SPACE to restart', True, WHITE)
     
-    surface.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 80))
-    surface.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, HEIGHT // 2 - 20))
-    surface.blit(restart_text, (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 30))
-    surface.blit(quit_text, (WIDTH // 2 - quit_text.get_width() // 2, HEIGHT // 2 + 70))
+    surface.blit(game_over_text, (WIDTH//2 - game_over_text.get_width()//2, HEIGHT//2 - 60))
+    surface.blit(score_text, (WIDTH//2 - score_text.get_width()//2, HEIGHT//2))
+    surface.blit(restart_text, (WIDTH//2 - restart_text.get_width()//2, HEIGHT//2 + 40))
+
+def draw_instructions(surface):
+    font = pygame.font.SysFont('Arial', 20)
+    instructions = [
+        "Use ARROW KEYS to move",
+        "Eat the red food to grow",
+        "Don't hit yourself!",
+        "Press P to pause",
+        "Press ESC to quit"
+    ]
+    
+    for i, text in enumerate(instructions):
+        rendered = font.render(text, True, WHITE)
+        surface.blit(rendered, (10, HEIGHT - 120 + i * 25))
 
 def main():
     # Set up the display
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption('Snake Game')
+    pygame.display.set_caption("Python Snake Game")
     clock = pygame.time.Clock()
     
-    # Create game objects
+    # Game objects
     snake = Snake()
     food = Food()
     
     # Game state
     game_over = False
+    paused = False
     high_score = 0
     
     # Main game loop
@@ -188,15 +199,10 @@ def main():
             if event.type == pygame.KEYDOWN:
                 if game_over:
                     if event.key == pygame.K_SPACE:
-                        # Restart game
                         snake.reset()
                         food.randomize_position()
                         game_over = False
-                    elif event.key == pygame.K_ESCAPE:
-                        pygame.quit()
-                        sys.exit()
                 else:
-                    # Handle snake movement
                     if event.key == pygame.K_UP:
                         snake.turn(UP)
                     elif event.key == pygame.K_DOWN:
@@ -205,11 +211,13 @@ def main():
                         snake.turn(LEFT)
                     elif event.key == pygame.K_RIGHT:
                         snake.turn(RIGHT)
+                    elif event.key == pygame.K_p:
+                        paused = not paused
                     elif event.key == pygame.K_ESCAPE:
                         pygame.quit()
                         sys.exit()
         
-        if not game_over:
+        if not game_over and not paused:
             # Move snake
             if not snake.move():
                 game_over = True
@@ -220,7 +228,7 @@ def main():
                 snake.grow()
                 food.randomize_position()
                 
-                # Make sure food doesn't appear on snake
+                # Make sure food doesn't spawn on snake
                 while food.position in snake.positions:
                     food.randomize_position()
         
@@ -230,9 +238,14 @@ def main():
         snake.draw(screen)
         food.draw(screen)
         draw_score(screen, snake.score, high_score)
+        draw_instructions(screen)
         
         if game_over:
             draw_game_over(screen, snake.score)
+        elif paused:
+            font = pygame.font.SysFont('Arial', 50)
+            pause_text = font.render('PAUSED', True, BLUE)
+            screen.blit(pause_text, (WIDTH//2 - pause_text.get_width()//2, HEIGHT//2))
         
         pygame.display.update()
         clock.tick(FPS)

@@ -35,15 +35,18 @@ class Config:
     MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "http://localhost:3002/sse")
 
     # ── Paths ─────────────────────────────────────────────────────────────────
-    BASE_DIR: Path = Path(__file__).parent
+    # Use .resolve() so these are always absolute even if __file__ is relative
+    BASE_DIR: Path = Path(__file__).resolve().parent
     TOOLS_DIR: Path = BASE_DIR / "agents" / "tools"
     PROMPTS_DIR: Path = BASE_DIR / "agents" / "prompts"
     # Workspace: where the agent creates/edits project files.
     # Override with WORKSPACE_DIR env var for production deployments.
-    WORKSPACE_DIR: Path = Path(os.getenv("WORKSPACE_DIR", str(Path(__file__).parent.parent / "workspace")))
+    WORKSPACE_DIR: Path = Path(
+        os.getenv("WORKSPACE_DIR", str(Path(__file__).resolve().parent.parent / "workspace"))
+    ).resolve()
 
     # ── Model behaviour ───────────────────────────────────────────────────────
-    MAX_TOKENS = 4000
+    MAX_TOKENS = 16000
     MAX_CONVERSATION_TOKENS = 325_000
     ENABLE_THINKING = True
     DEFAULT_TEMPERATURE = 0

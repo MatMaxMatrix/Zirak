@@ -59,7 +59,7 @@ class LLM_Agent(ConversableAgent):
         self.current_step_index = 0
 
         # Track current working directory for terminal commands
-        self.current_working_directory = os.getcwd()
+        self.current_working_directory = str(Config.WORKSPACE_DIR)
 
         # Context tracking for agentic behavior
         self.context_manager = ContextManager()
@@ -1161,7 +1161,11 @@ class LLM_Agent(ConversableAgent):
 
         for i, tool_call in enumerate(tool_calls):
             tool_name = tool_call.function.name
-            tool_input = json.loads(tool_call.function.arguments)
+            try:
+                tool_input = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Could not parse arguments for tool '{tool_name}': {e}")
+                tool_input = {}
             step_num = i + 1
             action_desc = self._get_action_description(tool_name, tool_input)
 
@@ -1199,10 +1203,32 @@ class LLM_Agent(ConversableAgent):
             if emit_fn and wid:
                 emit_fn(wid, "LLM_Agent", msg, status)
 
+        # Helper: push workspace file tree to client after a tool writes files
+        _FILE_MUTATING_TOOLS = {
+            "filecreatortool", "fileedittool", "createfolderstool",
+            "diffeditortool", "terminalcommandtool", "uvpackagemanager",
+        }
+
+        def _ws_fs(tool: str) -> None:
+            if tool.lower() not in _FILE_MUTATING_TOOLS:
+                return
+            ctx = getattr(self, "context", None)
+            if not ctx:
+                return
+            emit_fn = ctx.get("emit_file_system")
+            wid = ctx.get("workflow_id", "")
+            if emit_fn and wid:
+                emit_fn(wid)
+
         # Execute each tool call sequentially
         for i, tool_call in enumerate(tool_calls):
             tool_name = tool_call.function.name
-            tool_input = json.loads(tool_call.function.arguments)
+            try:
+                tool_input = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError as e:
+                logger.warning(f"Skipping tool '{tool_name}' — bad JSON arguments: {e}")
+                _ws_step(f"⚠️ Skipped {tool_name} (malformed arguments — response may have been truncated)", "error")
+                continue
             step_num = i + 1
             action_desc = self._get_action_description(tool_name, tool_input)
 
@@ -1230,6 +1256,9 @@ class LLM_Agent(ConversableAgent):
 
             tool_use = ToolUseMock(tool_name, tool_input)
             result = await self._execute_tool(tool_use)
+
+            # Push updated workspace tree immediately after any file-writing tool
+            _ws_fs(tool_name)
 
             # Emit "complete" step after execution
             _ws_step(f"✅ [{step_num}/{len(tool_calls)}] {action_desc}", "complete")
@@ -1477,8 +1506,7 @@ class LLM_Agent(ConversableAgent):
 
         # Ensure project_root is set
         if "project_root" not in tool_input:
-            # Use the current working directory as the default project root
-            project_root = os.getcwd()
+            project_root = str(Config.WORKSPACE_DIR)
             tool_input["project_root"] = project_root
             self.console.print(
                 f"[yellow]Setting project_root to current directory: {project_root}[/yellow]"
@@ -1505,7 +1533,7 @@ class LLM_Agent(ConversableAgent):
         self.total_tokens_used = 0
 
         # Reset working directory
-        self.current_working_directory = os.getcwd()
+        self.current_working_directory = str(Config.WORKSPACE_DIR)
 
         # Reset context manager
         self.context_manager = ContextManager()

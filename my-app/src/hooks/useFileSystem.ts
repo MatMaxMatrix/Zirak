@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FileSystem } from '@/app/contexts/WebSocketContext';
+import { useState, useEffect, useRef } from 'react';
+import { FileSystem, useWebSocket } from '@/app/contexts/WebSocketContext';
 import { fetchFileSystem } from '@/lib/chat-utils';
 
 // Define Project interface
@@ -21,6 +21,10 @@ export function useFileSystem() {
   const [fileSystem, setFileSystem] = useState<FileSystem[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileSystem | null>(null);
   const [currentProject, setCurrentProject] = useState<Project | null>(null);
+
+  const { activeWorkflowId } = useWebSocket();
+  // Keep a stable ref so the interval callback doesn't capture a stale closure
+  const refreshRef = useRef<() => Promise<FileSystem[] | null>>(() => Promise.resolve(null));
 
   // Toggle directory expansion
   const toggleDirectory = (path: string) => {
@@ -75,7 +79,6 @@ export function useFileSystem() {
       const result = await fetch(`${backendUrl}/api/workspace/files?_ts=${Date.now()}`, {
         method: 'GET',
         cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
       }).then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -111,8 +114,8 @@ export function useFileSystem() {
         return result.fileSystem;
       }
       return null;
-    } catch (error) {
-      console.error('[FileSystem] Failed to refresh from backend:', error);
+    } catch {
+      // Silently ignore — backend may not be running yet; polling will retry
       return null;
     }
   };
@@ -391,11 +394,35 @@ export function useFileSystem() {
     }
   };
 
-  // Load workspace from backend on mount
+  // Keep refreshRef current so the polling interval always calls the latest version
+  refreshRef.current = refreshFileSystem;
+
+  // Load workspace on mount, retrying until the backend is reachable
   useEffect(() => {
-    refreshFileSystem().catch(() => {});
+    let cancelled = false;
+    let attempt = 0;
+
+    const tryFetch = async () => {
+      const result = await refreshRef.current();
+      if (!cancelled && result === null && attempt < 8) {
+        attempt++;
+        setTimeout(tryFetch, Math.min(attempt * 2000, 10000));
+      }
+    };
+
+    tryFetch();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll every 2.5 s while a workflow is active so new files appear immediately
+  useEffect(() => {
+    if (!activeWorkflowId) return;
+    const id = setInterval(() => {
+      refreshRef.current().catch(() => {});
+    }, 2500);
+    return () => clearInterval(id);
+  }, [activeWorkflowId]);
 
   // Listen for external refreshes
   useEffect(() => {
