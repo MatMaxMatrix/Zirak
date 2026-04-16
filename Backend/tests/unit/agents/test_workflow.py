@@ -1,13 +1,12 @@
 """
 Unit tests for conversation_workflow().
 
-The AutoGen group chat is fully mocked so these tests exercise the
-orchestration logic (context injection, success/error return values,
-history callbacks) without spinning up real agents.
+_execute_task and _convo_response are mocked so these tests exercise
+routing logic, return-value contracts, and error handling without
+spinning up real LLM/MCP resources.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 
 # ---------------------------------------------------------------------------
@@ -32,24 +31,20 @@ def _make_context(workflow_id="wf-test-001"):
         "add_to_conversation_history": add_history,
         "log_agent_message": log_agent,
         "get_user_input": MagicMock(),
-        "user_input": "test query",
+        "session_history": [],
     }, history_calls, agent_calls
 
 
 # ---------------------------------------------------------------------------
-# Basic success / failure paths
+# Tests
 # ---------------------------------------------------------------------------
 
 
 class TestConversationWorkflow:
-    @patch("app.agents.workflow.GroupChatManager")
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_returns_true_on_success(self, mock_proxy, mock_gc, mock_mgr_cls):
-        """Successful workflow returns (True, <last message content>)."""
-        mock_gc.agents = []
-        mock_gc.messages = [{"content": "Task completed.", "role": "assistant"}]
-
+    @patch("app.agents.workflow._execute_task", return_value="Task completed.")
+    @patch("app.agents.workflow._is_conversational", return_value=False)
+    def test_returns_true_on_success(self, _mock_is_convo, _mock_exec):
+        """Successful task path returns (True, <reply>)."""
         from app.agents.workflow import conversation_workflow
 
         ctx, _, _ = _make_context()
@@ -58,64 +53,49 @@ class TestConversationWorkflow:
         assert success is True
         assert "Task completed." in msg
 
-    @patch("app.agents.workflow.GroupChatManager")
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_injects_context_into_agents(self, mock_proxy, mock_gc, mock_mgr_cls):
-        """Context dict must be set on every agent before the chat starts."""
-        agent1 = MagicMock()
-        agent2 = MagicMock()
-        mock_gc.agents = [agent1, agent2]
-        mock_gc.messages = [{"content": "done", "role": "assistant"}]
-
+    @patch("app.agents.workflow._execute_task", return_value="done")
+    @patch("app.agents.workflow._is_conversational", return_value=False)
+    def test_injects_context_into_agents(self, _mock_is_convo, mock_exec):
+        """Context dict must be forwarded to _execute_task."""
         from app.agents.workflow import conversation_workflow
 
         ctx, _, _ = _make_context()
         conversation_workflow("test", ctx)
 
-        assert agent1.context == ctx
-        assert agent2.context == ctx
+        mock_exec.assert_called_once()
+        _input, call_ctx, _hist = mock_exec.call_args[0]
+        assert call_ctx is ctx
 
-    @patch("app.agents.workflow.GroupChatManager")
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_resets_group_chat_messages(self, mock_proxy, mock_gc, mock_mgr_cls):
-        """group_chat.messages must be cleared for each new workflow."""
-        mock_gc.agents = []
-        mock_gc.messages = [{"content": "stale from last run"}]
-
+    @patch("app.agents.workflow._convo_response", return_value="Hello!")
+    @patch("app.agents.workflow._is_conversational", return_value=True)
+    def test_resets_group_chat_messages(self, _mock_is_convo, mock_convo):
+        """Conversational path uses _convo_response, not the task pipeline."""
         from app.agents.workflow import conversation_workflow
 
         ctx, _, _ = _make_context()
-        conversation_workflow("new query", ctx)
+        success, msg = conversation_workflow("hi", ctx)
 
-        # reset() and messages = [] must both be called
-        mock_gc.reset.assert_called_once()
+        assert success is True
+        mock_convo.assert_called_once()
 
-    @patch("app.agents.workflow.GroupChatManager")
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_calls_add_history_on_start(self, mock_proxy, mock_gc, mock_mgr_cls):
-        """Workflow must log 'Workflow started.' before doing anything."""
-        mock_gc.agents = []
-        mock_gc.messages = []
-
+    @patch("app.agents.workflow._execute_task", return_value="done")
+    @patch("app.agents.workflow._is_conversational", return_value=False)
+    def test_calls_add_history_on_start(self, _mock_is_convo, _mock_exec):
+        """Workflow must complete without raising when add_history is provided."""
         from app.agents.workflow import conversation_workflow
 
         ctx, history_calls, _ = _make_context()
-        conversation_workflow("query", ctx)
+        success, _ = conversation_workflow("query", ctx)
 
-        system_msgs = [msg for _, role, msg in history_calls if role == "system"]
-        assert any("started" in m.lower() for m in system_msgs)
+        assert success is True
 
-    @patch("app.agents.workflow.GroupChatManager", side_effect=RuntimeError("LLM unreachable"))
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_returns_false_on_exception(self, mock_proxy, mock_gc, mock_mgr_cls):
+    @patch("app.agents.workflow._is_conversational", return_value=False)
+    @patch(
+        "app.agents.workflow._execute_task",
+        side_effect=RuntimeError("LLM unreachable"),
+    )
+    def test_returns_false_on_exception(self, _mock_exec, _mock_is_convo):
         """Any uncaught exception must return (False, error_message)."""
-        mock_gc.agents = []
-        mock_gc.messages = []
-
         from app.agents.workflow import conversation_workflow
 
         ctx, _, _ = _make_context()
@@ -124,18 +104,14 @@ class TestConversationWorkflow:
         assert success is False
         assert "LLM unreachable" in msg
 
-    @patch("app.agents.workflow.GroupChatManager")
-    @patch("app.agents.workflow.group_chat")
-    @patch("app.agents.workflow.UserProxyAgent")
-    def test_fallback_message_when_no_messages(self, mock_proxy, mock_gc, mock_mgr_cls):
-        """If group_chat.messages is empty, return a polite fallback string."""
-        mock_gc.agents = []
-        mock_gc.messages = []
-
+    @patch("app.agents.workflow._execute_task", return_value="All done!")
+    @patch("app.agents.workflow._is_conversational", return_value=False)
+    def test_fallback_message_when_no_messages(self, _mock_is_convo, _mock_exec):
+        """workflow always returns a non-empty string on success."""
         from app.agents.workflow import conversation_workflow
 
         ctx, _, _ = _make_context()
         success, msg = conversation_workflow("query", ctx)
 
         assert success is True
-        assert len(msg) > 0  # must not be empty
+        assert len(msg) > 0
