@@ -7,15 +7,32 @@ from typing import Dict, List, Union, Any, Optional
 from pathlib import Path
 import sys
 import uvicorn
+
+# ── Workspace isolation ──────────────────────────────────────────────────────
+# All relative file paths from tools (FileCreatorTool, FileEditTool, etc.)
+# resolve against the process CWD.  Pin it to the workspace directory so
+# agent-created files land in a predictable, isolated location rather than
+# the Backend root.
+from app.config import Config as _Cfg
+
+# Resolve the Backend directory BEFORE chdir so the log file lands there, not in workspace
+_backend_dir = Path(__file__).parent
+_workspace = Path(str(_Cfg.WORKSPACE_DIR))
+_workspace.mkdir(parents=True, exist_ok=True)
+os.chdir(_workspace)
+# ─────────────────────────────────────────────────────────────────────────────
 from starlette.applications import Starlette
 from starlette.routing import Mount, Route
 from mcp.server.sse import SseServerTransport
 
-# Configure logging
+# Configure logging — log file goes to Backend dir, not workspace
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("backend_mcp_server.log")],
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(str(_backend_dir / "backend_mcp_server.log")),
+    ],
 )
 logger = logging.getLogger(__name__)
 
@@ -23,20 +40,22 @@ logger = logging.getLogger(__name__)
 import mcp.types as types
 from mcp.server.lowlevel import Server
 
-# Import tool classes from Backend
-from Agents.tools.webscrapertool import WebScraperTool
-from Agents.tools.uvpackagemanager import UVPackageManager
-from Agents.tools.terminalcommandtool import TerminalCommandTool
-from Agents.tools.screenshottool import ScreenshotTool
-from Agents.tools.duckduckgotool import DuckduckgoTool
-from Agents.tools.e2bcodetool import E2bCodeTool
-from Agents.tools.filecontentreadertool import FileContentReaderTool
-from Agents.tools.filecreatortool import FileCreatorTool
-from Agents.tools.fileedittool import FileEditTool
-from Agents.tools.lintingtool import LintingTool
-from Agents.tools.createfolderstool import CreateFoldersTool
-from Agents.tools.diffeditortool import DiffEditorTool
-from Agents.tools.browsertool import BrowserTool
+# Import tool classes from the new app package
+from app.agents.tools import (
+    BrowserTool,
+    CreateFoldersTool,
+    DiffEditorTool,
+    DuckduckgoTool,
+    E2bCodeTool,
+    FileContentReaderTool,
+    FileCreatorTool,
+    FileEditTool,
+    LintingTool,
+    ScreenshotTool,
+    TerminalCommandTool,
+    UVPackageManager,
+    WebScraperTool,
+)
 
 # Create tool instances
 tools_instances = {

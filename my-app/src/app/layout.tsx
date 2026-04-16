@@ -24,15 +24,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="bg-background" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         {/* Head content managed by Next.js */}
       </head>
-      <body className={`${inter.className} bg-background text-foreground`} suppressHydrationWarning>
-        <ThemeProvider 
-          attribute="class" 
-          defaultTheme="system" 
-          enableSystem
+      <body className={`${inter.className} bg-[#0C0C0C] text-white`} suppressHydrationWarning>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <CSRFProvider>

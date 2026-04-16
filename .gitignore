@@ -26,6 +26,8 @@ my-app/.env.local*
 *.key
 *.cert
 *.p12
+OAI_CONFIG_LIST
+Backend/OAI_CONFIG_LIST
 
 # Config files that might contain secrets
 config.json

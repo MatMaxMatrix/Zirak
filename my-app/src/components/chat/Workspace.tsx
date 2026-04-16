@@ -158,49 +158,13 @@ export function Workspace({
   const [openEditorFiles, setOpenEditorFiles] = useState<EditorFile[]>([]);
   const [activeEditorFilePath, setActiveEditorFilePath] = useState<string | null>(null);
 
-  // Update the safeRefresh function to match the expected Promise<void> type
+  // Refresh file system from backend workspace endpoint
   const safeRefresh = async (): Promise<void> => {
-    // Use the provided refreshFileSystem from props
     if (typeof refreshFileSystem === 'function') {
       try {
-        // Add a small delay before refreshing to ensure file operations have completed
-        await new Promise(resolve => setTimeout(resolve, 100));
         await refreshFileSystem();
-
-        // Perform a second refresh after a short delay to ensure consistency
-        setTimeout(async () => {
-          try {
-            await refreshFileSystem();
-          } catch (error) {
-            console.error('Error in delayed refresh:', error);
-          }
-        }, 500);
       } catch (error) {
         console.error('Error refreshing file system:', error);
-        
-        // Try one more time with a direct fetch approach
-        try {
-          const timestamp = new Date().getTime();
-          const response = await fetch(`/api/filesystem?_ts=${timestamp}`, {
-            method: 'GET',
-            cache: 'no-store',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
-              'Expires': '0'
-            }
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            if (result && result.fileSystem) {
-              console.log('Manual file system refresh succeeded');
-            }
-          }
-        } catch (fallbackError) {
-          console.error('Fallback refresh also failed:', fallbackError);
-        }
       }
     }
   };

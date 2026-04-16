@@ -1,120 +1,74 @@
-# Zirak AI Assistant with Real-time Communication
+# Snake Game - Python PyGame Implementation
 
-This project integrates a Backend Agentic Workflow system with a React Frontend using WebSockets for real-time communication. The system allows for live monitoring of the agentic workflow, handling of user input requests, and visualization of the conversation flow.
+A classic Snake game built with Python and PyGame.
 
-## Project Structure
+## Features
 
-The project consists of two main components:
+- **Classic Snake gameplay**: Control the snake to eat food and grow longer
+- **Score tracking**: Current score and high score display
+- **Game over detection**: Collision with yourself ends the game
+- **Restart functionality**: Press SPACE to restart after game over
+- **Visual polish**: 
+  - Snake with eyes that follow direction
+  - Gradient-colored snake body
+  - Grid background
+  - Food with shine effect
+  - Clean UI with score display
 
-1. **Backend**: Python-based agentic workflow system using AutoGen
-2. **Frontend**: React-based UI with WebSocket communication
+## Controls
 
-## Setup and Installation
+- **Arrow Keys**: Control snake direction (UP, DOWN, LEFT, RIGHT)
+- **SPACE**: Restart game after game over
+- **ESC**: Quit game
 
-### Backend Setup
+## Installation
 
-1. Navigate to the Backend directory:
+1. Make sure you have Python 3.6+ installed
+2. Install PyGame:
+   ```bash
+   pip install pygame
    ```
-   cd Backend
-   ```
-
-2. Create a virtual environment (if not already created):
-   ```
-   python -m venv .venv
-   ```
-
-3. Activate the virtual environment:
-   - Windows: `.venv\Scripts\activate`
-   - macOS/Linux: `source .venv/bin/activate`
-
-4. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-5. Make sure you have set up your `.env` file with the necessary API keys (see `.env.example`).
-
-### Frontend Setup
-
-1. Navigate to the my-app directory:
-   ```
-   cd my-app
+   Or using uv:
+   ```bash
+   uv pip install pygame
    ```
 
-2. Install dependencies:
-   ```
-   npm install
-   ```
-
-## Running the Application
-
-### Start the Backend Server
-
-1. Ensure your virtual environment is activated
-2. From the Backend directory, run:
-   ```
-   python server.py
-   ```
-   This will start the Flask server with SocketIO on port 5001.
-
-### Start the Frontend Development Server
-
-1. From the my-app directory, run:
-   ```
-   npm run dev
-   ```
-   This will start the Next.js development server.
-
-2. Open your browser and navigate to:
-   ```
-   http://localhost:3000
+3. Run the game:
+   ```bash
+   python snake_game.py
    ```
 
-## Secrets Management
+## Game Rules
 
-We follow strict security practices to protect sensitive information:
+1. Control the snake using arrow keys
+2. Eat the red food to grow longer and increase your score
+3. Avoid colliding with yourself
+4. The snake can wrap around the screen edges
+5. Each food eaten gives you 10 points
+6. Game ends when the snake collides with itself
 
-1. **Environment Variables**:
-   - Never commit `.env` files to the repository
-   - Use `.env.example` as a template with dummy values
-   - Store actual secrets in `.env.local` or other gitignored files
+## Code Structure
 
-2. **Git Hooks**:
-   - Run `./install-hooks.sh` to install pre-commit hooks that scan for secrets
-   - These hooks prevent accidental commits of sensitive information
+- `Snake` class: Handles snake movement, growth, and drawing
+- `Food` class: Manages food position and drawing
+- Main game loop: Handles input, game logic, and rendering
+- Helper functions: Grid drawing, score display, game over screen
 
-3. **Best Practices**:
-   - Never use `git add .` or `git add *` - add files individually
-   - Always check what you're committing with `git diff --staged`
-   - Rotate API keys regularly
-   - Use minimal permissions for all API keys
+## Customization
 
-For more detailed information, see `SECRETS_MANAGEMENT.md`.
+You can easily modify these constants at the top of the file:
+- `WIDTH, HEIGHT`: Game window size
+- `GRID_SIZE`: Size of each grid cell
+- `FPS`: Game speed (frames per second)
+- Colors: All color constants are defined
 
-## How It Works
+## Requirements
 
-1. The frontend connects to the backend via WebSockets.
-2. When a user sends a message, it's transmitted to the backend via WebSocket.
-3. The backend initiates the agentic workflow and streams real-time updates back to the frontend.
-4. If the workflow requires user input (from UserProxyAgent), the frontend will display an input prompt.
-5. The workflow continues once the user provides the requested input.
+- Python 3.6+
+- PyGame 2.0+
 
-## Key Features
+## License
 
-- Real-time streaming of agent messages and workflow steps
-- Interactive user input when required by the workflow
-- Visual representation of the agent workflow
-- File and terminal output display
+Free to use and modify for any purpose.
 
-## Troubleshooting
-
-- If you encounter connection issues, ensure both servers are running and check browser console for errors
-- For backend issues, check the terminal running the server for error logs
-- Make sure your `.env` file contains valid API keys
-
-## Development Notes
-
-- The backend uses Flask-SocketIO for WebSocket communication
-- The frontend implements WebSocket using socket.io-client
-- User input is handled using asynchronous event-based communication
-- The agentic workflow is modified to track and stream its progress in real-time
+Enjoy the game! 🐍
